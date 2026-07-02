@@ -1,0 +1,48 @@
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  .no-print,
+  .sidebar,
+  .topbar,
+  .stepper,
+  .bottom-actions {
+    display: none !important;
+  }
+
+  .app-shell,
+  .main-area,
+  .content {
+    display: block;
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .print-page {
+    width: 100%;
+    overflow: visible;
+    border: 0;
+  }
+
+  .draw-sheet-heading {
+    padding: 0 0 8px;
+  }
+
+  .bracket-scroll {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .bracket-grid {
+    transform-origin: top left;
+    break-inside: avoid;
+  }
+}

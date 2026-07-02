@@ -13,6 +13,7 @@ export type Entrant = {
   team2?: string;
   sameTeam?: boolean;
   region?: string;
+  ranking?: number | string;
 };
 
 export type DrawOptions = {
