@@ -23,6 +23,19 @@ Tournament draw maker with seed, bye, team, and region-aware placement.
 
 ---
 
+## 開発用ドキュメント
+
+実装時は、以下の順で確認してください。
+
+| ドキュメント | 目的 |
+|---|---|
+| [`docs/requirements.md`](docs/requirements.md) | PoC全体の要件定義。要件の正 |
+| [`docs/screen-spec.md`](docs/screen-spec.md) | 画面別仕様、入力項目、操作、状態遷移 |
+| [`docs/logic-spec.md`](docs/logic-spec.md) | トーナメント生成ロジック、関数分解、テスト観点 |
+| [`AGENTS.md`](AGENTS.md) | Codex / AIエージェント向け実装指示 |
+
+---
+
 ## PoCスコープ
 
 最初のPoCでは、以下を実装対象とします。
@@ -125,6 +138,8 @@ PDF出力・保存
 ## 開発時の注意
 
 - `docs/requirements.md` を要件の正とする
+- 画面実装時は `docs/screen-spec.md` を参照する
+- 生成ロジック実装時は `docs/logic-spec.md` を参照する
 - PoC対象外の機能を安易に追加しない
 - 既存VBAコードを移植しない
 - 仕様・操作思想は参考にするが、WEBアプリとして独自実装する
