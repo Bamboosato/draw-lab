@@ -243,6 +243,7 @@ function findSeedErrors(entrants: readonly Entrant[], seedCount: number | undefi
 
   const errors: ValidationIssue[] = [];
   const seedCounts = countSeeds(entrants);
+  const bandCounts = new Map<string, { band: { start: number; end: number }; count: number }>();
 
   for (const [seedNo, count] of seedCounts) {
     if (seedNo > seedCount) {
@@ -251,7 +252,18 @@ function findSeedErrors(entrants: readonly Entrant[], seedCount: number | undefi
 
     const band = getSeedBand(seedNo, seedCount);
 
-    if (band && count > band.end - band.start + 1) {
+    if (band) {
+      const key = `${band.start}-${band.end}`;
+      const current = bandCounts.get(key);
+      bandCounts.set(key, {
+        band,
+        count: (current?.count ?? 0) + count,
+      });
+    }
+  }
+
+  for (const { band, count } of bandCounts.values()) {
+    if (count > band.end - band.start + 1) {
       errors.push({
         code: "SEED_DUPLICATION_EXCEEDS_PLACEMENT_SLOTS",
         message: "同順位シードが配置枠数を超えています",

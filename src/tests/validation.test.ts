@@ -83,6 +83,26 @@ describe("validateTournament", () => {
     expect(result.warnings.map((issue) => issue.code)).toContain("UNUSUAL_SEED_DUPLICATION");
   });
 
+  it("returns an error when total same-band seeds exceed their placement band", () => {
+    const result = validateTournament(
+      makeTournament({
+        seedCount: 4,
+        entrants: [
+          makeEntrant(1, { seedNo: 1 }),
+          makeEntrant(2, { seedNo: 2 }),
+          makeEntrant(3, { seedNo: 3 }),
+          makeEntrant(4, { seedNo: 3 }),
+          makeEntrant(5, { seedNo: 4 }),
+          makeEntrant(6, { seedNo: 4 }),
+        ],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).toContain(
+      "SEED_DUPLICATION_EXCEEDS_PLACEMENT_SLOTS",
+    );
+  });
+
   it("returns an error when duplicate seedNo values exceed their placement band", () => {
     const result = validateTournament(
       makeTournament({
