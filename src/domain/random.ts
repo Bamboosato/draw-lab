@@ -1,8 +1,5 @@
-let seedCounter = 0;
-
-export function createRandomSeed(now = new Date().toISOString()): string {
-  seedCounter += 1;
-  return `seed-${now}-${seedCounter.toString(36)}`;
+export function createRandomSeed(source: string): string {
+  return `seed-${hashString(source).toString(36)}`;
 }
 
 export function createSeededRandom(seed: string): () => number {
@@ -44,6 +41,17 @@ function xmur3(seed: string): () => number {
     hash = Math.imul(hash ^ (hash >>> 13), 3266489909);
     return (hash ^= hash >>> 16) >>> 0;
   };
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
 }
 
 function sfc32(a: number, b: number, c: number, d: number): () => number {

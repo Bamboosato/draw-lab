@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSeededRandom, shuffleWithRandom } from "../domain/random";
+import { createRandomSeed, createSeededRandom, shuffleWithRandom } from "../domain/random";
 
 describe("seeded random", () => {
   it("returns the same sequence for the same seed", () => {
@@ -22,5 +22,10 @@ describe("seeded random", () => {
     expect(shuffleWithRandom(items, createSeededRandom("shuffle"))).toEqual(
       shuffleWithRandom(items, createSeededRandom("shuffle")),
     );
+  });
+
+  it("creates a deterministic seed from caller-provided source text", () => {
+    expect(createRandomSeed("tournament-1:2026-07-02")).toBe(createRandomSeed("tournament-1:2026-07-02"));
+    expect(createRandomSeed("tournament-1:2026-07-02")).not.toBe(createRandomSeed("tournament-2:2026-07-02"));
   });
 });

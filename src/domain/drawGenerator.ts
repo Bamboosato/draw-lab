@@ -1,6 +1,6 @@
 import { createEmptySlots, isSlotAvailable } from "./bracketStructure";
 import { calculateByeCount, placeByes } from "./byePlacement";
-import { createRandomSeed, createSeededRandom, pickWithRandom } from "./random";
+import { createSeededRandom, pickWithRandom } from "./random";
 import { calculatePlacementPenalty } from "./scoring";
 import { placeSeededEntrants } from "./seedPlacement";
 import type {
@@ -12,7 +12,7 @@ import type {
   GenerateDrawResult,
   PlaceUnseededEntrantsParams,
 } from "./types";
-import { getNumericSeedNo, getValidEntrants, normalizeTournament, validateTournament } from "./validation";
+import { getValidEntrants, normalizeTournament, validateTournament } from "./validation";
 
 export function generateDraw(input: GenerateDrawInput): GenerateDrawResult {
   const normalizedTournament = normalizeTournament(input.tournament);
@@ -22,8 +22,8 @@ export function generateDraw(input: GenerateDrawInput): GenerateDrawResult {
     return { validation };
   }
 
-  const now = input.now ?? new Date().toISOString();
-  const randomSeed = normalizedTournament.options.randomSeed ?? createRandomSeed(now);
+  const now = input.now;
+  const randomSeed = input.randomSeed ?? normalizedTournament.options.randomSeed ?? createDeterministicFallbackSeed(normalizedTournament.id);
   const random = createSeededRandom(randomSeed);
   const validEntrants = getValidEntrants(normalizedTournament.entrants, normalizedTournament.matchType);
   let slots = createEmptySlots(normalizedTournament.drawSize);
@@ -93,12 +93,6 @@ export function placeUnseededEntrants(params: PlaceUnseededEntrantsParams): Draw
     const bestCandidates = scoredCandidates.filter((candidate) => candidate.score === minScore);
     const selected = pickWithRandom(bestCandidates, params.random).slot;
     selected.entrantId = entrant.id;
-
-    const seedNo = getNumericSeedNo(entrant);
-
-    if (seedNo !== undefined) {
-      selected.seedNo = seedNo;
-    }
   }
 
   return nextSlots;
@@ -165,4 +159,8 @@ function stableHash(value: string): string {
   }
 
   return (hash >>> 0).toString(36);
+}
+
+function createDeterministicFallbackSeed(tournamentId: string): string {
+  return `seed-${stableHash(tournamentId)}`;
 }

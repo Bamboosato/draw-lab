@@ -35,6 +35,70 @@ describe("validateTournament", () => {
     expect(result.errors.map((issue) => issue.code)).toContain("SEED_NO_INVALID");
   });
 
+  it("returns SEED_COUNT_INVALID for negative or decimal seedCount values", () => {
+    const negative = validateTournament(makeTournament({ seedCount: -1 }));
+    const decimal = validateTournament(makeTournament({ seedCount: 2.5 }));
+
+    expect(negative.errors.map((issue) => issue.code)).toContain("SEED_COUNT_INVALID");
+    expect(decimal.errors.map((issue) => issue.code)).toContain("SEED_COUNT_INVALID");
+  });
+
+  it("returns SEED_COUNT_UNSUPPORTED for seedCount values outside the PoC set", () => {
+    const result = validateTournament(makeTournament({ seedCount: 6 }));
+
+    expect(result.errors.map((issue) => issue.code)).toContain("SEED_COUNT_UNSUPPORTED");
+  });
+
+  it("returns SEED_COUNT_EXCEEDS_DRAW_SIZE when seedCount exceeds drawSize", () => {
+    const result = validateTournament(makeTournament({ drawSize: 16, seedCount: 32 }));
+
+    expect(result.errors.map((issue) => issue.code)).toContain("SEED_COUNT_EXCEEDS_DRAW_SIZE");
+  });
+
+  it("returns SEED_NO_EXCEEDS_SEED_COUNT when seedNo is outside the configured seedCount", () => {
+    const result = validateTournament(
+      makeTournament({
+        seedCount: 2,
+        entrants: [makeEntrant(1, { seedNo: 3 })],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).toContain("SEED_NO_EXCEEDS_SEED_COUNT");
+  });
+
+  it("allows same-rank seeds when they fit in the seed placement band", () => {
+    const result = validateTournament(
+      makeTournament({
+        seedCount: 4,
+        entrants: [
+          makeEntrant(1, { seedNo: 1 }),
+          makeEntrant(2, { seedNo: 2 }),
+          makeEntrant(3, { seedNo: 3 }),
+          makeEntrant(4, { seedNo: 3 }),
+        ],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).not.toContain("SEED_DUPLICATION_EXCEEDS_PLACEMENT_SLOTS");
+    expect(result.warnings.map((issue) => issue.code)).toContain("UNUSUAL_SEED_DUPLICATION");
+  });
+
+  it("returns an error when duplicate seedNo values exceed their placement band", () => {
+    const result = validateTournament(
+      makeTournament({
+        seedCount: 4,
+        entrants: [
+          makeEntrant(1, { seedNo: 1 }),
+          makeEntrant(2, { seedNo: 1 }),
+          makeEntrant(3, { seedNo: 3 }),
+          makeEntrant(4, { seedNo: 4 }),
+        ],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).toContain("SEED_DUPLICATION_EXCEEDS_PLACEMENT_SLOTS");
+  });
+
   it("warns when the same player name appears more than once", () => {
     const result = validateTournament(
       makeTournament({

@@ -26,6 +26,18 @@ describe("generateDraw", () => {
     expect(first.draw?.slots).toEqual(second.draw?.slots);
   });
 
+  it("uses the caller supplied randomSeed and now values", () => {
+    const result = generateDraw(
+      makeInput(makeTournamentWithEntrantCount(4, 4), {
+        randomSeed: "caller-seed",
+        now: "2026-07-03T00:00:00.000Z",
+      }),
+    );
+
+    expect(result.draw?.randomSeed).toBe("caller-seed");
+    expect(result.draw?.generatedAt).toBe("2026-07-03T00:00:00.000Z");
+  });
+
   it("can produce different placement with different random seeds", () => {
     const base = makeTournamentWithEntrantCount(13, 16);
     const first = generateDraw(
@@ -76,11 +88,29 @@ describe("generateDraw", () => {
     expect(result.draw).toBeUndefined();
     expect(result.validation.errors.map((issue) => issue.code)).toContain("ENTRANTS_EXCEED_DRAW_SIZE");
   });
+
+  it("returns validation errors without a draw when seedNo exceeds seedCount", () => {
+    const result = generateDraw(
+      makeInput(
+        makeTournament({
+          seedCount: 2,
+          entrants: [makeEntrant(1, { seedNo: 3 }), ...makeEntrants(3)],
+        }),
+      ),
+    );
+
+    expect(result.draw).toBeUndefined();
+    expect(result.validation.errors.map((issue) => issue.code)).toContain("SEED_NO_EXCEEDS_SEED_COUNT");
+  });
 });
 
-function makeInput(tournament: ReturnType<typeof makeTournament>) {
+function makeInput(
+  tournament: ReturnType<typeof makeTournament>,
+  overrides: { randomSeed?: string; now?: string } = {},
+) {
   return {
     tournament,
-    now: "2026-07-02T00:00:00.000Z",
+    randomSeed: overrides.randomSeed,
+    now: overrides.now ?? "2026-07-02T00:00:00.000Z",
   };
 }

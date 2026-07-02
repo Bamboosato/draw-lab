@@ -1,5 +1,5 @@
 import type { DrawOptions, DrawSize, Entrant, MatchType, Tournament, ValidationIssue, ValidationResult } from "./types";
-import { VALID_DRAW_SIZES } from "./types";
+import { VALID_DRAW_SIZES, VALID_SEED_COUNTS } from "./types";
 
 const DEFAULT_OPTIONS: DrawOptions = {
   avoidSameTeam: true,
@@ -15,7 +15,7 @@ export function normalizeTournament(tournament: Tournament): Tournament {
     date: normalizeOptionalString(tournament.date),
     venue: normalizeOptionalString(tournament.venue),
     eventName: normalizeOptionalString(tournament.eventName),
-    seedCount: normalizeNumber(tournament.seedCount) ?? 0,
+    seedCount: normalizeNumber(tournament.seedCount) ?? Number.NaN,
     entrants: normalizeEntrants(tournament.entrants ?? [], tournament.matchType),
     options: {
       ...DEFAULT_OPTIONS,
@@ -68,12 +68,30 @@ export function validateTournament(tournament: Tournament): ValidationResult {
     });
   }
 
-  if (isDrawSize(normalized.drawSize) && normalized.seedCount > normalized.drawSize) {
+  const seedCount = getNumericSeedCount(normalized.seedCount);
+
+  if (seedCount === undefined) {
     errors.push({
-      code: "SEED_COUNT_EXCEEDS_DRAW_SIZE",
-      message: "シード数はドローサイズ以下にしてください",
+      code: "SEED_COUNT_INVALID",
+      message: "シード数は0以上の整数で入力してください",
       field: "seedCount",
     });
+  } else {
+    if (isDrawSize(normalized.drawSize) && seedCount > normalized.drawSize) {
+      errors.push({
+        code: "SEED_COUNT_EXCEEDS_DRAW_SIZE",
+        message: "シード数はドローサイズ以下にしてください",
+        field: "seedCount",
+      });
+    }
+
+    if (!isSupportedSeedCount(seedCount)) {
+      errors.push({
+        code: "SEED_COUNT_UNSUPPORTED",
+        message: "シード数は0, 2, 4, 8, 16, 32, 64から選択してください",
+        field: "seedCount",
+      });
+    }
   }
 
   const matchType = isMatchType(normalized.matchType) ? normalized.matchType : "singles";
@@ -98,10 +116,17 @@ export function validateTournament(tournament: Tournament): ValidationResult {
       });
     }
 
-    if (isDrawSize(normalized.drawSize)) {
-      const seedNo = getNumericSeedNo(entrant);
+    const seedNo = getNumericSeedNo(entrant);
 
-      if (seedNo !== undefined && seedNo > normalized.drawSize) {
+    if (seedNo !== undefined) {
+      if (seedCount !== undefined && seedNo > seedCount) {
+        errors.push({
+          code: "SEED_NO_EXCEEDS_SEED_COUNT",
+          message: "シード番号はシード数以内で指定してください",
+          entrantId: entrant.id,
+          field: "seedNo",
+        });
+      } else if (isDrawSize(normalized.drawSize) && seedNo > normalized.drawSize) {
         errors.push({
           code: "SEED_NO_INVALID",
           message: "シード番号は数値で入力してください",
@@ -142,8 +167,9 @@ export function validateTournament(tournament: Tournament): ValidationResult {
     });
   }
 
+  errors.push(...findSeedErrors(validEntrants, seedCount));
   warnings.push(...findDuplicatePlayerWarnings(normalized.entrants));
-  warnings.push(...findSeedWarnings(validEntrants, normalized.seedCount));
+  warnings.push(...findSeedWarnings(validEntrants, seedCount));
 
   return { errors, warnings };
 }
@@ -170,8 +196,20 @@ export function getNumericSeedNo(entrant: Entrant): number | undefined {
   return entrant.seedNo;
 }
 
+export function getNumericSeedCount(seedCount: number): number | undefined {
+  if (!Number.isInteger(seedCount) || seedCount < 0) {
+    return undefined;
+  }
+
+  return seedCount;
+}
+
 export function isDrawSize(value: unknown): value is DrawSize {
   return typeof value === "number" && VALID_DRAW_SIZES.includes(value as DrawSize);
+}
+
+export function isSupportedSeedCount(seedCount: number): boolean {
+  return VALID_SEED_COUNTS.includes(seedCount as (typeof VALID_SEED_COUNTS)[number]);
 }
 
 function findDuplicatePlayerWarnings(entrants: readonly Entrant[]): ValidationIssue[] {
@@ -198,20 +236,40 @@ function findDuplicatePlayerWarnings(entrants: readonly Entrant[]): ValidationIs
   return warnings;
 }
 
-function findSeedWarnings(entrants: readonly Entrant[], seedCount: number): ValidationIssue[] {
-  const warnings: ValidationIssue[] = [];
-  const seedCounts = new Map<number, number>();
-  let assignedSeedCount = 0;
+function findSeedErrors(entrants: readonly Entrant[], seedCount: number | undefined): ValidationIssue[] {
+  if (seedCount === undefined) {
+    return [];
+  }
 
-  for (const entrant of entrants) {
-    const seedNo = getNumericSeedNo(entrant);
+  const errors: ValidationIssue[] = [];
+  const seedCounts = countSeeds(entrants);
 
-    if (seedNo === undefined) {
+  for (const [seedNo, count] of seedCounts) {
+    if (seedNo > seedCount) {
       continue;
     }
 
-    assignedSeedCount += 1;
-    seedCounts.set(seedNo, (seedCounts.get(seedNo) ?? 0) + 1);
+    const band = getSeedBand(seedNo, seedCount);
+
+    if (band && count > band.end - band.start + 1) {
+      errors.push({
+        code: "SEED_DUPLICATION_EXCEEDS_PLACEMENT_SLOTS",
+        message: "同順位シードが配置枠数を超えています",
+        field: "seedNo",
+      });
+    }
+  }
+
+  return errors;
+}
+
+function findSeedWarnings(entrants: readonly Entrant[], seedCount: number | undefined): ValidationIssue[] {
+  const warnings: ValidationIssue[] = [];
+  const seedCounts = countSeeds(entrants);
+  let assignedSeedCount = 0;
+
+  for (const count of seedCounts.values()) {
+    assignedSeedCount += count;
   }
 
   if ([...seedCounts.values()].some((count) => count > 1)) {
@@ -222,7 +280,7 @@ function findSeedWarnings(entrants: readonly Entrant[], seedCount: number): Vali
     });
   }
 
-  if ((seedCount > 0 || assignedSeedCount > 0) && seedCount !== assignedSeedCount) {
+  if (seedCount !== undefined && (seedCount > 0 || assignedSeedCount > 0) && seedCount !== assignedSeedCount) {
     warnings.push({
       code: "SEED_COUNT_MISMATCH",
       message: "シード数とシード指定人数が一致していません",
@@ -231,6 +289,38 @@ function findSeedWarnings(entrants: readonly Entrant[], seedCount: number): Vali
   }
 
   return warnings;
+}
+
+function countSeeds(entrants: readonly Entrant[]): Map<number, number> {
+  const seedCounts = new Map<number, number>();
+
+  for (const entrant of entrants) {
+    const seedNo = getNumericSeedNo(entrant);
+
+    if (seedNo !== undefined) {
+      seedCounts.set(seedNo, (seedCounts.get(seedNo) ?? 0) + 1);
+    }
+  }
+
+  return seedCounts;
+}
+
+function getSeedBand(seedNo: number, seedCount: number): { start: number; end: number } | undefined {
+  let start = 1;
+  let size = 1;
+
+  while (start <= seedCount) {
+    const end = Math.min(seedCount, start + size - 1);
+
+    if (seedNo >= start && seedNo <= end) {
+      return { start, end };
+    }
+
+    start = end + 1;
+    size = start === 2 ? 1 : size * 2;
+  }
+
+  return undefined;
 }
 
 function addName(

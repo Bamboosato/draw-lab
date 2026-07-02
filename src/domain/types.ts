@@ -1,4 +1,5 @@
 export const VALID_DRAW_SIZES = [4, 8, 16, 32, 64, 128] as const;
+export const VALID_SEED_COUNTS = [0, 2, 4, 8, 16, 32, 64] as const;
 
 export type DrawSize = (typeof VALID_DRAW_SIZES)[number];
 export type MatchType = "singles" | "doubles";
@@ -66,7 +67,8 @@ export type ValidationIssue = {
 
 export type GenerateDrawInput = {
   tournament: Tournament;
-  now?: string;
+  randomSeed?: string;
+  now: string;
 };
 
 export type GenerateDrawResult = {
@@ -113,4 +115,22 @@ export type CreateGeneratedDrawParams = {
   randomSeed: string;
   slots: DrawSlot[];
   now: string;
+};
+
+export type BracketViewModel = {
+  title?: string;
+  date?: string;
+  venue?: string;
+  eventName?: string;
+  drawSize: DrawSize;
+  rows: BracketRow[];
+};
+
+export type BracketRow = {
+  position: number;
+  label: string;
+  seedNo?: number;
+  teamLabel?: string;
+  region?: string;
+  isBye: boolean;
 };
