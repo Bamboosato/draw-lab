@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { DRAW_SIZES, SEED_COUNTS } from "../app/tournamentModel";
+import { getBasicInfoErrors } from "../app/tournamentFlow";
+import { applyBasicInfoPatch, applyEntrantsUpdate, DRAW_SIZES, ensureEntrantRows, SEED_COUNTS } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import type { DrawSize, MatchType, Tournament } from "../domain/types";
 
@@ -9,14 +10,21 @@ export function BasicInfoPage() {
   const { id } = useParams();
   const tournament = useTournament(id);
   const { updateTournament } = useTournaments();
-  const basicErrors = useMemo(() => tournament ? getBasicErrors(tournament) : [], [tournament]);
+  const basicErrors = useMemo(() => tournament ? getBasicInfoErrors(tournament) : [], [tournament]);
 
   if (!tournament) {
     return <NotFoundPanel />;
   }
 
   const update = (patch: Partial<Tournament>): void => {
-    updateTournament({ ...tournament, ...patch, generatedDraw: undefined });
+    updateTournament(applyBasicInfoPatch(tournament, patch));
+  };
+
+  const goNext = (): void => {
+    const entrants = ensureEntrantRows(tournament.entrants, tournament.drawSize, tournament.matchType);
+
+    updateTournament(applyEntrantsUpdate(tournament, entrants));
+    navigate(`/tournaments/${tournament.id}/edit/entrants`);
   };
 
   return (
@@ -88,33 +96,18 @@ export function BasicInfoPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" onClick={() => navigate("/")}>一覧へ戻る</button>
-        <button type="button" className="button secondary" onClick={() => updateTournament(tournament)}>一時保存</button>
+        <button type="button" className="button secondary" onClick={() => navigate("/")}>戻る</button>
         <button
           type="button"
           className="button primary"
           disabled={basicErrors.length > 0}
-          onClick={() => navigate(`/tournaments/${tournament.id}/edit/entrants`)}
+          onClick={goNext}
         >
-          次へ（名簿入力へ）
+          次へ
         </button>
       </div>
     </div>
   );
-}
-
-function getBasicErrors(tournament: Tournament): string[] {
-  const errors: string[] = [];
-
-  if (tournament.seedCount < 0) {
-    errors.push("シード数は0以上にしてください。");
-  }
-
-  if (tournament.seedCount > tournament.drawSize) {
-    errors.push("シード数はドローサイズ以下にしてください。");
-  }
-
-  return errors;
 }
 
 function NotFoundPanel() {

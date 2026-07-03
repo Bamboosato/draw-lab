@@ -125,6 +125,10 @@ type DrawOptions = {
   avoidSameTeam: boolean;
   avoidSameRegion: boolean;
   prioritizeSeedBye: boolean;
+  seedPositionMode?: "fixed" | "jtaRulebook" | "grandSlam";
+  thirdFourthSeedPlacement?: "tennisRule" | "standard";
+  fixByePositionOnSeedLottery?: boolean;
+  entrantPlacementOrder?: "largeTeamFirst" | "random" | "rosterOrder";
   randomSeed?: string;
 };
 ```
@@ -264,16 +268,17 @@ function validateTournament(tournament: Tournament): ValidationResult;
 | `NO_ENTRANTS` | 有効参加者が0件 | 参加者を1件以上入力してください |
 | `ENTRANTS_EXCEED_DRAW_SIZE` | 有効参加者数 > drawSize | 参加者数がドローサイズを超えています |
 | `PLAYER_NAME_REQUIRED` | シングルスでplayer1Nameなし | 選手名を入力してください |
+| `DOUBLES_PLAYER_MISSING` | ダブルスでplayer1Nameまたはplayer2Nameなし | ダブルスの選手名1・選手名2を入力してください |
 | `SEED_NO_INVALID` | seedNoが数値でない | シード番号は数値で入力してください |
+| `SEED_COUNT_MISMATCH` | seedCountと実際のseed指定数に差がある | シード数とシード指定人数が一致していません |
+| `RANKING_INVALID` | rankingが1〜9999の整数でない | ランキングは1〜9999の整数で入力してください |
 
 ## 7.3 警告
 
 | code | 条件 | message |
 |---|---|---|
 | `DUPLICATE_PLAYER_NAME` | 同一選手名が複数存在 | 同じ選手名が複数行にあります |
-| `DOUBLES_PLAYER_MISSING` | ダブルスで片方の選手名のみ入力 | ダブルスの選手名が片方のみ入力されています |
 | `UNUSUAL_SEED_DUPLICATION` | 同順位として解釈可能だが不自然な重複 | シード番号の重複があります |
-| `SEED_COUNT_MISMATCH` | seedCountと実際のseed指定数に差がある | シード数とシード指定人数が一致していません |
 
 ## 7.4 有効参加者の判定
 
@@ -378,6 +383,8 @@ type PlaceSeededEntrantsParams = {
   entrants: Entrant[];
   drawSize: DrawSize;
   seedCount: number;
+  options: DrawOptions;
+  seedPositionLookup?: number[];
   random: () => number;
 };
 ```
@@ -390,11 +397,18 @@ PoCでは以下の考え方で実装する。
 |---|---|
 | 1 | 上側の山の最上部 |
 | 2 | 下側の山の最下部 |
-| 3〜4 | 準決勝ブロックに分散 |
-| 5〜8 | 準々決勝ブロックに分散 |
-| 9〜16 | さらに細かいブロックに分散 |
+| 3〜4 | `thirdFourthSeedPlacement` に従って分散 |
+| 5〜8 | 準々決勝ブロックに分散。抽選対象の場合はグループ内で抽選 |
+| 9〜16 | さらに細かいブロックに分散。抽選対象の場合はグループ内で抽選 |
+| 17〜32 | 128ドローかつグランドスラム方式の場合に抽選対象 |
 
-厳密な競技団体ルール完全準拠はPoC対象外。
+`seedPositionMode` は以下とする。
+
+| 値 | 内容 |
+|---|---|
+| `fixed` | シード位置を抽選しない |
+| `jtaRulebook` | ExcelマクロのJTAルールブック方式に準じて抽選 |
+| `grandSlam` | Excelマクロのグランドスラム方式に準じて、128ドローでは32シードまで抽選 |
 
 ## 10.4 seedCount
 
@@ -443,7 +457,8 @@ type PlaceByesParams = {
   slots: DrawSlot[];
   byeCount: number;
   drawSize: DrawSize;
-  prioritizeSeedBye: boolean;
+  options: DrawOptions;
+  seedPositionLookup?: number[];
   random: () => number;
 };
 ```
@@ -453,24 +468,19 @@ type PlaceByesParams = {
 - BYE数 = drawSize - 有効参加者数
 - BYEは `DrawSlot.isBye = true` として表現する
 - BYEはentrantとして扱わない
+- BYEは末尾シード番号を持つ仮想枠として扱い、`drawSize`, `drawSize - 1`, ... の seedNo から位置を決める
 - BYE同士の初戦対戦は避ける
-- `prioritizeSeedBye` がtrueの場合、シード選手の初戦相手枠を優先する
-- シードがない、またはBYEが余る場合は全体に分散する
+- 仮想シード位置に置けない場合は全体に分散する
 
-## 11.4 シード側優先BYE
+## 11.4 BYE位置固定
 
-シード選手が配置済みの場合、以下を優先する。
+`fixByePositionOnSeedLottery` がtrueの場合、シード位置抽選があってもBYE側の位置は元のシード枠基準で固定する。
 
 ```text
-シード選手のpositionの初戦相手positionにBYEを置く
+16ドローで4 BYEの場合、BYEは内部的に seedNo 16, 15, 14, 13 として配置する
 ```
 
 例:
-
-```text
-position 1 に第1シード
-相手position 2 にBYE
-```
 
 ## 11.5 分散BYE
 
@@ -512,28 +522,32 @@ type PlaceUnseededEntrantsParams = {
 
 ## 12.4 配置順
 
-PoCでは以下のどちらかを採用する。
+`entrantPlacementOrder` により以下のいずれかを採用する。デフォルトは `largeTeamFirst`。
 
-推奨はA案。
-
-### A案: 所属人数が多いグループから配置
+### `largeTeamFirst`: メンバーの多いチームから配置
 
 ```text
-1. ノーシードEntrantをチーム・地区の人数順に並べる
+1. ノーシードEntrantを関連チーム人数順に並べる
 2. 多いグループのEntrantから配置する
 3. 候補slotのペナルティスコアを計算する
 4. 最低スコアのslotへ配置する
 ```
 
-### B案: 入力順 + ペナルティ配置
+### `random`: ランダムに配置
+
+```text
+1. ノーシードEntrantをseeded randomでシャッフルする
+2. 候補slotのペナルティスコアを計算する
+3. 最低スコアのslotへ配置する
+```
+
+### `rosterOrder`: 名簿記載順に配置
 
 ```text
 1. 入力順を維持する
 2. 候補slotのペナルティスコアを計算する
 3. 最低スコアのslotへ配置する
 ```
-
-A案の方が、同所属が多い場合の偏りを抑えやすい。
 
 ---
 
@@ -770,7 +784,7 @@ type BracketRow = {
 | シングルスで選手名なし | `PLAYER_NAME_REQUIRED` エラー |
 | シード番号が文字列 | `SEED_NO_INVALID` エラー |
 | 同一選手名あり | `DUPLICATE_PLAYER_NAME` 警告 |
-| ダブルスで片方のみ入力 | `DOUBLES_PLAYER_MISSING` 警告 |
+| ダブルスで選手名1・選手名2の不足 | `DOUBLES_PLAYER_MISSING` エラー |
 
 ## 19.2 random.test.ts
 

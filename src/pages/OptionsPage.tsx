@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  applyOptionsPatch,
   createRandomSeed,
   generateTournamentDraw,
   getEntrantStats,
@@ -8,14 +9,13 @@ import {
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import { ValidationBanner } from "../components/ValidationBanner";
-import type { Tournament } from "../domain/types";
+import type { DrawOptions } from "../domain/types";
 
 export function OptionsPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const tournament = useTournament(id);
   const { updateTournament } = useTournaments();
-  const [validationVisible, setValidationVisible] = useState(false);
 
   const validation = useMemo(() => tournament ? validateTournamentForUi(tournament) : { errors: [], warnings: [] }, [tournament]);
   const stats = useMemo(() => tournament ? getEntrantStats(tournament) : undefined, [tournament]);
@@ -24,26 +24,14 @@ export function OptionsPage() {
     return <section className="empty-state"><h2>トーナメントが見つかりません。</h2></section>;
   }
 
-  const update = (patch: Partial<Tournament>): void => {
-    updateTournament({ ...tournament, ...patch, generatedDraw: undefined });
+  const hasValidationErrors = validation.errors.length > 0;
+
+  const updateOptions = (patch: Partial<DrawOptions>): void => {
+    updateTournament(applyOptionsPatch(tournament, patch));
   };
 
-  const updateOptions = (patch: Partial<Tournament["options"]>): void => {
-    update({ options: { ...tournament.options, ...patch } });
-  };
-
-  const generate = (): void => {
-    setValidationVisible(true);
-
-    if (validation.errors.length > 0) {
-      return;
-    }
-
-    if (validation.warnings.length > 0 && !window.confirm("警告があります。内容を確認したうえで生成しますか？")) {
-      return;
-    }
-
-    const seed = tournament.options.randomSeed || createRandomSeed();
+  const proceedGenerate = (): void => {
+    const seed = createRandomSeed();
     const result = generateTournamentDraw(tournament, seed);
 
     if (result.validation.errors.length > 0) {
@@ -54,79 +42,121 @@ export function OptionsPage() {
     navigate(`/tournaments/${tournament.id}/preview`);
   };
 
+  const generate = (): void => {
+    if (validation.errors.length > 0) {
+      return;
+    }
+
+    proceedGenerate();
+  };
+
   return (
     <div className="page-stack">
       <section className="page-heading">
         <div>
           <p className="eyebrow">Generate Options</p>
-          <h2>生成オプションの設定</h2>
-          <p>配置条件と乱数シードを設定します。BYEをシード側へ優先配置する設定は初期ONです。</p>
+          <h2>トーナメント生成</h2>
+          <p>シード位置、BYE位置、残り選手の配置順序を設定します。</p>
         </div>
       </section>
 
-      {validationVisible ? <ValidationBanner errors={validation.errors} warnings={validation.warnings} /> : null}
+      {hasValidationErrors ? (
+        <ValidationBanner errors={validation.errors} warnings={[]} entrants={tournament.entrants} />
+      ) : null}
 
       <section className="option-layout">
         <div className="settings-panel">
-          <h3>配置条件</h3>
+          <h3>シード・BYE位置</h3>
+          <div className="field-group">
+            <span>第3・第4シード位置</span>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="thirdFourthSeedPlacement"
+                checked={(tournament.options.thirdFourthSeedPlacement ?? "tennisRule") === "tennisRule"}
+                onChange={() => updateOptions({ thirdFourthSeedPlacement: "tennisRule" })}
+              />
+              <span><strong>テニス方式</strong></span>
+            </label>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="thirdFourthSeedPlacement"
+                checked={tournament.options.thirdFourthSeedPlacement === "standard"}
+                onChange={() => updateOptions({ thirdFourthSeedPlacement: "standard" })}
+              />
+              <span><strong>標準方式</strong></span>
+            </label>
+          </div>
+          <div className="field-group">
+            <span>シード位置抽選</span>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="seedPositionMode"
+                checked={tournament.options.seedPositionMode === "fixed"}
+                onChange={() => updateOptions({ seedPositionMode: "fixed" })}
+              />
+              <span><strong>抽選しない</strong></span>
+            </label>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="seedPositionMode"
+                checked={(tournament.options.seedPositionMode ?? "jtaRulebook") === "jtaRulebook"}
+                onChange={() => updateOptions({ seedPositionMode: "jtaRulebook" })}
+              />
+              <span><strong>JTAルールブック方式</strong></span>
+            </label>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="seedPositionMode"
+                checked={tournament.options.seedPositionMode === "grandSlam"}
+                onChange={() => updateOptions({ seedPositionMode: "grandSlam" })}
+              />
+              <span><strong>グランドスラム方式</strong></span>
+            </label>
+          </div>
           <label className="check-field">
             <input
               type="checkbox"
-              checked={tournament.options.avoidSameTeam}
-              onChange={(event) => updateOptions({ avoidSameTeam: event.target.checked })}
+              checked={tournament.options.fixByePositionOnSeedLottery ?? true}
+              disabled={(tournament.options.seedPositionMode ?? "jtaRulebook") === "fixed"}
+              onChange={(event) => updateOptions({ fixByePositionOnSeedLottery: event.target.checked })}
             />
-            <span>
-              <strong>チーム偏り回避</strong>
-              <small>同じ所属チームの初戦対戦や山の集中を抑制します。</small>
-            </span>
-          </label>
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={tournament.options.avoidSameRegion}
-              onChange={(event) => updateOptions({ avoidSameRegion: event.target.checked })}
-            />
-            <span>
-              <strong>地区偏り回避</strong>
-              <small>地区情報を使って初戦対戦と山の偏りを抑制します。</small>
-            </span>
-          </label>
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={tournament.options.prioritizeSeedBye}
-              onChange={(event) => updateOptions({ prioritizeSeedBye: event.target.checked })}
-            />
-            <span>
-              <strong>BYEをシード側へ優先配置</strong>
-              <small>上位シードの初戦相手側にBYEを優先します。</small>
-            </span>
+            <span><strong>BYE位置を固定する</strong></span>
           </label>
         </div>
 
         <div className="settings-panel">
-          <h3>乱数シード</h3>
+          <h3>選手配置順序</h3>
           <label className="check-field">
             <input
-              type="checkbox"
-              checked={Boolean(tournament.options.randomSeed)}
-              onChange={(event) => updateOptions({ randomSeed: event.target.checked ? createRandomSeed() : undefined })}
+              type="radio"
+              name="entrantPlacementOrder"
+              checked={(tournament.options.entrantPlacementOrder ?? "largeTeamFirst") === "largeTeamFirst"}
+              onChange={() => updateOptions({ entrantPlacementOrder: "largeTeamFirst" })}
             />
-            <span>
-              <strong>シード値を固定する</strong>
-              <small>同じ条件で同一の生成結果を再現できます。</small>
-            </span>
+            <span><strong>メンバーの多いチームから配置</strong></span>
           </label>
-          <label className="field">
-            <span>シード値</span>
-            <div className="compound-input">
-              <input
-                value={tournament.options.randomSeed ?? ""}
-                disabled={!tournament.options.randomSeed}
-                onChange={(event) => updateOptions({ randomSeed: event.target.value })}
-              />
-              <button type="button" onClick={() => updateOptions({ randomSeed: createRandomSeed() })}>再生成</button>
-            </div>
+          <label className="check-field">
+            <input
+              type="radio"
+              name="entrantPlacementOrder"
+              checked={tournament.options.entrantPlacementOrder === "random"}
+              onChange={() => updateOptions({ entrantPlacementOrder: "random" })}
+            />
+            <span><strong>ランダムに配置</strong></span>
+          </label>
+          <label className="check-field">
+            <input
+              type="radio"
+              name="entrantPlacementOrder"
+              checked={tournament.options.entrantPlacementOrder === "rosterOrder"}
+              onChange={() => updateOptions({ entrantPlacementOrder: "rosterOrder" })}
+            />
+            <span><strong>名簿記載順に配置</strong></span>
           </label>
         </div>
 
@@ -144,9 +174,15 @@ export function OptionsPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" onClick={() => navigate(`/tournaments/${tournament.id}/edit/entrants`)}>戻る（名簿入力へ）</button>
-        <button type="button" className="button secondary" onClick={() => updateTournament(tournament)}>一時保存</button>
-        <button type="button" className="button primary" onClick={generate}>トーナメント表を生成する</button>
+        <button type="button" className="button secondary" onClick={() => navigate(`/tournaments/${tournament.id}/edit/entrants`)}>戻る</button>
+        <button
+          type="button"
+          className="button primary"
+          disabled={hasValidationErrors}
+          onClick={generate}
+        >
+          {hasValidationErrors ? "エラー修正後に次へ" : "次へ"}
+        </button>
       </div>
     </div>
   );

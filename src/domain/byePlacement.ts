@@ -6,6 +6,7 @@ import {
   isSlotAvailable,
 } from "./bracketStructure";
 import { pickWithRandom } from "./random";
+import { getSeedPositionLookup } from "./seedPlacement";
 import type { DrawSize, DrawSlot, PlaceByesParams } from "./types";
 
 export function calculateByeCount(drawSize: DrawSize, entrantCount: number): number {
@@ -20,22 +21,19 @@ export function placeByes(params: PlaceByesParams): DrawSlot[] {
     return nextSlots;
   }
 
-  if (params.prioritizeSeedBye) {
-    const seededSlots = nextSlots
-      .filter((slot) => slot.seedNo !== undefined && slot.entrantId)
-      .sort((a, b) => (a.seedNo ?? 0) - (b.seedNo ?? 0));
+  const seedPositionLookup = params.seedPositionLookup ?? getSeedPositionLookup(params.drawSize, params.options, params.random);
 
-    for (const seedSlot of seededSlots) {
-      if (remaining === 0) {
-        break;
-      }
+  for (let index = 0; index < params.byeCount; index += 1) {
+    if (remaining === 0) {
+      break;
+    }
 
-      const opponent = findSlotByPosition(nextSlots, getOpponentPosition(seedSlot.position));
+    const byeSeedNo = params.drawSize - index;
+    const slot = findSlotByPosition(nextSlots, seedPositionLookup[byeSeedNo]);
 
-      if (isSlotAvailable(opponent)) {
-        opponent.isBye = true;
-        remaining -= 1;
-      }
+    if (isSlotAvailable(slot)) {
+      slot.isBye = true;
+      remaining -= 1;
     }
   }
 

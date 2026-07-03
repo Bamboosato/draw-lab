@@ -6,6 +6,10 @@ const DEFAULT_OPTIONS: DrawOptions = {
   avoidSameTeam: true,
   avoidSameRegion: true,
   prioritizeSeedBye: true,
+  seedPositionMode: "jtaRulebook",
+  thirdFourthSeedPlacement: "tennisRule",
+  fixByePositionOnSeedLottery: true,
+  entrantPlacementOrder: "largeTeamFirst",
 };
 
 export function normalizeTournament(tournament: Tournament): Tournament {
@@ -21,6 +25,13 @@ export function normalizeTournament(tournament: Tournament): Tournament {
     options: {
       ...DEFAULT_OPTIONS,
       ...(tournament.options ?? {}),
+      avoidSameTeam: true,
+      avoidSameRegion: true,
+      prioritizeSeedBye: true,
+      seedPositionMode: normalizeSeedPositionMode(tournament.options?.seedPositionMode),
+      thirdFourthSeedPlacement: normalizeThirdFourthSeedPlacement(tournament.options?.thirdFourthSeedPlacement),
+      fixByePositionOnSeedLottery: tournament.options?.fixByePositionOnSeedLottery ?? DEFAULT_OPTIONS.fixByePositionOnSeedLottery,
+      entrantPlacementOrder: normalizeEntrantPlacementOrder(tournament.options?.entrantPlacementOrder),
       randomSeed: normalizeOptionalString(tournament.options?.randomSeed),
     },
     createdAt: normalizeOptionalString(tournament.createdAt) ?? "",
@@ -118,6 +129,15 @@ export function validateTournament(tournament: Tournament): ValidationResult {
       });
     }
 
+    if (hasRankingValue(entrant) && getNumericRanking(entrant) === undefined) {
+      errors.push({
+        code: "RANKING_INVALID",
+        message: "ランキングは1〜9999の整数で入力してください",
+        entrantId: entrant.id,
+        field: "ranking",
+      });
+    }
+
     const seedNo = getNumericSeedNo(entrant);
 
     if (seedNo !== undefined) {
@@ -151,10 +171,10 @@ export function validateTournament(tournament: Tournament): ValidationResult {
         });
       }
 
-      if (hasPlayer1 !== hasPlayer2) {
-        warnings.push({
+      if (!hasPlayer1 || !hasPlayer2) {
+        errors.push({
           code: "DOUBLES_PLAYER_MISSING",
-          message: "ダブルスの選手名が片方のみ入力されています",
+          message: "ダブルスの選手名1・選手名2を入力してください",
           entrantId: entrant.id,
           field: hasPlayer1 ? "player2Name" : "player1Name",
         });
@@ -180,7 +200,7 @@ export function validateTournament(tournament: Tournament): ValidationResult {
 
   errors.push(...findSeedErrors(validEntrants, seedCount));
   warnings.push(...findDuplicatePlayerWarnings(normalized.entrants));
-  warnings.push(...findSeedWarnings(validEntrants, seedCount));
+  warnings.push(...findSeedWarnings(validEntrants));
 
   return { errors, warnings };
 }
@@ -205,6 +225,27 @@ export function getNumericSeedNo(entrant: Entrant): number | undefined {
   }
 
   return entrant.seedNo;
+}
+
+export function getNumericRanking(entrant: Entrant): number | undefined {
+  if (typeof entrant.ranking === "number") {
+    return Number.isInteger(entrant.ranking) && entrant.ranking >= 1 && entrant.ranking <= 9999
+      ? entrant.ranking
+      : undefined;
+  }
+
+  if (typeof entrant.ranking !== "string") {
+    return undefined;
+  }
+
+  const trimmed = entrant.ranking.trim();
+
+  if (!/^\d+$/.test(trimmed)) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 9999 ? parsed : undefined;
 }
 
 export function getNumericSeedCount(seedCount: number): number | undefined {
@@ -283,31 +324,28 @@ function findSeedErrors(entrants: readonly Entrant[], seedCount: number | undefi
     }
   }
 
+  const assignedSeedCount = Array.from(seedCounts.values()).reduce((sum, count) => sum + count, 0);
+
+  if ((seedCount > 0 || assignedSeedCount > 0) && seedCount !== assignedSeedCount) {
+    errors.push({
+      code: "SEED_COUNT_MISMATCH",
+      message: "シード数とシード指定人数が一致していません",
+      field: "seedCount",
+    });
+  }
+
   return errors;
 }
 
-function findSeedWarnings(entrants: readonly Entrant[], seedCount: number | undefined): ValidationIssue[] {
+function findSeedWarnings(entrants: readonly Entrant[]): ValidationIssue[] {
   const warnings: ValidationIssue[] = [];
   const seedCounts = countSeeds(entrants);
-  let assignedSeedCount = 0;
-
-  for (const count of seedCounts.values()) {
-    assignedSeedCount += count;
-  }
 
   if ([...seedCounts.values()].some((count) => count > 1)) {
     warnings.push({
       code: "UNUSUAL_SEED_DUPLICATION",
       message: "シード番号の重複があります",
       field: "seedNo",
-    });
-  }
-
-  if (seedCount !== undefined && (seedCount > 0 || assignedSeedCount > 0) && seedCount !== assignedSeedCount) {
-    warnings.push({
-      code: "SEED_COUNT_MISMATCH",
-      message: "シード数とシード指定人数が一致していません",
-      field: "seedCount",
     });
   }
 
@@ -364,8 +402,28 @@ function hasSeedValue(entrant: Entrant): boolean {
   return entrant.seedNo !== undefined && String(entrant.seedNo).trim() !== "";
 }
 
+function hasRankingValue(entrant: Entrant): boolean {
+  return entrant.ranking !== undefined && String(entrant.ranking).trim() !== "";
+}
+
 function isMatchType(value: unknown): value is MatchType {
   return value === "singles" || value === "doubles";
+}
+
+function normalizeSeedPositionMode(value: DrawOptions["seedPositionMode"]): DrawOptions["seedPositionMode"] {
+  return value === "fixed" || value === "jtaRulebook" || value === "grandSlam" ? value : DEFAULT_OPTIONS.seedPositionMode;
+}
+
+function normalizeThirdFourthSeedPlacement(
+  value: DrawOptions["thirdFourthSeedPlacement"],
+): DrawOptions["thirdFourthSeedPlacement"] {
+  return value === "tennisRule" || value === "standard" ? value : DEFAULT_OPTIONS.thirdFourthSeedPlacement;
+}
+
+function normalizeEntrantPlacementOrder(value: DrawOptions["entrantPlacementOrder"]): DrawOptions["entrantPlacementOrder"] {
+  return value === "largeTeamFirst" || value === "random" || value === "rosterOrder"
+    ? value
+    : DEFAULT_OPTIONS.entrantPlacementOrder;
 }
 
 function normalizeSeedNo(value: Entrant["seedNo"]): Entrant["seedNo"] {

@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  applyEntrantsUpdate,
   compactTournament,
   createEmptyEntrant,
-  ensureEntrantRows,
   getEntrantStats,
   parseEntrantsFromText,
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ValidationBanner } from "../components/ValidationBanner";
 import type { Entrant } from "../domain/types";
 
@@ -19,6 +20,7 @@ export function EntrantsPage() {
   const { updateTournament } = useTournaments();
   const [pasteText, setPasteText] = useState("");
   const [checked, setChecked] = useState(false);
+  const [warningConfirmOpen, setWarningConfirmOpen] = useState(false);
 
   const validation = useMemo(() => tournament ? validateTournamentForUi(tournament) : { errors: [], warnings: [] }, [tournament]);
   const stats = useMemo(() => tournament ? getEntrantStats(tournament) : undefined, [tournament]);
@@ -27,14 +29,21 @@ export function EntrantsPage() {
     return <section className="empty-state"><h2>トーナメントが見つかりません。</h2></section>;
   }
 
-  const rows = ensureEntrantRows(tournament.entrants, tournament.drawSize, tournament.matchType);
+  const rows = tournament.entrants;
+  const hasValidationErrors = validation.errors.length > 0;
+  const shouldBlockNext = checked && hasValidationErrors;
 
   const updateEntrants = (entrants: Entrant[]): void => {
-    updateTournament({ ...tournament, entrants, generatedDraw: undefined });
+    updateTournament(applyEntrantsUpdate(tournament, entrants));
   };
 
   const updateEntrant = (entrantId: string, patch: Partial<Entrant>): void => {
     updateEntrants(rows.map((entrant) => entrant.id === entrantId ? { ...entrant, ...patch } : entrant));
+  };
+
+  const proceedNext = (): void => {
+    updateTournament(applyEntrantsUpdate(tournament, compactTournament(tournament).entrants));
+    navigate(`/tournaments/${tournament.id}/edit/options`);
   };
 
   const goNext = (): void => {
@@ -44,12 +53,12 @@ export function EntrantsPage() {
       return;
     }
 
-    if (validation.warnings.length > 0 && !window.confirm("警告があります。内容を確認したうえで次へ進みますか？")) {
+    if (validation.warnings.length > 0) {
+      setWarningConfirmOpen(true);
       return;
     }
 
-    updateTournament(compactTournament(tournament));
-    navigate(`/tournaments/${tournament.id}/edit/options`);
+    proceedNext();
   };
 
   return (
@@ -62,7 +71,7 @@ export function EntrantsPage() {
         </div>
         <div className="button-row no-print">
           <button type="button" className="button secondary" onClick={() => updateEntrants([...rows, createEmptyEntrant(rows.length + 1, tournament.matchType)])}>行追加</button>
-          <button type="button" className="button secondary" onClick={() => updateTournament(compactTournament(tournament))}>空行削除</button>
+          <button type="button" className="button secondary" onClick={() => updateTournament(applyEntrantsUpdate(tournament, compactTournament(tournament).entrants))}>空行削除</button>
           <button type="button" className="button secondary" onClick={() => setChecked(true)}>入力チェック</button>
         </div>
       </section>
@@ -76,7 +85,9 @@ export function EntrantsPage() {
         </section>
       ) : null}
 
-      {checked ? <ValidationBanner errors={validation.errors} warnings={validation.warnings} /> : null}
+      {checked ? (
+        <ValidationBanner errors={validation.errors} warnings={validation.warnings} entrants={rows} />
+      ) : null}
 
       <section className="table-panel roster-panel">
         <table className="data-table roster-table">
@@ -84,13 +95,13 @@ export function EntrantsPage() {
             <tr>
               <th>No.</th>
               <th>シード</th>
-              <th>{tournament.matchType === "doubles" ? "選手名1" : "選手名"}</th>
-              {tournament.matchType === "doubles" ? <th>選手名2</th> : null}
+              <th>{renderRequiredHeader(tournament.matchType === "doubles" ? "選手名1" : "選手名")}</th>
+              {tournament.matchType === "doubles" ? <th>{renderRequiredHeader("選手名2")}</th> : null}
               <th>{tournament.matchType === "doubles" ? "所属チーム1" : "所属チーム"}</th>
               {tournament.matchType === "doubles" ? <th>所属チーム2</th> : null}
-              {tournament.matchType === "doubles" ? <th>同チーム扱い</th> : null}
+              {tournament.matchType === "doubles" ? <th className="same-team-group-column">同チーム扱い</th> : null}
               <th>地区</th>
-              <th>ランキング</th>
+              <th className="ranking-column">ランキング</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -128,9 +139,8 @@ export function EntrantsPage() {
                   </td>
                 ) : null}
                 {tournament.matchType === "doubles" ? (
-                  <td>
+                  <td className="same-team-group-column">
                     <input
-                      className="short-input"
                       maxLength={5}
                       value={entrant.sameTeamGroup ?? ""}
                       onChange={(event) => updateEntrant(entrant.id, { sameTeamGroup: event.target.value })}
@@ -140,8 +150,14 @@ export function EntrantsPage() {
                 <td>
                   <input value={entrant.region ?? ""} onChange={(event) => updateEntrant(entrant.id, { region: event.target.value })} />
                 </td>
-                <td>
-                  <input value={entrant.ranking ?? ""} onChange={(event) => updateEntrant(entrant.id, { ranking: event.target.value })} />
+                <td className="ranking-column">
+                  <input
+                    inputMode="numeric"
+                    maxLength={4}
+                    pattern="[0-9]*"
+                    value={entrant.ranking ?? ""}
+                    onChange={(event) => updateEntrant(entrant.id, { ranking: normalizeRankingInput(event.target.value) })}
+                  />
                 </td>
                 <td>
                   <button type="button" className="danger-link" onClick={() => updateEntrants(rows.filter((item) => item.id !== entrant.id))}>削除</button>
@@ -180,12 +196,44 @@ export function EntrantsPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" onClick={() => navigate(`/tournaments/${tournament.id}/edit/basic`)}>戻る（基本情報へ）</button>
-        <button type="button" className="button secondary" onClick={() => updateTournament(tournament)}>一時保存</button>
-        <button type="button" className="button primary" onClick={goNext}>次へ（生成オプションへ）</button>
+        <button type="button" className="button secondary" onClick={() => navigate(`/tournaments/${tournament.id}/edit/basic`)}>戻る</button>
+        <button
+          type="button"
+          className="button primary"
+          disabled={shouldBlockNext}
+          onClick={goNext}
+        >
+          {shouldBlockNext ? "エラー修正後に次へ" : "次へ"}
+        </button>
       </div>
+
+      <ConfirmDialog
+        open={warningConfirmOpen}
+        title="警告があります"
+        message="内容を確認したうえで次へ進みますか？"
+        confirmLabel="確認して次へ"
+        cancelLabel="戻って修正"
+        onCancel={() => setWarningConfirmOpen(false)}
+        onConfirm={() => {
+          setWarningConfirmOpen(false);
+          proceedNext();
+        }}
+      />
     </div>
   );
+}
+
+function renderRequiredHeader(label: string) {
+  return (
+    <span className="required-header">
+      {label}
+      <span className="required-marker" aria-label="必須">*</span>
+    </span>
+  );
+}
+
+function normalizeRankingInput(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 4);
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

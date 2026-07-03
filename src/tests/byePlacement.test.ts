@@ -3,26 +3,38 @@ import { createEmptySlots, getOpponentPosition } from "../domain/bracketStructur
 import { calculateByeCount, placeByes } from "../domain/byePlacement";
 import { createSeededRandom } from "../domain/random";
 import { placeSeededEntrants } from "../domain/seedPlacement";
+import type { DrawOptions } from "../domain/types";
 import { makeEntrant } from "./testFactory";
+
+const options: DrawOptions = {
+  avoidSameTeam: true,
+  avoidSameRegion: true,
+  prioritizeSeedBye: true,
+  seedPositionMode: "fixed",
+  thirdFourthSeedPlacement: "tennisRule",
+  fixByePositionOnSeedLottery: true,
+  entrantPlacementOrder: "largeTeamFirst",
+};
 
 describe("bye placement", () => {
   it("calculates bye count from draw size and entrant count", () => {
     expect(calculateByeCount(16, 13)).toBe(3);
   });
 
-  it("places BYEs beside seeded entrants when prioritizeSeedBye is true", () => {
+  it("places BYEs as trailing virtual seed positions", () => {
     const seededSlots = placeSeededEntrants({
       slots: createEmptySlots(16),
       entrants: [makeEntrant(1, { seedNo: 1 }), makeEntrant(2, { seedNo: 2 })],
       drawSize: 16,
       seedCount: 2,
+      options,
       random: createSeededRandom("bye-seed"),
     });
     const slots = placeByes({
       slots: seededSlots,
       byeCount: 2,
       drawSize: 16,
-      prioritizeSeedBye: true,
+      options,
       random: createSeededRandom("bye-seed"),
     });
 
@@ -35,7 +47,7 @@ describe("bye placement", () => {
       slots: createEmptySlots(16),
       byeCount: 3,
       drawSize: 16,
-      prioritizeSeedBye: false,
+      options,
       random: createSeededRandom("distribute-byes"),
     });
     const byeSlots = slots.filter((slot) => slot.isBye);
