@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   compactTournament,
   createEmptyEntrant,
+  ensureEntrantRows,
   getEntrantStats,
   parseEntrantsFromText,
   validateTournamentForUi,
@@ -26,7 +27,7 @@ export function EntrantsPage() {
     return <section className="empty-state"><h2>トーナメントが見つかりません。</h2></section>;
   }
 
-  const rows = tournament.entrants.length > 0 ? tournament.entrants : [createEmptyEntrant(1, tournament.matchType)];
+  const rows = ensureEntrantRows(tournament.entrants, tournament.drawSize, tournament.matchType);
 
   const updateEntrants = (entrants: Entrant[]): void => {
     updateTournament({ ...tournament, entrants, generatedDraw: undefined });
@@ -129,9 +130,10 @@ export function EntrantsPage() {
                 {tournament.matchType === "doubles" ? (
                   <td>
                     <input
-                      type="checkbox"
-                      checked={entrant.sameTeam ?? false}
-                      onChange={(event) => updateEntrant(entrant.id, { sameTeam: event.target.checked })}
+                      className="short-input"
+                      maxLength={5}
+                      value={entrant.sameTeamGroup ?? ""}
+                      onChange={(event) => updateEntrant(entrant.id, { sameTeamGroup: event.target.value })}
                     />
                   </td>
                 ) : null}
@@ -156,7 +158,9 @@ export function EntrantsPage() {
           <textarea
             value={pasteText}
             onChange={(event) => setPasteText(event.target.value)}
-            placeholder="No, シード, 選手名, 所属チーム, 地区, ランキング の順で貼り付けできます。"
+            placeholder={tournament.matchType === "doubles"
+              ? "No, シード, 選手名1, 選手名2, 所属チーム1, 所属チーム2, 同チーム扱い, 地区, ランキング"
+              : "No, シード, 選手名, 所属チーム, 地区, ランキング"}
           />
         </label>
         <div className="button-row">

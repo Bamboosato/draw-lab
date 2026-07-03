@@ -3,6 +3,7 @@ import { calculateByeCount, placeByes } from "./byePlacement";
 import { createSeededRandom, pickWithRandom } from "./random";
 import { calculatePlacementPenalty } from "./scoring";
 import { placeSeededEntrants } from "./seedPlacement";
+import { getTeamRelationTokens } from "./teamGrouping";
 import type {
   CreateGeneratedDrawParams,
   DrawSlot,
@@ -111,14 +112,14 @@ export function createGeneratedDraw(params: CreateGeneratedDrawParams): Generate
 }
 
 function sortUnseededEntrants(entrants: readonly Entrant[]): Entrant[] {
-  const teamCounts = countBy(entrants, getEntrantTeamKey);
+  const teamCounts = countByTokens(entrants, getTeamRelationTokens);
   const regionCounts = countBy(entrants, (entrant) => entrant.region);
 
   return entrants
     .map((entrant, index) => ({ entrant, index }))
     .sort((a, b) => {
-      const aGroupSize = Math.max(teamCounts.get(getEntrantTeamKey(a.entrant) ?? "") ?? 0, regionCounts.get(a.entrant.region ?? "") ?? 0);
-      const bGroupSize = Math.max(teamCounts.get(getEntrantTeamKey(b.entrant) ?? "") ?? 0, regionCounts.get(b.entrant.region ?? "") ?? 0);
+      const aGroupSize = Math.max(getMaxTokenCount(teamCounts, getTeamRelationTokens(a.entrant)), regionCounts.get(a.entrant.region ?? "") ?? 0);
+      const bGroupSize = Math.max(getMaxTokenCount(teamCounts, getTeamRelationTokens(b.entrant)), regionCounts.get(b.entrant.region ?? "") ?? 0);
 
       return bGroupSize - aGroupSize || a.index - b.index;
     })
@@ -142,12 +143,23 @@ function countBy(
   return counts;
 }
 
-function getEntrantTeamKey(entrant: Entrant): string | undefined {
-  if (entrant.sameTeam) {
-    return entrant.team1 ?? entrant.team2;
+function countByTokens(
+  entrants: readonly Entrant[],
+  tokenSelector: (entrant: Entrant) => string[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+
+  for (const entrant of entrants) {
+    for (const token of tokenSelector(entrant)) {
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
   }
 
-  return [entrant.team1, entrant.team2].filter(Boolean).join("|") || undefined;
+  return counts;
+}
+
+function getMaxTokenCount(counts: Map<string, number>, tokens: readonly string[]): number {
+  return Math.max(0, ...tokens.map((token) => counts.get(token) ?? 0));
 }
 
 function stableHash(value: string): string {

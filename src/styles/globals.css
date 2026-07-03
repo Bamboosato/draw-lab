@@ -193,6 +193,7 @@ a {
 
 .page-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
@@ -557,6 +558,10 @@ a {
   width: 100%;
 }
 
+.preview-page .bottom-actions {
+  position: static;
+}
+
 .draw-preview {
   border: 1px solid #dce2ed;
   border-radius: 8px;
@@ -588,6 +593,81 @@ a {
 .bracket-scroll {
   overflow: auto;
   padding: 20px;
+}
+
+.svg-bracket {
+  display: block;
+  max-width: none;
+  background: #ffffff;
+}
+
+.svg-round-heading {
+  fill: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.svg-slot rect {
+  fill: #ffffff;
+  stroke: #cbd5e1;
+  stroke-width: 1;
+}
+
+.svg-slot.bye rect {
+  fill: #f8fafc;
+}
+
+.svg-slot-position {
+  fill: #64748b;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.svg-seed-chip {
+  fill: #eaf1ff !important;
+  stroke: none !important;
+}
+
+.svg-seed-text {
+  fill: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.svg-entrant-name {
+  fill: #172033;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.svg-slot.bye .svg-entrant-name {
+  fill: #64748b;
+}
+
+.svg-entrant-sub {
+  fill: #64748b;
+  font-size: 11px;
+}
+
+.svg-connector {
+  fill: none;
+  stroke: #334155;
+  stroke-linecap: square;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.svg-match rect {
+  fill: #ffffff;
+  stroke: #cbd5e1;
+  stroke-width: 1;
+}
+
+.svg-match text {
+  fill: #64748b;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .bracket-grid {

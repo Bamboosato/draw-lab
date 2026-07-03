@@ -41,6 +41,16 @@
     padding: 0;
   }
 
+  .svg-bracket {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+  }
+
+  .draw-preview {
+    border: 0;
+  }
+
   .bracket-grid {
     transform-origin: top left;
     break-inside: avoid;

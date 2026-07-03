@@ -142,4 +142,26 @@ describe("validateTournament", () => {
 
     expect(result.warnings.map((issue) => issue.code)).toContain("DOUBLES_PLAYER_MISSING");
   });
+
+  it("allows same-team group values up to five characters", () => {
+    const result = validateTournament(
+      makeTournament({
+        matchType: "doubles",
+        entrants: [makeEntrant(1, { player1Name: "Player A", player2Name: "Player B", sameTeamGroup: "ABCDE" })],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).not.toContain("SAME_TEAM_GROUP_TOO_LONG");
+  });
+
+  it("returns an error when same-team group values exceed five characters", () => {
+    const result = validateTournament(
+      makeTournament({
+        matchType: "doubles",
+        entrants: [makeEntrant(1, { player1Name: "Player A", player2Name: "Player B", sameTeamGroup: "ABCDEF" })],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).toContain("SAME_TEAM_GROUP_TOO_LONG");
+  });
 });

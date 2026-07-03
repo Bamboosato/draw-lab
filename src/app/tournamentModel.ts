@@ -33,7 +33,7 @@ export function createDefaultTournament(): Tournament {
     matchType: "singles",
     drawSize: 16,
     seedCount: 0,
-    entrants: createEmptyEntrants(8, "singles"),
+    entrants: createEmptyEntrants(16, "singles"),
     options: {
       avoidSameTeam: true,
       avoidSameRegion: true,
@@ -48,6 +48,24 @@ export function createEmptyEntrants(count: number, matchType: MatchType): Entran
   return Array.from({ length: count }, (_, index) => createEmptyEntrant(index + 1, matchType));
 }
 
+export function ensureEntrantRows(
+  entrants: readonly Entrant[],
+  drawSize: DrawSize,
+  matchType: MatchType,
+): Entrant[] {
+  if (entrants.length >= drawSize) {
+    return [...entrants];
+  }
+
+  return [
+    ...entrants,
+    ...Array.from(
+      { length: drawSize - entrants.length },
+      (_, index) => createEmptyEntrant(entrants.length + index + 1, matchType),
+    ),
+  ];
+}
+
 export function createEmptyEntrant(index: number, matchType: MatchType): Entrant {
   return {
     id: createId(`entrant-${index}`),
@@ -56,6 +74,7 @@ export function createEmptyEntrant(index: number, matchType: MatchType): Entrant
     team1: "",
     team2: matchType === "doubles" ? "" : undefined,
     sameTeam: false,
+    sameTeamGroup: matchType === "doubles" ? "" : undefined,
     region: "",
     ranking: "",
   };
@@ -136,6 +155,7 @@ export function isEntrantEmpty(entrant: Entrant): boolean {
     entrant.player2Name,
     entrant.team1,
     entrant.team2,
+    entrant.sameTeamGroup,
     entrant.region,
     entrant.ranking,
   ].every((value) => value === undefined || String(value).trim() === "") && entrant.sameTeam !== true;
@@ -292,8 +312,8 @@ function getHeaderField(header: string): keyof Entrant | "no" | undefined {
     return "team2";
   }
 
-  if (["same team", "sameteam", "同チーム", "同チーム扱い"].includes(normalized)) {
-    return "sameTeam";
+  if (["same team", "sameteam", "same team group", "sameteamgroup", "同チーム", "同チーム扱い"].includes(normalized)) {
+    return "sameTeamGroup";
   }
 
   if (["region", "area", "district", "地区", "地域"].includes(normalized)) {
@@ -311,8 +331,10 @@ function assignByVisibleColumnOrder(entrant: Entrant, row: string[], matchType: 
   if (matchType === "doubles") {
     const values = row.length >= 9 ? row.slice(1) : row;
     const fields: (keyof Entrant)[] = values.length >= 8
-      ? ["seedNo", "player1Name", "player2Name", "team1", "team2", "sameTeam", "region", "ranking"]
-      : ["player1Name", "player2Name", "team1", "team2", "region", "ranking"];
+      ? ["seedNo", "player1Name", "player2Name", "team1", "team2", "sameTeamGroup", "region", "ranking"]
+      : values.length >= 7
+        ? ["player1Name", "player2Name", "team1", "team2", "sameTeamGroup", "region", "ranking"]
+        : ["player1Name", "player2Name", "team1", "team2", "region", "ranking"];
 
     values.forEach((cell, index) => assignEntrantField(entrant, fields[index], cell));
     return;
@@ -333,6 +355,11 @@ function assignEntrantField(entrant: Entrant, field: keyof Entrant | "no" | unde
 
   if (field === "sameTeam") {
     entrant.sameTeam = ["true", "1", "yes", "y", "同じ", "同一", "○", "on"].includes(value.trim().toLowerCase());
+    return;
+  }
+
+  if (field === "sameTeamGroup") {
+    entrant.sameTeamGroup = value.trim();
     return;
   }
 

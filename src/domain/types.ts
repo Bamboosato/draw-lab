@@ -12,6 +12,7 @@ export type Entrant = {
   team1?: string;
   team2?: string;
   sameTeam?: boolean;
+  sameTeamGroup?: string;
   region?: string;
   ranking?: number | string;
 };

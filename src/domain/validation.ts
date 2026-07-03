@@ -1,4 +1,5 @@
 import type { DrawOptions, DrawSize, Entrant, MatchType, Tournament, ValidationIssue, ValidationResult } from "./types";
+import { normalizeSameTeamGroup } from "./teamGrouping";
 import { VALID_DRAW_SIZES, VALID_SEED_COUNTS } from "./types";
 
 const DEFAULT_OPTIONS: DrawOptions = {
@@ -37,6 +38,7 @@ export function normalizeEntrants(entrants: Entrant[], matchType: MatchType): En
     team1: normalizeOptionalString(entrant.team1),
     team2: matchType === "doubles" ? normalizeOptionalString(entrant.team2) : undefined,
     sameTeam: entrant.sameTeam ?? false,
+    sameTeamGroup: matchType === "doubles" ? normalizeSameTeamGroup(entrant.sameTeamGroup) : undefined,
     region: normalizeOptionalString(entrant.region),
   }));
 }
@@ -139,6 +141,15 @@ export function validateTournament(tournament: Tournament): ValidationResult {
     if (matchType === "doubles") {
       const hasPlayer1 = Boolean(entrant.player1Name);
       const hasPlayer2 = Boolean(entrant.player2Name);
+
+      if (entrant.sameTeamGroup && Array.from(entrant.sameTeamGroup).length > 5) {
+        errors.push({
+          code: "SAME_TEAM_GROUP_TOO_LONG",
+          message: "同チーム扱いは1〜5文字で入力してください",
+          entrantId: entrant.id,
+          field: "sameTeamGroup",
+        });
+      }
 
       if (hasPlayer1 !== hasPlayer2) {
         warnings.push({
