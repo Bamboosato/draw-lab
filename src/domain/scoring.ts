@@ -4,6 +4,7 @@ import {
   getOpponentPosition,
   getQuarterIndex,
 } from "./bracketStructure";
+import { areRelatedTeams } from "./teamGrouping";
 import type { DrawSlot, Entrant, PlacementPenaltyParams } from "./types";
 
 export const PLACEMENT_PENALTY = {
@@ -71,13 +72,6 @@ export function calculatePlacementPenalty(params: PlacementPenaltyParams): numbe
   return penalty;
 }
 
-export function areRelatedTeams(a: Entrant, b: Entrant): boolean {
-  const aTeams = getTeamTokens(a);
-  const bTeams = new Set(getTeamTokens(b));
-
-  return aTeams.some((team) => bTeams.has(team));
-}
-
 export function isSameRegion(a: Entrant, b: Entrant): boolean {
   return Boolean(a.region && b.region && a.region === b.region);
 }
@@ -89,13 +83,4 @@ function getPlacedEntrantAtPosition(
 ): Entrant | undefined {
   const slot = findSlotByPosition(slots, position);
   return slot?.entrantId ? entrantsById.get(slot.entrantId) : undefined;
-}
-
-function getTeamTokens(entrant: Entrant): string[] {
-  if (entrant.sameTeam) {
-    const representative = entrant.team1 ?? entrant.team2;
-    return representative ? [representative] : [];
-  }
-
-  return [entrant.team1, entrant.team2].filter((team): team is string => Boolean(team));
 }

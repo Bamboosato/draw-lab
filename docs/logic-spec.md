@@ -113,6 +113,7 @@ type Entrant = {
   team1?: string;
   team2?: string;
   sameTeam?: boolean;
+  sameTeamGroup?: string;
   region?: string;
 };
 ```
@@ -232,7 +233,8 @@ function normalizeEntrants(entrants: Entrant[], matchType: "singles" | "doubles"
 | seedNo | 数値化できる場合はnumberへ変換する |
 | team1/team2 | trimする |
 | region | trimする |
-| sameTeam | 未指定の場合はfalse扱い |
+| sameTeam | 旧データ互換用。未指定の場合はfalse扱い |
+| sameTeamGroup | trimする。空文字は未指定扱い。指定時は1〜5文字 |
 | id | 未設定の場合は生成する |
 
 ## 6.4 注意点
@@ -582,11 +584,11 @@ entrant.team1 が一致すれば同チーム
 ダブルス:
 
 ```text
-sameTeam = true の場合:
-  team1 または team2 の代表値を使う
-
-sameTeam = false の場合:
+実所属:
   team1 / team2 のどちらかが候補相手の team1 / team2 と一致すれば関連チームとして扱う
+
+同チーム扱い:
+  sameTeamGroup が同じ文字列なら同一チーム扱いとして扱う
 ```
 
 PoC初期では、空のteamは判定対象外とする。

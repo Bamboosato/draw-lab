@@ -20,6 +20,24 @@ describe("placement scoring", () => {
     expect(score(candidate, [placed], slots, 1)).toBeGreaterThanOrEqual(PLACEMENT_PENALTY.sameTeamFirstRound);
   });
 
+  it("treats doubles affiliations as related when either side's team overlaps", () => {
+    const placed = makeEntrant(1, { team1: "East", team2: "West", region: "R1" });
+    const candidate = makeEntrant(2, { team1: "South", team2: "East", region: "R2" });
+    const slots = createEmptySlots(16);
+    slots[1].entrantId = placed.id;
+
+    expect(score(candidate, [placed], slots, 1)).toBeGreaterThanOrEqual(PLACEMENT_PENALTY.sameTeamFirstRound);
+  });
+
+  it("adds same-team penalties when the same-team group matches", () => {
+    const placed = makeEntrant(1, { team1: "A", team2: "B", sameTeamGroup: "G1", region: "R1" });
+    const candidate = makeEntrant(2, { team1: "C", team2: "D", sameTeamGroup: "G1", region: "R2" });
+    const slots = createEmptySlots(16);
+    slots[1].entrantId = placed.id;
+
+    expect(score(candidate, [placed], slots, 1)).toBeGreaterThanOrEqual(PLACEMENT_PENALTY.sameTeamFirstRound);
+  });
+
   it("adds a medium penalty for a same-region first-round opponent", () => {
     const placed = makeEntrant(1, { team1: "A", region: "R1" });
     const candidate = makeEntrant(2, { team1: "B", region: "R1" });

@@ -1,16 +1,43 @@
-import type { CSSProperties } from "react";
 import type { BracketViewModel } from "../domain/types";
 
+const slotWidth = 330;
 const slotHeight = 44;
-const slotGap = 8;
+const slotGap = 10;
+const roundGap = 176;
+const resultWidth = 128;
+const resultHeight = 34;
+const connectorOffset = 28;
+const connectorOverlap = 8;
+const leftPadding = 16;
+const topPadding = 42;
+const rightPadding = 28;
+const bottomPadding = 24;
+const entrantNameX = leftPadding + 96;
 
-export function DrawPreview({ viewModel, randomSeed, generatedAt }: {
+export function DrawPreview({
+  viewModel,
+  randomSeed,
+  generatedAt,
+}: {
   viewModel: BracketViewModel;
   randomSeed: string;
   generatedAt: string;
 }) {
   const roundCount = Math.log2(viewModel.drawSize);
   const rounds = Array.from({ length: roundCount }, (_, index) => index + 1);
+  const rowPitch = slotHeight + slotGap;
+  const svgWidth = leftPadding + slotWidth + connectorOffset + roundGap * (roundCount - 1) + resultWidth + rightPadding;
+  const svgHeight = topPadding + viewModel.rows.length * rowPitch - slotGap + bottomPadding;
+
+  const rowCenterY = (rowIndex: number): number => topPadding + rowIndex * rowPitch + slotHeight / 2;
+  const roundX = (round: number): number => leftPadding + slotWidth + connectorOffset + roundGap * (round - 1);
+  const sourceX = (round: number): number => round === 1 ? leftPadding + slotWidth : roundX(round - 1) + resultWidth;
+  const matchCenterY = (round: number, matchIndex: number): number => {
+    const span = 2 ** round;
+    const startRow = matchIndex * span;
+    const endRow = startRow + span - 1;
+    return (rowCenterY(startRow) + rowCenterY(endRow)) / 2;
+  };
 
   return (
     <section className="print-page draw-preview">
@@ -30,47 +57,84 @@ export function DrawPreview({ viewModel, randomSeed, generatedAt }: {
         </div>
       </div>
       <div className="bracket-scroll">
-        <div
-          className="bracket-grid"
-          style={{
-            "--slot-height": `${slotHeight}px`,
-            "--slot-gap": `${slotGap}px`,
-            gridTemplateColumns: `minmax(280px, 340px) repeat(${roundCount}, minmax(160px, 190px))`,
-          } as CSSProperties}
+        <svg
+          className="svg-bracket"
+          role="img"
+          aria-label={`${viewModel.title || "トーナメント"}のトーナメント表`}
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+          width={svgWidth}
+          height={svgHeight}
         >
-          <section className="bracket-round entrant-round">
-            <h3>出場者</h3>
-            {viewModel.rows.map((row) => (
-              <div className={`entrant-slot ${row.isBye ? "bye" : ""}`} key={row.position}>
-                <span className="slot-position">{row.position}</span>
-                {row.seedNo ? <span className="seed-chip">S{row.seedNo}</span> : <span className="seed-spacer" />}
-                <span className="entrant-name">{row.label || "未配置"}</span>
-                <span className="entrant-sub">
-                  {[row.teamLabel, row.region].filter(Boolean).join(" / ") || "-"}
-                </span>
-              </div>
-            ))}
-          </section>
+          <text className="svg-round-heading" x={leftPadding} y={22}>出場者</text>
           {rounds.map((round) => (
-            <section className="bracket-round match-round" key={round}>
-              <h3>{getRoundName(round, roundCount)}</h3>
-              {Array.from({ length: viewModel.drawSize / 2 ** round }, (_, index) => {
-                const span = 2 ** round;
-                const height = span * slotHeight + Math.max(0, span - 1) * slotGap;
+            <text className="svg-round-heading" x={roundX(round)} y={22} key={`heading-${round}`}>
+              {getRoundName(round, roundCount)}
+            </text>
+          ))}
+
+          <g className="svg-connectors">
+            {rounds.flatMap((round) => {
+              const matchCount = viewModel.drawSize / 2 ** round;
+              const x = roundX(round);
+              const previousX = sourceX(round);
+              const connectorX = round === 1 ? previousX + connectorOffset / 2 : x - connectorOffset;
+
+              return Array.from({ length: matchCount }, (_, matchIndex) => {
+                const topY = round === 1 ? rowCenterY(matchIndex * 2) : matchCenterY(round - 1, matchIndex * 2);
+                const bottomY = round === 1 ? rowCenterY(matchIndex * 2 + 1) : matchCenterY(round - 1, matchIndex * 2 + 1);
+                const centerY = (topY + bottomY) / 2;
 
                 return (
-                  <div
-                    className="match-box"
-                    key={`${round}-${index}`}
-                    style={{ minHeight: `${height}px` }}
-                  >
-                    <span>{round === roundCount ? "優勝" : `勝者 M${round}-${index + 1}`}</span>
-                  </div>
+                  <path
+                    className="svg-connector"
+                    key={`connector-${round}-${matchIndex}`}
+                    d={`M ${previousX - connectorOverlap} ${topY} H ${connectorX} V ${bottomY} H ${previousX - connectorOverlap} M ${connectorX} ${centerY} H ${x + connectorOverlap}`}
+                  />
                 );
-              })}
-            </section>
-          ))}
-        </div>
+              });
+            })}
+          </g>
+
+          {viewModel.rows.map((row, index) => {
+            const y = topPadding + index * rowPitch;
+
+            return (
+              <g className={`svg-slot ${row.isBye ? "bye" : ""}`} key={row.position}>
+                <rect x={leftPadding} y={y} width={slotWidth} height={slotHeight} rx={6} />
+                <text className="svg-slot-position" x={leftPadding + 12} y={y + 27}>{row.position}</text>
+                {row.seedNo ? (
+                  <g>
+                    <rect className="svg-seed-chip" x={leftPadding + 46} y={y + 10} width={38} height={22} rx={11} />
+                    <text className="svg-seed-text" x={leftPadding + 65} y={y + 25}>S{row.seedNo}</text>
+                  </g>
+                ) : null}
+                <text className="svg-entrant-name" x={entrantNameX} y={y + 18}>
+                  {truncateText(row.label || "未配置", 21)}
+                </text>
+                <text className="svg-entrant-sub" x={entrantNameX} y={y + 36}>
+                  {truncateText([row.teamLabel, row.region].filter(Boolean).join(" / ") || "-", 26)}
+                </text>
+              </g>
+            );
+          })}
+
+          {rounds.flatMap((round) => {
+            const matchCount = viewModel.drawSize / 2 ** round;
+            const x = roundX(round);
+
+            return Array.from({ length: matchCount }, (_, matchIndex) => {
+              const centerY = matchCenterY(round, matchIndex);
+              const label = round === roundCount ? "優勝" : `勝者 M${round}-${matchIndex + 1}`;
+
+              return (
+                <g className="svg-match" key={`match-${round}-${matchIndex}`}>
+                  <rect x={x} y={centerY - resultHeight / 2} width={resultWidth} height={resultHeight} rx={6} />
+                  <text x={x + 12} y={centerY + 5}>{label}</text>
+                </g>
+              );
+            });
+          })}
+        </svg>
       </div>
     </section>
   );
@@ -92,6 +156,10 @@ function getRoundName(round: number, roundCount: number): string {
   }
 
   return `${round}回戦`;
+}
+
+function truncateText(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
 function formatDateTime(value: string): string {

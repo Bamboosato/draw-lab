@@ -179,6 +179,7 @@ function coerceEntrant(value: unknown, index: number): Entrant {
     team1: coerceString(value.team1),
     team2: coerceString(value.team2),
     sameTeam: coerceBoolean(value.sameTeam, false),
+    sameTeamGroup: coerceString(value.sameTeamGroup)?.trim() || undefined,
     region: coerceString(value.region),
     ranking: coerceNumberOrString(value.ranking),
   };
