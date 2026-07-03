@@ -1,4 +1,4 @@
-import type { DrawSize, DrawSlot, Entrant, GeneratedDraw, Tournament } from "../domain/types";
+import type { DrawOptions, DrawSize, DrawSlot, Entrant, GeneratedDraw, Tournament } from "../domain/types";
 import { VALID_DRAW_SIZES } from "../domain/types";
 import { createDefaultTournament, createId, createRandomSeed, touchTournament } from "./tournamentModel";
 
@@ -47,7 +47,7 @@ export function parseTournamentImport(text: string): ImportParseResult {
   if (!text.trim()) {
     return {
       state: "empty",
-      message: "JSONを読み込むと解析結果が表示されます。未入力時はエラーを表示しません。",
+      message: "大会情報を読み込むと解析結果が表示されます。未入力時はエラーを表示しません。",
     };
   }
 
@@ -67,12 +67,12 @@ export function parseTournamentImport(text: string): ImportParseResult {
     return {
       state: "success",
       tournament,
-      message: `有効なJSON構造です。参加者${tournament.entrants.length}件を検出しました。`,
+      message: `有効な大会情報です。参加者${tournament.entrants.length}件を検出しました。`,
     };
   } catch {
     return {
       state: "error",
-      message: "JSONを解析できません。構文または形式を確認してください。",
+      message: "大会情報を解析できません。ファイルまたは入力内容を確認してください。",
     };
   }
 }
@@ -105,7 +105,10 @@ export function createSampleJson(): string {
       avoidSameTeam: true,
       avoidSameRegion: true,
       prioritizeSeedBye: true,
-      randomSeed: createRandomSeed(),
+      seedPositionMode: "jtaRulebook",
+      thirdFourthSeedPlacement: "tennisRule",
+      fixByePositionOnSeedLottery: true,
+      entrantPlacementOrder: "largeTeamFirst",
     },
     entrants: Array.from({ length: 8 }, (_, index) => ({
       id: createId(`sample-${index + 1}`),
@@ -154,6 +157,19 @@ function coerceTournament(value: unknown, replaceId = false): Tournament {
           avoidSameTeam: coerceBoolean(value.options.avoidSameTeam, true),
           avoidSameRegion: coerceBoolean(value.options.avoidSameRegion, true),
           prioritizeSeedBye: coerceBoolean(value.options.prioritizeSeedBye, true),
+          seedPositionMode: coerceSeedPositionMode(value.options.seedPositionMode, fallback.options.seedPositionMode),
+          thirdFourthSeedPlacement: coerceThirdFourthSeedPlacement(
+            value.options.thirdFourthSeedPlacement,
+            fallback.options.thirdFourthSeedPlacement,
+          ),
+          fixByePositionOnSeedLottery: coerceBoolean(
+            value.options.fixByePositionOnSeedLottery,
+            fallback.options.fixByePositionOnSeedLottery ?? true,
+          ),
+          entrantPlacementOrder: coerceEntrantPlacementOrder(
+            value.options.entrantPlacementOrder,
+            fallback.options.entrantPlacementOrder,
+          ),
           randomSeed: coerceString(value.options.randomSeed),
         }
       : fallback.options,
@@ -262,6 +278,27 @@ function coerceString(value: unknown): string | undefined {
 
 function coerceBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function coerceSeedPositionMode(
+  value: unknown,
+  fallback: DrawOptions["seedPositionMode"],
+): DrawOptions["seedPositionMode"] {
+  return value === "fixed" || value === "jtaRulebook" || value === "grandSlam" ? value : fallback;
+}
+
+function coerceThirdFourthSeedPlacement(
+  value: unknown,
+  fallback: DrawOptions["thirdFourthSeedPlacement"],
+): DrawOptions["thirdFourthSeedPlacement"] {
+  return value === "tennisRule" || value === "standard" ? value : fallback;
+}
+
+function coerceEntrantPlacementOrder(
+  value: unknown,
+  fallback: DrawOptions["entrantPlacementOrder"],
+): DrawOptions["entrantPlacementOrder"] {
+  return value === "largeTeamFirst" || value === "random" || value === "rosterOrder" ? value : fallback;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

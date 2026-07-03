@@ -16,11 +16,9 @@ const entrantNameX = leftPadding + 96;
 
 export function DrawPreview({
   viewModel,
-  randomSeed,
   generatedAt,
 }: {
   viewModel: BracketViewModel;
-  randomSeed: string;
   generatedAt: string;
 }) {
   const roundCount = Math.log2(viewModel.drawSize);
@@ -52,7 +50,6 @@ export function DrawPreview({
         </div>
         <div className="draw-meta">
           <span>{viewModel.drawSize}ドロー</span>
-          <span>Seed: {randomSeed}</span>
           <span>{formatDateTime(generatedAt)}</span>
         </div>
       </div>

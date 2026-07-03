@@ -21,8 +21,16 @@ export type DrawOptions = {
   avoidSameTeam: boolean;
   avoidSameRegion: boolean;
   prioritizeSeedBye: boolean;
+  seedPositionMode?: SeedPositionMode;
+  thirdFourthSeedPlacement?: ThirdFourthSeedPlacement;
+  fixByePositionOnSeedLottery?: boolean;
+  entrantPlacementOrder?: EntrantPlacementOrder;
   randomSeed?: string;
 };
+
+export type SeedPositionMode = "fixed" | "jtaRulebook" | "grandSlam";
+export type ThirdFourthSeedPlacement = "tennisRule" | "standard";
+export type EntrantPlacementOrder = "largeTeamFirst" | "random" | "rosterOrder";
 
 export type Tournament = {
   id: string;
@@ -83,6 +91,8 @@ export type PlaceSeededEntrantsParams = {
   entrants: Entrant[];
   drawSize: DrawSize;
   seedCount: number;
+  options: DrawOptions;
+  seedPositionLookup?: number[];
   random: () => number;
 };
 
@@ -90,7 +100,8 @@ export type PlaceByesParams = {
   slots: DrawSlot[];
   byeCount: number;
   drawSize: DrawSize;
-  prioritizeSeedBye: boolean;
+  options: DrawOptions;
+  seedPositionLookup?: number[];
   random: () => number;
 };
 

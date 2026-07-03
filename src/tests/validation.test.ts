@@ -66,6 +66,33 @@ describe("validateTournament", () => {
     expect(result.errors.map((issue) => issue.code)).toContain("SEED_NO_EXCEEDS_SEED_COUNT");
   });
 
+  it("allows ranking values from 1 to 9999", () => {
+    const result = validateTournament(
+      makeTournament({
+        entrants: [
+          makeEntrant(1, { ranking: 1 }),
+          makeEntrant(2, { ranking: 9999 }),
+        ],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).not.toContain("RANKING_INVALID");
+  });
+
+  it("returns RANKING_INVALID for ranking values outside 1 to 9999", () => {
+    const invalidRankings = [0, 10000, 1.5, "abc"];
+
+    for (const ranking of invalidRankings) {
+      const result = validateTournament(
+        makeTournament({
+          entrants: [makeEntrant(1, { ranking })],
+        }),
+      );
+
+      expect(result.errors.map((issue) => issue.code)).toContain("RANKING_INVALID");
+    }
+  });
+
   it("allows same-rank seeds when they fit in the seed placement band", () => {
     const result = validateTournament(
       makeTournament({
@@ -119,6 +146,23 @@ describe("validateTournament", () => {
     expect(result.errors.map((issue) => issue.code)).toContain("SEED_DUPLICATION_EXCEEDS_PLACEMENT_SLOTS");
   });
 
+  it("returns an error when seedCount and assigned seed entrants differ", () => {
+    const result = validateTournament(
+      makeTournament({
+        seedCount: 4,
+        entrants: [
+          makeEntrant(1, { seedNo: 1 }),
+          makeEntrant(2, { seedNo: 2 }),
+          makeEntrant(3),
+          makeEntrant(4),
+        ],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).toContain("SEED_COUNT_MISMATCH");
+    expect(result.warnings.map((issue) => issue.code)).not.toContain("SEED_COUNT_MISMATCH");
+  });
+
   it("warns when the same player name appears more than once", () => {
     const result = validateTournament(
       makeTournament({
@@ -132,7 +176,7 @@ describe("validateTournament", () => {
     expect(result.warnings.map((issue) => issue.code)).toContain("DUPLICATE_PLAYER_NAME");
   });
 
-  it("warns when a doubles entrant has only one player name", () => {
+  it("returns an error when a doubles entrant has only one player name", () => {
     const result = validateTournament(
       makeTournament({
         matchType: "doubles",
@@ -140,7 +184,18 @@ describe("validateTournament", () => {
       }),
     );
 
-    expect(result.warnings.map((issue) => issue.code)).toContain("DOUBLES_PLAYER_MISSING");
+    expect(result.errors.map((issue) => issue.code)).toContain("DOUBLES_PLAYER_MISSING");
+  });
+
+  it("returns an error when a doubles row has affiliation but no player names", () => {
+    const result = validateTournament(
+      makeTournament({
+        matchType: "doubles",
+        entrants: [makeEntrant(1, { player1Name: "", player2Name: "", team1: "Team A", team2: "Team B" })],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).toContain("DOUBLES_PLAYER_MISSING");
   });
 
   it("allows same-team group values up to five characters", () => {

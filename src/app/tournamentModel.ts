@@ -2,11 +2,11 @@ import { calculateByeCount } from "../domain/byePlacement";
 import { generateDraw } from "../domain/drawGenerator";
 import type {
   DrawSize,
+  DrawOptions,
   Entrant,
   GeneratedDraw,
   MatchType,
   Tournament,
-  ValidationIssue,
   ValidationResult,
 } from "../domain/types";
 import { VALID_DRAW_SIZES, VALID_SEED_COUNTS } from "../domain/types";
@@ -38,6 +38,10 @@ export function createDefaultTournament(): Tournament {
       avoidSameTeam: true,
       avoidSameRegion: true,
       prioritizeSeedBye: true,
+      seedPositionMode: "jtaRulebook",
+      thirdFourthSeedPlacement: "tennisRule",
+      fixByePositionOnSeedLottery: true,
+      entrantPlacementOrder: "largeTeamFirst",
     },
     createdAt: now,
     updatedAt: now,
@@ -94,19 +98,57 @@ export function compactTournament(tournament: Tournament): Tournament {
   };
 }
 
+export function applyBasicInfoPatch(tournament: Tournament, patch: Partial<Tournament>): Tournament {
+  const next = { ...tournament, ...patch };
+
+  if (hasGenerationBasicInfoChanged(tournament, next)) {
+    return { ...next, generatedDraw: undefined };
+  }
+
+  return next;
+}
+
+export function applyEntrantsUpdate(tournament: Tournament, entrants: Entrant[]): Tournament {
+  const next = { ...tournament, entrants };
+
+  if (haveDrawEntrantsChanged(tournament.entrants, entrants)) {
+    return { ...next, generatedDraw: undefined };
+  }
+
+  return next;
+}
+
+export function applyOptionsPatch(tournament: Tournament, patch: Partial<DrawOptions>): Tournament {
+  const options = { ...tournament.options, ...patch };
+  const next = { ...tournament, options };
+
+  if (areDrawOptionsEqual(tournament.options, options)) {
+    return next;
+  }
+
+  return { ...next, generatedDraw: undefined };
+}
+
 export function validateTournamentForUi(tournament: Tournament): ValidationResult {
-  const compact = compactTournament(tournament);
-  const validation = validateTournament(compact);
-  const activeEntrants = getValidEntrants(compact.entrants, compact.matchType);
+  const validation = validateTournament(tournament);
 
   return {
     errors: validation.errors,
-    warnings: [...validation.warnings, ...buildOptionalAttributeWarnings(activeEntrants, compact.matchType)],
+    warnings: validation.warnings,
   };
 }
 
 export function generateTournamentDraw(tournament: Tournament, seedOverride?: string): GenerateTournamentResult {
   const now = new Date().toISOString();
+  const validation = validateTournament(tournament);
+
+  if (validation.errors.length > 0) {
+    return {
+      tournament,
+      validation,
+    };
+  }
+
   const compact = compactTournament(tournament);
   const randomSeed = seedOverride ?? compact.options.randomSeed ?? createRandomSeed();
   const result = generateDraw({
@@ -161,6 +203,54 @@ export function isEntrantEmpty(entrant: Entrant): boolean {
   ].every((value) => value === undefined || String(value).trim() === "") && entrant.sameTeam !== true;
 }
 
+function hasGenerationBasicInfoChanged(current: Tournament, next: Tournament): boolean {
+  return current.matchType !== next.matchType
+    || current.drawSize !== next.drawSize
+    || current.seedCount !== next.seedCount;
+}
+
+function haveDrawEntrantsChanged(current: readonly Entrant[], next: readonly Entrant[]): boolean {
+  return JSON.stringify(toEntrantDrawSignature(current)) !== JSON.stringify(toEntrantDrawSignature(next));
+}
+
+function areDrawOptionsEqual(current: DrawOptions, next: DrawOptions): boolean {
+  return JSON.stringify(toDrawOptionsSignature(current)) === JSON.stringify(toDrawOptionsSignature(next));
+}
+
+function toEntrantDrawSignature(entrants: readonly Entrant[]) {
+  return entrants
+    .filter((entrant) => !isEntrantEmpty(entrant))
+    .map((entrant) => ({
+      id: entrant.id,
+      seedNo: normalizeSignatureValue(entrant.seedNo),
+      player1Name: normalizeSignatureValue(entrant.player1Name),
+      player2Name: normalizeSignatureValue(entrant.player2Name),
+      team1: normalizeSignatureValue(entrant.team1),
+      team2: normalizeSignatureValue(entrant.team2),
+      sameTeam: entrant.sameTeam === true,
+      sameTeamGroup: normalizeSignatureValue(entrant.sameTeamGroup),
+      region: normalizeSignatureValue(entrant.region),
+      ranking: normalizeSignatureValue(entrant.ranking),
+    }));
+}
+
+function toDrawOptionsSignature(options: DrawOptions) {
+  return {
+    avoidSameTeam: options.avoidSameTeam,
+    avoidSameRegion: options.avoidSameRegion,
+    prioritizeSeedBye: options.prioritizeSeedBye,
+    seedPositionMode: options.seedPositionMode,
+    thirdFourthSeedPlacement: options.thirdFourthSeedPlacement,
+    fixByePositionOnSeedLottery: options.fixByePositionOnSeedLottery,
+    entrantPlacementOrder: options.entrantPlacementOrder,
+    randomSeed: normalizeSignatureValue(options.randomSeed),
+  };
+}
+
+function normalizeSignatureValue(value: number | string | undefined): string {
+  return value === undefined ? "" : String(value).trim();
+}
+
 export function parseEntrantsFromText(text: string, matchType: MatchType): Entrant[] {
   const rows = parseDelimitedRows(text).filter((row) => row.some((cell) => cell.trim()));
 
@@ -173,6 +263,8 @@ export function parseEntrantsFromText(text: string, matchType: MatchType): Entra
   const headers = hasHeader ? firstRow.map(getHeaderField) : [];
   const dataRows = hasHeader ? rows.slice(1) : rows;
 
+  const hasLeadingNumberColumn = detectLeadingNumberColumn(dataRows);
+
   return dataRows.map((row, index) => {
     const entrant = createEmptyEntrant(index + 1, matchType);
 
@@ -182,7 +274,7 @@ export function parseEntrantsFromText(text: string, matchType: MatchType): Entra
         assignEntrantField(entrant, field, cell);
       });
     } else {
-      assignByVisibleColumnOrder(entrant, row, matchType);
+      assignByVisibleColumnOrder(entrant, row, matchType, index, hasLeadingNumberColumn);
     }
 
     entrant.id = createId(`entrant-${index + 1}`);
@@ -200,45 +292,6 @@ export function createId(prefix: string): string {
   }
 
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function buildOptionalAttributeWarnings(entrants: readonly Entrant[], matchType: MatchType): ValidationIssue[] {
-  const warnings: ValidationIssue[] = [];
-
-  for (const entrant of entrants) {
-    const teamMissing = matchType === "doubles"
-      ? !hasText(entrant.team1) && !hasText(entrant.team2)
-      : !hasText(entrant.team1);
-
-    if (teamMissing) {
-      warnings.push({
-        code: "TEAM_MISSING",
-        message: "所属チームが未入力です。生成は可能ですが、偏り回避の精度が下がります",
-        entrantId: entrant.id,
-        field: "team1",
-      });
-    }
-
-    if (!hasText(entrant.region)) {
-      warnings.push({
-        code: "REGION_MISSING",
-        message: "地区が未入力です。生成は可能ですが、地区偏り回避の精度が下がります",
-        entrantId: entrant.id,
-        field: "region",
-      });
-    }
-
-    if (entrant.ranking === undefined || String(entrant.ranking).trim() === "") {
-      warnings.push({
-        code: "RANKING_MISSING",
-        message: "ランキングが未入力です。シード候補の確認情報としては任意です",
-        entrantId: entrant.id,
-        field: "ranking",
-      });
-    }
-  }
-
-  return warnings;
 }
 
 function parseDelimitedRows(text: string): string[][] {
@@ -327,25 +380,92 @@ function getHeaderField(header: string): keyof Entrant | "no" | undefined {
   return undefined;
 }
 
-function assignByVisibleColumnOrder(entrant: Entrant, row: string[], matchType: MatchType): void {
+function assignByVisibleColumnOrder(
+  entrant: Entrant,
+  row: string[],
+  matchType: MatchType,
+  rowIndex: number,
+  hasLeadingNumberColumn: boolean,
+): void {
+  const values = stripLeadingNumberColumn(row, rowIndex, hasLeadingNumberColumn);
+
   if (matchType === "doubles") {
-    const values = row.length >= 9 ? row.slice(1) : row;
-    const fields: (keyof Entrant)[] = values.length >= 8
-      ? ["seedNo", "player1Name", "player2Name", "team1", "team2", "sameTeamGroup", "region", "ranking"]
-      : values.length >= 7
-        ? ["player1Name", "player2Name", "team1", "team2", "sameTeamGroup", "region", "ranking"]
-        : ["player1Name", "player2Name", "team1", "team2", "region", "ranking"];
+    const fields = inferDoublesFields(values);
 
     values.forEach((cell, index) => assignEntrantField(entrant, fields[index], cell));
     return;
   }
 
-  const values = row.length >= 6 ? row.slice(1) : row;
-  const fields: (keyof Entrant)[] = values.length >= 5
-    ? ["seedNo", "player1Name", "team1", "region", "ranking"]
-    : ["player1Name", "team1", "region", "ranking"];
+  const fields = inferSinglesFields(values);
 
   values.forEach((cell, index) => assignEntrantField(entrant, fields[index], cell));
+}
+
+function stripLeadingNumberColumn(row: string[], rowIndex: number, hasLeadingNumberColumn: boolean): string[] {
+  if (!hasLeadingNumberColumn && !isRowNumberCell(row[0], rowIndex + 1)) {
+    return row;
+  }
+
+  return row.slice(1);
+}
+
+function inferSinglesFields(values: string[]): (keyof Entrant)[] {
+  if (values.length >= 5 || hasSeedColumn(values)) {
+    return ["seedNo", "player1Name", "team1", "region", "ranking"];
+  }
+
+  return ["player1Name", "team1", "region", "ranking"];
+}
+
+function inferDoublesFields(values: string[]): (keyof Entrant)[] {
+  if (values.length >= 8 || hasSeedColumn(values)) {
+    return ["seedNo", "player1Name", "player2Name", "team1", "team2", "sameTeamGroup", "region", "ranking"];
+  }
+
+  if (values.length >= 7) {
+    return ["player1Name", "player2Name", "team1", "team2", "sameTeamGroup", "region", "ranking"];
+  }
+
+  return ["player1Name", "player2Name", "team1", "team2", "region", "ranking"];
+}
+
+function hasSeedColumn(values: readonly string[]): boolean {
+  if (values.length < 2) {
+    return false;
+  }
+
+  const first = values[0]?.trim() ?? "";
+  return first === "" || Number.isInteger(Number(first));
+}
+
+function detectLeadingNumberColumn(rows: readonly string[][]): boolean {
+  if (rows.length < 2) {
+    return false;
+  }
+
+  const numbers = rows.map((row) => parsePositiveInteger(row[0]));
+
+  if (numbers.some((number) => number === undefined)) {
+    return false;
+  }
+
+  const first = numbers[0] ?? 0;
+  return numbers.every((number, index) => number === first + index);
+}
+
+function isRowNumberCell(value: string | undefined, expectedNumber: number): boolean {
+  return parsePositiveInteger(value) === expectedNumber;
+}
+
+function parsePositiveInteger(value: string | undefined): number | undefined {
+  const trimmed = value?.trim();
+
+  if (!trimmed || !/^\d+$/.test(trimmed)) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function assignEntrantField(entrant: Entrant, field: keyof Entrant | "no" | undefined, value: string): void {
@@ -380,8 +500,4 @@ function normalizeNumberishText(value: string): number | string | undefined {
 
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : trimmed;
-}
-
-function hasText(value: string | undefined): boolean {
-  return Boolean(value && value.trim());
 }

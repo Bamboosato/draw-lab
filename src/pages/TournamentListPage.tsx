@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTournaments } from "../app/TournamentProvider";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { Tournament } from "../domain/types";
 
 export function TournamentListPage() {
   const navigate = useNavigate();
   const { tournaments, deleteTournament, duplicateTournament } = useTournaments();
+  const [deleteTargetId, setDeleteTargetId] = useState<string | undefined>();
+  const deleteTarget = tournaments.find((tournament) => tournament.id === deleteTargetId);
 
   return (
     <div className="page-stack">
@@ -15,7 +19,7 @@ export function TournamentListPage() {
           <p>作成済みのトーナメントを管理・編集します。</p>
         </div>
         <div className="button-row no-print">
-          <Link className="button secondary" to="/import">JSONインポート</Link>
+          <Link className="button secondary" to="/import">大会情報読込</Link>
           <Link className="button primary" to="/tournaments/new">新規作成</Link>
         </div>
       </section>
@@ -30,7 +34,7 @@ export function TournamentListPage() {
       {tournaments.length === 0 ? (
         <section className="empty-state">
           <h3>保存済みのトーナメントはありません。</h3>
-          <p>新規作成またはJSONインポートから開始してください。</p>
+          <p>新規作成または大会情報読込から開始してください。</p>
         </section>
       ) : (
         <section className="table-panel">
@@ -85,11 +89,7 @@ export function TournamentListPage() {
                       <button
                         type="button"
                         className="danger-link"
-                        onClick={() => {
-                          if (window.confirm("このトーナメントを削除しますか？")) {
-                            deleteTournament(tournament.id);
-                          }
-                        }}
+                        onClick={() => setDeleteTargetId(tournament.id)}
                       >
                         削除
                       </button>
@@ -101,6 +101,21 @@ export function TournamentListPage() {
           </table>
         </section>
       )}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="トーナメントを削除します"
+        message={`${deleteTarget?.title || "無題のトーナメント"} を削除しますか？`}
+        confirmLabel="削除する"
+        cancelLabel="キャンセル"
+        tone="danger"
+        onCancel={() => setDeleteTargetId(undefined)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteTournament(deleteTarget.id);
+          }
+          setDeleteTargetId(undefined);
+        }}
+      />
     </div>
   );
 }

@@ -23,16 +23,16 @@ export function JsonImportPage() {
     <div className="page-stack">
       <section className="page-heading">
         <div>
-          <p className="eyebrow">JSON Import</p>
-          <h2>JSONインポート</h2>
-          <p>既存の大会データや参加者リストをJSON形式で復元します。</p>
+          <p className="eyebrow">Tournament Data Import</p>
+          <h2>大会情報読込</h2>
+          <p>保存済みの大会情報ファイルから大会データや参加者リストを復元します。</p>
         </div>
       </section>
 
       <section className="import-layout">
         <div className="settings-panel">
           <label className="field">
-            <span>JSONファイル</span>
+            <span>大会情報ファイル</span>
             <input
               type="file"
               accept="application/json,.json"
@@ -51,7 +51,7 @@ export function JsonImportPage() {
             />
           </label>
           <label className="field">
-            <span>JSONテキストを直接入力</span>
+            <span>大会情報テキストを直接入力</span>
             <textarea value={text} onChange={(event) => setText(event.target.value)} />
           </label>
           <div className="button-row">
@@ -65,7 +65,7 @@ export function JsonImportPage() {
                 setParsed(parseTournamentImport(sample));
               }}
             >
-              サンプルJSON
+              サンプルデータ
             </button>
           </div>
         </div>
@@ -81,7 +81,14 @@ export function JsonImportPage() {
               <div><dt>BYE数</dt><dd>{stats.byeCount === undefined ? "不正" : stats.byeCount}</dd></div>
             </dl>
           ) : null}
-          {parsed.state === "success" ? <ValidationBanner errors={validation.errors} warnings={validation.warnings} compact /> : null}
+          {parsed.state === "success" ? (
+            <ValidationBanner
+              errors={validation.errors}
+              warnings={validation.warnings}
+              entrants={parsed.tournament.entrants}
+              compact
+            />
+          ) : null}
         </aside>
       </section>
 
@@ -100,7 +107,7 @@ export function JsonImportPage() {
             navigate("/");
           }}
         >
-          インポート実行
+          読込実行
         </button>
       </div>
     </div>
