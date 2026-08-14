@@ -30,11 +30,7 @@ export function BasicInfoPage() {
   return (
     <div className="page-stack">
       <section className="page-heading">
-        <div>
-          <p className="eyebrow">Basic Information</p>
-          <h2>大会の基本情報を入力</h2>
-          <p>トーナメント表に表示する情報とドロー構成を設定します。</p>
-        </div>
+        <p className="page-description">トーナメント表に表示する情報とドロー構成を設定します。</p>
       </section>
 
       {basicErrors.length > 0 ? (
@@ -96,10 +92,11 @@ export function BasicInfoPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" onClick={() => navigate("/")}>戻る</button>
+        <button type="button" className="button secondary" title="トーナメント一覧へ戻る" onClick={() => navigate("/")}>戻る</button>
         <button
           type="button"
           className="button primary"
+          title="名簿入力へ進む"
           disabled={basicErrors.length > 0}
           onClick={goNext}
         >

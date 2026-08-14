@@ -53,11 +53,7 @@ export function OptionsPage() {
   return (
     <div className="page-stack">
       <section className="page-heading">
-        <div>
-          <p className="eyebrow">Generate Options</p>
-          <h2>トーナメント生成</h2>
-          <p>シード位置、BYE位置、残り選手の配置順序を設定します。</p>
-        </div>
+        <p className="page-description">シード位置、BYE位置、残り選手の配置順序を設定します。</p>
       </section>
 
       {hasValidationErrors ? (
@@ -174,10 +170,11 @@ export function OptionsPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" onClick={() => navigate(`/tournaments/${tournament.id}/edit/entrants`)}>戻る</button>
+        <button type="button" className="button secondary" title="名簿入力へ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/entrants`)}>戻る</button>
         <button
           type="button"
           className="button primary"
+          title="プレビューへ進む"
           disabled={hasValidationErrors}
           onClick={generate}
         >

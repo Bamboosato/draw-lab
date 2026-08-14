@@ -55,10 +55,11 @@ export function JsonImportPage() {
             <textarea value={text} onChange={(event) => setText(event.target.value)} />
           </label>
           <div className="button-row">
-            <button type="button" className="button secondary" onClick={() => setParsed(parseTournamentImport(text))}>データを解析</button>
+            <button type="button" className="button secondary" title="入力した大会情報を解析" onClick={() => setParsed(parseTournamentImport(text))}>データを解析</button>
             <button
               type="button"
               className="button secondary"
+              title="サンプルの大会情報を読み込む"
               onClick={() => {
                 const sample = createSampleJson();
                 setText(sample);
@@ -93,11 +94,12 @@ export function JsonImportPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" onClick={() => navigate("/")}>一覧へ戻る</button>
+        <button type="button" className="button secondary" title="トーナメント一覧へ戻る" onClick={() => navigate("/")}>一覧へ戻る</button>
         <button
-          type="button"
-          className="button primary"
-          disabled={parsed.state !== "success" || validation.errors.length > 0}
+         type="button"
+         className="button primary"
+          title="解析した大会情報を読み込む"
+         disabled={parsed.state !== "success" || validation.errors.length > 0}
           onClick={() => {
             if (parsed.state !== "success") {
               return;

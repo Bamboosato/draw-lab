@@ -24,13 +24,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             type="button"
             className="sidebar-toggle"
             aria-label={isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ"}
+            title={isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ"}
             aria-expanded={!isSidebarCollapsed}
             onClick={() => setSidebarCollapsed((current) => !current)}
           >
             <SidebarToggleIcon isCollapsed={isSidebarCollapsed} />
           </button>
           <div className="brand">
-            <img className="brand-mark" src="/draw-lab-icon.png" alt="" aria-hidden="true" />
             <div>
               <strong>DrawLab</strong>
               <span>PoC / ローカル保存</span>
@@ -48,35 +48,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
       <div className="main-area">
-        <header className="topbar no-print">
-          <div>
-            <p className="eyebrow">DrawLab Tournament Manager</p>
-            <h1>{screenName}</h1>
-          </div>
-        </header>
         {showStepper && tournamentId ? (
           <div className="stepper-band no-print">
-            <ol className="stepper" aria-label="作成フロー">
-              {TOURNAMENT_STEPS.map((step, index) => {
-                const isActive = currentStep === step.key;
-                const className = getStepperItemClassName(step.key, isActive);
-
-                return (
-                  <li
-                    key={step.key}
-                    className={className}
-                    aria-current={isActive ? "step" : undefined}
-                  >
-                    <span className="stepper-pill">
-                      <span className="step-number">{index + 1}</span>
-                      <span className="step-label">{step.label}</span>
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
+            <TournamentStepper currentStep={currentStep} />
           </div>
-        ) : null}
+        ) : (
+          <header className="topbar no-print">
+            <div>
+              <p className="eyebrow">DrawLab Tournament Manager</p>
+              <h1>{screenName}</h1>
+            </div>
+          </header>
+        )}
         {flowNotice ? (
           <div className="flow-notice no-print" role="status">
             {flowNotice}
@@ -85,6 +68,30 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="content">{children}</main>
       </div>
     </div>
+  );
+}
+
+function TournamentStepper({ currentStep }: { currentStep: TournamentStep | undefined }) {
+  return (
+    <ol className="stepper" aria-label="作成フロー">
+      {TOURNAMENT_STEPS.map((step, index) => {
+        const isActive = currentStep === step.key;
+        const className = getStepperItemClassName(step.key, isActive);
+
+        return (
+          <li
+            key={step.key}
+            className={className}
+            aria-current={isActive ? "step" : undefined}
+          >
+            <span className="stepper-pill">
+              <span className="step-number">{index + 1}</span>
+              <span className="step-label">{step.label}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

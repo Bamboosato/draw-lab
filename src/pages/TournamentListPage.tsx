@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
+import { downloadTournament } from "../app/tournamentPersistence";
 import { useTournaments } from "../app/TournamentProvider";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { Tournament } from "../domain/types";
@@ -13,14 +15,17 @@ export function TournamentListPage() {
   return (
     <div className="page-stack">
       <section className="page-heading">
-        <div>
-          <p className="eyebrow">Tournament List</p>
-          <h2>トーナメント一覧</h2>
-          <p>作成済みのトーナメントを管理・編集します。</p>
-        </div>
+        <p className="page-description">作成済みのトーナメントを管理・編集します。</p>
         <div className="button-row no-print">
-          <Link className="button secondary" to="/import">大会情報読込</Link>
-          <Link className="button primary" to="/tournaments/new">新規作成</Link>
+          <Link
+            className="button secondary"
+            to="/import"
+            title="大会情報を読込み"
+            aria-label="大会情報を読込み"
+          >
+            読込
+          </Link>
+          <Link className="button primary" to="/tournaments/new" title="新しいトーナメントを作成">新規作成</Link>
         </div>
       </section>
 
@@ -38,7 +43,7 @@ export function TournamentListPage() {
         </section>
       ) : (
         <section className="table-panel">
-          <table className="data-table">
+          <table className="data-table tournament-list-table">
             <thead>
               <tr>
                 <th>大会名</th>
@@ -54,12 +59,15 @@ export function TournamentListPage() {
               {tournaments.map((tournament) => (
                 <tr key={tournament.id}>
                   <td>
-                    <strong>{tournament.title || "無題のトーナメント"}</strong>
+                    <strong title={tournament.title || "無題のトーナメント"}>{tournament.title || "無題のトーナメント"}</strong>
                     <span className="muted-line">{tournament.venue || "会場未設定"}</span>
                   </td>
-                  <td>
+                  <td
+                    className="tournament-event-cell"
+                    title={`${tournament.eventName || "-"}（${tournament.matchType === "doubles" ? "ダブルス" : "シングルス"}）`}
+                  >
                     {tournament.eventName || "-"}
-                    <span className="muted-line">{tournament.matchType === "doubles" ? "ダブルス" : "シングルス"}</span>
+                    <span className="muted-line">（{tournament.matchType === "doubles" ? "ダブルス" : "シングルス"}）</span>
                   </td>
                   <td>{tournament.date || "-"}</td>
                   <td>{tournament.drawSize}枠</td>
@@ -67,32 +75,26 @@ export function TournamentListPage() {
                   <td>{formatDateTime(tournament.updatedAt)}</td>
                   <td>
                     <div className="inline-actions">
-                      <button type="button" onClick={() => navigate(`/tournaments/${tournament.id}/edit/basic`)}>編集</button>
+                      <button type="button" title="トーナメントを編集" onClick={() => navigate(`/tournaments/${tournament.id}/edit/basic`)}>編集</button>
                       <button
                         type="button"
+                        title="生成済みトーナメント表を表示"
                         disabled={!tournament.generatedDraw}
                         onClick={() => navigate(`/tournaments/${tournament.id}/preview`)}
                       >
                         プレビュー
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
+                      <ActionMenu
+                        tournament={tournament}
+                        onDuplicate={() => {
                           const duplicated = duplicateTournament(tournament.id);
                           if (duplicated) {
                             navigate(`/tournaments/${duplicated.id}/edit/basic`);
                           }
                         }}
-                      >
-                        複製
-                      </button>
-                      <button
-                        type="button"
-                        className="danger-link"
-                        onClick={() => setDeleteTargetId(tournament.id)}
-                      >
-                        削除
-                      </button>
+                        onExport={() => downloadTournament(tournament)}
+                        onDelete={() => setDeleteTargetId(tournament.id)}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -120,6 +122,154 @@ export function TournamentListPage() {
   );
 }
 
+function ActionMenu({
+  tournament,
+  onDuplicate,
+  onExport,
+  onDelete,
+}: {
+  tournament: Tournament;
+  onDuplicate: () => void;
+  onExport: () => void;
+  onDelete: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (
+        event.target instanceof Node
+        && (menuRef.current?.contains(event.target) || triggerRef.current?.contains(event.target))
+      ) {
+        return;
+      }
+
+      setIsOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+    const updateMenuPosition = (): void => {
+      const trigger = triggerRef.current;
+      if (!trigger) {
+        return;
+      }
+
+      const triggerRect = trigger.getBoundingClientRect();
+      const menuWidth = 96;
+      const left = Math.max(
+        8,
+        Math.min(triggerRect.right - menuWidth, window.innerWidth - menuWidth - 8),
+      );
+
+      setMenuPosition({ top: triggerRect.bottom + 6, left });
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    updateMenuPosition();
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [isOpen]);
+
+  const toggleMenu = (): void => {
+    if (!isOpen) {
+      const trigger = triggerRef.current;
+      if (trigger) {
+        const triggerRect = trigger.getBoundingClientRect();
+        const menuWidth = 96;
+        const left = Math.max(
+          8,
+          Math.min(triggerRect.right - menuWidth, window.innerWidth - menuWidth - 8),
+        );
+        setMenuPosition({ top: triggerRect.bottom + 6, left });
+      }
+    }
+
+    setIsOpen((current) => !current);
+  };
+
+  return (
+    <div className="action-menu">
+      <button
+        type="button"
+        className="action-menu-trigger"
+        ref={triggerRef}
+        aria-label={`${tournament.title || "大会"}のその他の操作`}
+        title="その他の操作"
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        onClick={toggleMenu}
+      >
+        <span aria-hidden="true">⋯</span>
+      </button>
+      {isOpen ? createPortal(
+        <div
+          className="action-menu-popover"
+          ref={menuRef}
+          role="menu"
+          style={{ top: menuPosition.top, left: menuPosition.left }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            title="トーナメントを複製"
+            aria-label="トーナメントを複製"
+            onClick={() => {
+              setIsOpen(false);
+              onDuplicate();
+            }}
+          >
+            複製
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            title="大会情報をJSON出力"
+            aria-label="大会情報をJSON出力"
+            onClick={() => {
+              setIsOpen(false);
+              onExport();
+            }}
+          >
+            出力
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            title="トーナメントを削除"
+            aria-label="トーナメントを削除"
+            className="danger"
+            onClick={() => {
+              setIsOpen(false);
+              onDelete();
+            }}
+          >
+            削除
+          </button>
+        </div>,
+        document.body,
+      ) : null}
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="metric">
@@ -130,7 +280,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function StatusBadge({ tournament }: { tournament: Tournament }) {
-  return <span className={`status-badge ${tournament.generatedDraw ? "generated" : "draft"}`}>{tournament.generatedDraw ? "生成済み" : "未生成"}</span>;
+  return <span className={`status-badge ${tournament.generatedDraw ? "generated" : "draft"}`}>{tournament.generatedDraw ? "生成済" : "未生成"}</span>;
 }
 
 function formatDateTime(value: string): string {

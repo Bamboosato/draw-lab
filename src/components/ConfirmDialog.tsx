@@ -54,10 +54,10 @@ export function ConfirmDialog({
         <h2 id={titleId}>{title}</h2>
         <p>{message}</p>
         <div className="dialog-actions">
-          <button type="button" className="button secondary" onClick={onCancel}>
+          <button type="button" className="button secondary" title={cancelLabel} onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button type="button" className={`button ${tone === "danger" ? "danger" : "primary"}`} onClick={onConfirm}>
+          <button type="button" className={`button ${tone === "danger" ? "danger" : "primary"}`} title={confirmLabel} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>
