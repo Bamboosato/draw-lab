@@ -64,15 +64,11 @@ export function EntrantsPage() {
   return (
     <div className="page-stack">
       <section className="page-heading">
-        <div>
-          <p className="eyebrow">Roster Entry</p>
-          <h2>名簿入力</h2>
-          <p>ExcelまたはスプレッドシートからのTSV/CSV貼り付けにも対応します。</p>
-        </div>
+        <p className="page-description">ExcelまたはスプレッドシートからのTSV/CSV貼り付けにも対応します。</p>
         <div className="button-row no-print">
-          <button type="button" className="button secondary" onClick={() => updateEntrants([...rows, createEmptyEntrant(rows.length + 1, tournament.matchType)])}>行追加</button>
-          <button type="button" className="button secondary" onClick={() => updateTournament(applyEntrantsUpdate(tournament, compactTournament(tournament).entrants))}>空行削除</button>
-          <button type="button" className="button secondary" onClick={() => setChecked(true)}>入力チェック</button>
+          <button type="button" className="button secondary" title="名簿の入力行を追加" onClick={() => updateEntrants([...rows, createEmptyEntrant(rows.length + 1, tournament.matchType)])}>行追加</button>
+          <button type="button" className="button secondary" title="空の名簿行を削除" onClick={() => updateTournament(applyEntrantsUpdate(tournament, compactTournament(tournament).entrants))}>空行削除</button>
+          <button type="button" className="button secondary" title="名簿の入力内容をチェック" onClick={() => setChecked(true)}>入力チェック</button>
         </div>
       </section>
 
@@ -160,7 +156,7 @@ export function EntrantsPage() {
                   />
                 </td>
                 <td>
-                  <button type="button" className="danger-link" onClick={() => updateEntrants(rows.filter((item) => item.id !== entrant.id))}>削除</button>
+                  <button type="button" className="danger-link" title="この参加者を削除" onClick={() => updateEntrants(rows.filter((item) => item.id !== entrant.id))}>削除</button>
                 </td>
               </tr>
             ))}
@@ -183,6 +179,7 @@ export function EntrantsPage() {
           <button
             type="button"
             className="button secondary"
+            title="貼り付けたTSV/CSVを名簿に取り込む"
             onClick={() => {
               const parsed = parseEntrantsFromText(pasteText, tournament.matchType);
               updateEntrants([...compactTournament(tournament).entrants, ...parsed]);
@@ -196,10 +193,11 @@ export function EntrantsPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" onClick={() => navigate(`/tournaments/${tournament.id}/edit/basic`)}>戻る</button>
+        <button type="button" className="button secondary" title="基本情報へ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/basic`)}>戻る</button>
         <button
           type="button"
           className="button primary"
+          title="トーナメント生成へ進む"
           disabled={shouldBlockNext}
           onClick={goNext}
         >
