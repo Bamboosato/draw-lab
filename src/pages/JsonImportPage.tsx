@@ -23,8 +23,6 @@ export function JsonImportPage() {
     <div className="page-stack">
       <section className="page-heading">
         <div>
-          <p className="eyebrow">Tournament Data Import</p>
-          <h2>大会情報読込</h2>
           <p>保存済みの大会情報ファイルから大会データや参加者リストを復元します。</p>
         </div>
       </section>

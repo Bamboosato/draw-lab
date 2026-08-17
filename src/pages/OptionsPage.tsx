@@ -2,14 +2,19 @@ import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   applyOptionsPatch,
+  applyOutputOptionsPatch,
   createRandomSeed,
   generateTournamentDraw,
-  getEntrantStats,
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import { ValidationBanner } from "../components/ValidationBanner";
-import type { DrawOptions } from "../domain/types";
+import {
+  getAvailableOutputPageCounts,
+  getDrawOutputOptions,
+  getEffectiveOutputPageCount,
+} from "../domain/outputOptions";
+import type { DrawOptions, DrawOutputOptions } from "../domain/types";
 
 export function OptionsPage() {
   const navigate = useNavigate();
@@ -18,8 +23,6 @@ export function OptionsPage() {
   const { updateTournament } = useTournaments();
 
   const validation = useMemo(() => tournament ? validateTournamentForUi(tournament) : { errors: [], warnings: [] }, [tournament]);
-  const stats = useMemo(() => tournament ? getEntrantStats(tournament) : undefined, [tournament]);
-
   if (!tournament) {
     return <section className="empty-state"><h2>トーナメントが見つかりません。</h2></section>;
   }
@@ -28,6 +31,18 @@ export function OptionsPage() {
 
   const updateOptions = (patch: Partial<DrawOptions>): void => {
     updateTournament(applyOptionsPatch(tournament, patch));
+  };
+
+  const outputOptions = getDrawOutputOptions(tournament.outputOptions);
+  const outputPageCounts = getAvailableOutputPageCounts(tournament.drawSize);
+  const outputPageCount = getEffectiveOutputPageCount(
+    outputOptions.outputPageCount,
+    tournament.drawSize,
+    outputOptions.bracketLayout,
+  );
+
+  const updateOutputOptions = (patch: Partial<DrawOutputOptions>): void => {
+    updateTournament(applyOutputOptionsPatch(tournament, patch));
   };
 
   const proceedGenerate = (): void => {
@@ -53,7 +68,7 @@ export function OptionsPage() {
   return (
     <div className="page-stack">
       <section className="page-heading">
-        <p className="page-description">シード位置、BYE位置、残り選手の配置順序を設定します。</p>
+        <p className="page-description">シード位置、BYE位置、選手配置順序、出力形式を設定します。</p>
       </section>
 
       {hasValidationErrors ? (
@@ -156,16 +171,125 @@ export function OptionsPage() {
           </label>
         </div>
 
-        <aside className="settings-panel">
-          <h3>構成概要</h3>
-          {stats ? (
-            <dl className="summary-list">
-              <div><dt>有効参加者数</dt><dd>{stats.activeEntrantCount}</dd></div>
-              <div><dt>ドローサイズ</dt><dd>{tournament.drawSize}枠</dd></div>
-              <div><dt>BYE数</dt><dd>{stats.byeCount === undefined ? "不正" : stats.byeCount}</dd></div>
-              <div><dt>シード指定</dt><dd>{stats.seedAssignedCount}</dd></div>
-            </dl>
-          ) : null}
+        <aside className="settings-panel output-options-panel">
+          <h3>出力形式</h3>
+          <div className="field-group">
+            <span>トーナメント出力形式</span>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="bracketLayout"
+                checked={outputOptions.bracketLayout === "singleSide"}
+                onChange={() => updateOutputOptions({ bracketLayout: "singleSide" })}
+              />
+              <span><strong>片山</strong></span>
+            </label>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="bracketLayout"
+                checked={outputOptions.bracketLayout === "bothSides"}
+                onChange={() => updateOutputOptions({ bracketLayout: "bothSides" })}
+              />
+              <span><strong>両山</strong></span>
+            </label>
+          </div>
+          <label className="select-field">
+            <span>出力ページ数</span>
+            <select
+              value={outputPageCount}
+              disabled={outputOptions.bracketLayout === "singleSide"}
+              onChange={(event) => updateOutputOptions({
+                outputPageCount: Number(event.target.value) as DrawOutputOptions["outputPageCount"],
+              })}
+            >
+              {outputPageCounts.map((pageCount) => (
+                <option key={pageCount} value={pageCount}>{pageCount}ページ</option>
+              ))}
+            </select>
+          </label>
+          <div className="field-group">
+            <span>右山のドロー番号位置</span>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="rightSideDrawNumberPosition"
+                checked={outputOptions.rightSideDrawNumberPosition === "left"}
+                disabled={outputOptions.bracketLayout === "singleSide"}
+                onChange={() => updateOutputOptions({ rightSideDrawNumberPosition: "left" })}
+              />
+              <span><strong>左</strong></span>
+            </label>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="rightSideDrawNumberPosition"
+                checked={outputOptions.rightSideDrawNumberPosition === "right"}
+                disabled={outputOptions.bracketLayout === "singleSide"}
+                onChange={() => updateOutputOptions({ rightSideDrawNumberPosition: "right" })}
+              />
+              <span><strong>右</strong></span>
+            </label>
+          </div>
+          <div className="field-group">
+            <span>シード番号位置</span>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="seedNumberPosition"
+                checked={outputOptions.seedNumberPosition === "outer"}
+                onChange={() => updateOutputOptions({ seedNumberPosition: "outer" })}
+              />
+              <span><strong>外側</strong></span>
+            </label>
+            <label className="check-field">
+              <input
+                type="radio"
+                name="seedNumberPosition"
+                checked={outputOptions.seedNumberPosition === "inner"}
+                onChange={() => updateOutputOptions({ seedNumberPosition: "inner" })}
+              />
+              <span><strong>内側</strong></span>
+            </label>
+          </div>
+          <label className="select-field">
+            <span>ドロー線の太さ</span>
+            <select
+              value={outputOptions.lineWeight}
+              onChange={(event) => updateOutputOptions({ lineWeight: event.target.value as DrawOutputOptions["lineWeight"] })}
+            >
+              <option value="thin">細線</option>
+              <option value="normal">標準線</option>
+              <option value="bold">太線</option>
+              <option value="extraBold">極太線</option>
+            </select>
+          </label>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={outputOptions.teamNameBrackets}
+              onChange={(event) => updateOutputOptions({ teamNameBrackets: event.target.checked })}
+            />
+            <span><strong>チーム名をカッコ付きで表示</strong></span>
+          </label>
+          <div className="field-group">
+            <span>文字位置</span>
+            {([
+              ["default", "標準"],
+              ["center", "中央"],
+              ["distributed", "均等割付"],
+            ] as const).map(([value, label]) => (
+              <label className="check-field" key={value}>
+                <input
+                  type="radio"
+                  name="textAlign"
+                  checked={outputOptions.textAlign === value}
+                  onChange={() => updateOutputOptions({ textAlign: value })}
+                />
+                <span><strong>{label}</strong></span>
+              </label>
+            ))}
+          </div>
         </aside>
       </section>
 

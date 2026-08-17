@@ -1,4 +1,5 @@
 import type { DrawOptions, DrawSize, DrawSlot, Entrant, GeneratedDraw, Tournament } from "../domain/types";
+import { normalizeDrawOutputOptions } from "../domain/outputOptions";
 import { VALID_DRAW_SIZES } from "../domain/types";
 import { createDefaultTournament, createId, createRandomSeed, touchTournament } from "./tournamentModel";
 
@@ -173,6 +174,7 @@ function coerceTournament(value: unknown, replaceId = false): Tournament {
           randomSeed: coerceString(value.options.randomSeed),
         }
       : fallback.options,
+    outputOptions: normalizeDrawOutputOptions(value.outputOptions ?? fallback.outputOptions),
     generatedDraw: coerceGeneratedDraw(value.generatedDraw, id),
     createdAt: coerceString(value.createdAt) ?? now,
     updatedAt: now,

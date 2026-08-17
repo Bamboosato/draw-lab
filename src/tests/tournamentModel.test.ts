@@ -3,6 +3,7 @@ import {
   applyBasicInfoPatch,
   applyEntrantsUpdate,
   applyOptionsPatch,
+  applyOutputOptionsPatch,
   createDefaultTournament,
   createEmptyEntrant,
   createEmptyEntrants,
@@ -181,5 +182,24 @@ describe("tournamentModel", () => {
     const updated = applyOptionsPatch(tournament, { seedPositionMode: "fixed" });
 
     expect(updated.generatedDraw).toBeUndefined();
+  });
+
+  it("keeps generated draw when display output options change", () => {
+    const tournament = {
+      ...createDefaultTournament(),
+      generatedDraw,
+    };
+    const updated = applyOutputOptionsPatch(tournament, {
+      bracketLayout: "bothSides",
+      outputPageCount: 2,
+      lineWeight: "bold",
+    });
+
+    expect(updated.outputOptions).toMatchObject({
+      bracketLayout: "bothSides",
+      outputPageCount: 2,
+      lineWeight: "bold",
+    });
+    expect(updated.generatedDraw).toBe(generatedDraw);
   });
 });

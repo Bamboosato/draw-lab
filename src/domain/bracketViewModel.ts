@@ -1,20 +1,26 @@
 import type { BracketRow, BracketViewModel, Entrant, GeneratedDraw, Tournament } from "./types";
+import { getDrawOutputOptions } from "./outputOptions";
 import { normalizeTournament } from "./validation";
 
 export function buildBracketViewModel(tournament: Tournament, draw: GeneratedDraw): BracketViewModel {
   const normalizedTournament = normalizeTournament(tournament);
   const entrantsById = new Map(normalizedTournament.entrants.map((entrant) => [entrant.id, entrant]));
+  const useTeamBrackets = getDrawOutputOptions(tournament.outputOptions).teamNameBrackets;
   const rows = [...draw.slots]
     .sort((a, b) => a.position - b.position)
     .map<BracketRow>((slot) => {
       const entrant = slot.entrantId ? entrantsById.get(slot.entrantId) : undefined;
+      const teamLabels = entrant ? buildTeamLabels(entrant, useTeamBrackets) : {};
 
       return {
         position: slot.position,
         label: buildRowLabel(entrant, slot.isBye),
+        player1Label: entrant?.player1Name,
+        player2Label: entrant?.player2Name,
         seedNo: slot.seedNo,
-        teamLabel: entrant ? buildTeamLabel(entrant) : undefined,
-        region: entrant?.region,
+        teamLabel: entrant ? buildTeamLabel(entrant, useTeamBrackets) : undefined,
+        team1Label: teamLabels.team1Label,
+        team2Label: teamLabels.team2Label,
         isBye: slot.isBye,
       };
     });
@@ -24,7 +30,9 @@ export function buildBracketViewModel(tournament: Tournament, draw: GeneratedDra
     date: normalizedTournament.date,
     venue: normalizedTournament.venue,
     eventName: normalizedTournament.eventName,
+    matchType: normalizedTournament.matchType,
     drawSize: normalizedTournament.drawSize,
+    outputOptions: getDrawOutputOptions(tournament.outputOptions),
     rows,
   };
 }
@@ -41,7 +49,41 @@ function buildRowLabel(entrant: Entrant | undefined, isBye: boolean): string {
   return [entrant.player1Name, entrant.player2Name].filter(Boolean).join(" / ");
 }
 
-function buildTeamLabel(entrant: Entrant): string | undefined {
+function buildTeamLabel(entrant: Entrant, useBrackets: boolean): string | undefined {
+  const teamLabel = buildRawTeamLabel(entrant);
+
+  if (!teamLabel) {
+    return undefined;
+  }
+
+  return useBrackets ? `(${teamLabel})` : teamLabel;
+}
+
+function buildTeamLabels(
+  entrant: Entrant,
+  useBrackets: boolean,
+): { team1Label?: string; team2Label?: string } {
+  if (entrant.sameTeam) {
+    return {
+      team1Label: formatTeamLabel(entrant.team1 ?? entrant.team2, useBrackets),
+    };
+  }
+
+  return {
+    team1Label: formatTeamLabel(entrant.team1, useBrackets),
+    team2Label: formatTeamLabel(entrant.team2, useBrackets),
+  };
+}
+
+function formatTeamLabel(team: string | undefined, useBrackets: boolean): string | undefined {
+  if (!team) {
+    return undefined;
+  }
+
+  return useBrackets ? `(${team})` : team;
+}
+
+function buildRawTeamLabel(entrant: Entrant): string | undefined {
   if (entrant.sameTeam) {
     return entrant.team1 ?? entrant.team2;
   }

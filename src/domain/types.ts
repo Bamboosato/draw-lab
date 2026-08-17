@@ -28,6 +28,18 @@ export type DrawOptions = {
   randomSeed?: string;
 };
 
+export type DrawOutputOptions = {
+  bracketLayout: "singleSide" | "bothSides";
+  outputPageCount: OutputPageCount;
+  rightSideDrawNumberPosition: "left" | "right";
+  seedNumberPosition: "outer" | "inner";
+  lineWeight: "thin" | "normal" | "bold" | "extraBold";
+  teamNameBrackets: boolean;
+  textAlign: "default" | "center" | "distributed";
+};
+
+export type OutputPageCount = 1 | 2 | 4 | 8 | 16 | 32;
+
 export type SeedPositionMode = "fixed" | "jtaRulebook" | "grandSlam";
 export type ThirdFourthSeedPlacement = "tennisRule" | "standard";
 export type EntrantPlacementOrder = "largeTeamFirst" | "random" | "rosterOrder";
@@ -43,6 +55,7 @@ export type Tournament = {
   seedCount: number;
   entrants: Entrant[];
   options: DrawOptions;
+  outputOptions?: DrawOutputOptions;
   generatedDraw?: GeneratedDraw;
   createdAt: string;
   updatedAt: string;
@@ -135,15 +148,20 @@ export type BracketViewModel = {
   date?: string;
   venue?: string;
   eventName?: string;
+  matchType: MatchType;
   drawSize: DrawSize;
+  outputOptions: DrawOutputOptions;
   rows: BracketRow[];
 };
 
 export type BracketRow = {
   position: number;
   label: string;
+  player1Label?: string;
+  player2Label?: string;
   seedNo?: number;
   teamLabel?: string;
-  region?: string;
+  team1Label?: string;
+  team2Label?: string;
   isBye: boolean;
 };

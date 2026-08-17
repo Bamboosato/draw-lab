@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { downloadTournament } from "../app/tournamentPersistence";
 import { useTournaments } from "../app/TournamentProvider";
+import { CompactSummary } from "../components/CompactSummary";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { Tournament } from "../domain/types";
 
@@ -29,12 +30,15 @@ export function TournamentListPage() {
         </div>
       </section>
 
-      <section className="summary-grid">
-        <Metric label="全トーナメント" value={String(tournaments.length)} />
-        <Metric label="生成済み" value={String(tournaments.filter((item) => item.generatedDraw).length)} />
-        <Metric label="編集中" value={String(tournaments.filter((item) => !item.generatedDraw).length)} />
-        <Metric label="保存先" value="localStorage" />
-      </section>
+      <CompactSummary
+        ariaLabel="トーナメント概要"
+        items={[
+          { label: "全トーナメント", value: String(tournaments.length) },
+          { label: "生成済み", value: String(tournaments.filter((item) => item.generatedDraw).length) },
+          { label: "編集中", value: String(tournaments.filter((item) => !item.generatedDraw).length) },
+          { label: "保存先", value: "localStorage" },
+        ]}
+      />
 
       {tournaments.length === 0 ? (
         <section className="empty-state">
@@ -266,15 +270,6 @@ function ActionMenu({
         </div>,
         document.body,
       ) : null}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }

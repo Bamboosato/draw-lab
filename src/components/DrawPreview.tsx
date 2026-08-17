@@ -1,158 +1,614 @@
-import type { BracketViewModel } from "../domain/types";
+import type { BracketRow, BracketViewModel, DrawOutputOptions, DrawSize } from "../domain/types";
+import { getEffectiveOutputPageCount } from "../domain/outputOptions";
 
-const slotWidth = 330;
-const slotHeight = 44;
+const singleSlotHeight = 44;
+const doublesSlotHeight = 58;
 const slotGap = 10;
-const roundGap = 176;
-const resultWidth = 128;
-const resultHeight = 34;
-const connectorOffset = 28;
-const connectorOverlap = 8;
+const connectorLength = 24;
+const roundGap = connectorLength;
+const connectorOffset = roundGap;
 const leftPadding = 16;
-const topPadding = 42;
+const topPadding = 20;
 const rightPadding = 28;
 const bottomPadding = 24;
-const entrantNameX = leftPadding + 96;
+const slotHorizontalPadding = 12;
+const drawNumberZoneWidth = 20;
+const seedChipWidth = 38;
+const controlGap = 8;
+const minSinglesSlotWidth = 210;
+const maxSinglesSlotWidth = 260;
+const minDoublesSlotWidth = 240;
+const maxDoublesSlotWidth = 280;
+const entrantFontSize = 13;
+const teamFontSize = 11;
+const doublesColumnGap = 8;
+const minDoublesPlayerWidth = 44;
+const minDoublesTeamWidth = 36;
+const maxDoublesTeamWidth = 84;
+const centerGap = connectorLength * 2;
+
+type TextLayout = {
+  x: number;
+  textAnchor: "start" | "middle";
+  textLength?: number;
+  lengthAdjust?: "spacing" | "spacingAndGlyphs";
+};
+
+export function getDistributedTextLayout(
+  value: string,
+  startX: number,
+  availableWidth: number,
+  fontSize: number,
+): TextLayout {
+  const characterCount = Array.from(value).length;
+  const naturalWidth = estimateTextWidth(value, fontSize);
+  const safeWidth = Math.max(0, availableWidth);
+
+  if (characterCount < 2 || safeWidth <= 0) {
+    return { x: startX, textAnchor: "start" };
+  }
+
+  const maxWidth = naturalWidth + (characterCount - 1) * fontSize;
+  const targetWidth = Math.min(safeWidth, maxWidth);
+
+  if (targetWidth <= 0) {
+    return { x: startX, textAnchor: "start" };
+  }
+
+  return {
+    x: startX,
+    textAnchor: "start",
+    textLength: targetWidth,
+    lengthAdjust: targetWidth < naturalWidth ? "spacingAndGlyphs" : "spacing",
+  };
+}
+
+type SlotSide = "single" | "left" | "right";
+
+type SlotContentLayout = {
+  drawNumberX: number;
+  drawNumberAnchor: "start" | "end";
+  seedX: number;
+  seedOnLeft: boolean;
+  content: { startX: number; endX: number };
+};
+
+export function getSlotContentLayout(
+  slotX: number,
+  slotWidth: number,
+  side: SlotSide,
+  outputOptions: Pick<DrawOutputOptions, "rightSideDrawNumberPosition" | "seedNumberPosition">,
+  reserveSeed: boolean,
+): SlotContentLayout {
+  const drawNumberOnRight = side === "right" && outputOptions.rightSideDrawNumberPosition === "right";
+  const seedOnLeft = isSeedOnLeft(side, outputOptions.seedNumberPosition);
+  let contentStartX = slotX + slotHorizontalPadding;
+  let contentEndX = slotX + slotWidth - slotHorizontalPadding;
+  const drawNumberX = drawNumberOnRight ? contentEndX : contentStartX;
+
+  if (drawNumberOnRight) {
+    contentEndX -= drawNumberZoneWidth;
+  } else {
+    contentStartX += drawNumberZoneWidth;
+  }
+
+  let seedX = seedOnLeft ? contentStartX : contentEndX - seedChipWidth;
+  if (reserveSeed) {
+    if (seedOnLeft) {
+      seedX = contentStartX;
+      contentStartX += seedChipWidth + controlGap;
+    } else {
+      seedX = contentEndX - seedChipWidth;
+      contentEndX -= seedChipWidth + controlGap;
+    }
+  }
+
+  return {
+    drawNumberX,
+    drawNumberAnchor: drawNumberOnRight ? "end" : "start",
+    seedX,
+    seedOnLeft,
+    content: { startX: contentStartX, endX: contentEndX },
+  };
+}
+
+export function isSeedOnLeft(
+  side: "single" | "left" | "right",
+  seedNumberPosition: DrawOutputOptions["seedNumberPosition"],
+): boolean {
+  return side === "right"
+    ? seedNumberPosition === "inner"
+    : seedNumberPosition === "outer";
+}
+
+export function getBothSideJoinCenterY(drawSize: number, slotHeight = singleSlotHeight): number {
+  const sideRowCount = drawSize / 2;
+  const firstRowCenterY = topPadding + slotHeight / 2;
+  const lastRowCenterY = topPadding + (sideRowCount - 1) * (slotHeight + slotGap) + slotHeight / 2;
+
+  return (firstRowCenterY + lastRowCenterY) / 2;
+}
+
+export function getBothSideJoinPath(
+  leftSourceX: number,
+  rightSourceX: number,
+  centerY: number,
+): string {
+  const centerX = (leftSourceX + rightSourceX) / 2;
+  return `M ${leftSourceX} ${centerY} H ${rightSourceX} M ${centerX} ${centerY} V ${centerY - connectorLength}`;
+}
+
+export function getRoundConnectorPath(
+  sourceX: number,
+  targetX: number,
+  topY: number,
+  bottomY: number,
+): string {
+  return `M ${sourceX} ${topY} H ${targetX} V ${bottomY} H ${sourceX}`;
+}
+
+export function getBothSideRowGroups(
+  rows: BracketRow[],
+  drawSize: number,
+): { leftRows: BracketRow[]; rightRows: BracketRow[] } {
+  const sideRowCount = drawSize / 2;
+  return {
+    leftRows: rows.slice(0, sideRowCount),
+    rightRows: rows.slice(sideRowCount),
+  };
+}
+
+export type PrintPageBracket = {
+  drawSize: DrawSize;
+  rows: BracketRow[];
+};
+
+export function getPrintPageBrackets(
+  rows: BracketRow[],
+  drawSize: DrawSize,
+  pageCount: number,
+): PrintPageBracket[] {
+  const safePageCount = pageCount > 0
+    && drawSize % pageCount === 0
+    && drawSize / pageCount >= 4
+    ? pageCount
+    : 1;
+  const pageDrawSize = drawSize / safePageCount as DrawSize;
+
+  return Array.from({ length: safePageCount }, (_, index) => ({
+    drawSize: pageDrawSize,
+    rows: rows.slice(index * pageDrawSize, (index + 1) * pageDrawSize),
+  }));
+}
+
+export function getColumnTextLayout(
+  value: string,
+  startX: number,
+  endX: number,
+  textAlign: DrawOutputOptions["textAlign"],
+  fontSize: number,
+): TextLayout {
+  const availableWidth = Math.max(0, endX - startX);
+  const needsCompression = availableWidth > 0 && estimateTextWidth(value, fontSize) > availableWidth;
+  const fitLayout = needsCompression
+    ? { textLength: availableWidth, lengthAdjust: "spacingAndGlyphs" as const }
+    : {};
+
+  if (textAlign === "distributed") {
+    return getDistributedTextLayout(value, startX, endX - startX, fontSize);
+  }
+
+  return {
+    x: textAlign === "center" ? (startX + endX) / 2 : startX,
+    textAnchor: textAlign === "center" ? "middle" : "start",
+    ...fitLayout,
+  };
+}
+
+function getDoublesColumnRanges(
+  textRange: { startX: number; endX: number },
+  desiredTeamWidth: number,
+): {
+  player: { startX: number; endX: number };
+  team: { startX: number; endX: number };
+} {
+  const availableWidth = Math.max(0, textRange.endX - textRange.startX);
+  const teamWidth = desiredTeamWidth > 0
+    ? Math.min(desiredTeamWidth, Math.max(0, availableWidth - minDoublesPlayerWidth - doublesColumnGap))
+    : 0;
+  const columnGap = teamWidth > 0 ? doublesColumnGap : 0;
+  const playerEndX = Math.max(textRange.startX, textRange.endX - teamWidth - columnGap);
+
+  return {
+    player: { startX: textRange.startX, endX: playerEndX },
+    team: { startX: playerEndX + columnGap, endX: textRange.endX },
+  };
+}
+
+function estimateTextWidth(value: string, fontSize: number): number {
+  return Array.from(value).reduce((width, character) => {
+    if (/\s/.test(character)) {
+      return width + fontSize * 0.4;
+    }
+
+    if (/^[\u0000-\u007f]$/.test(character)) {
+      return width + fontSize * 0.62;
+    }
+
+    return width + fontSize;
+  }, 0);
+}
+
+function getDoublesTeamColumnWidth(rows: BracketRow[]): number {
+  const labels = rows.flatMap((row) => [row.team1Label, row.team2Label]).filter((label): label is string => Boolean(label));
+
+  if (labels.length === 0) {
+    return 0;
+  }
+
+  const requiredWidth = Math.max(...labels.map((label) => estimateTextWidth(truncateText(label, 12), teamFontSize))) + 4;
+  return clamp(Math.ceil(requiredWidth), minDoublesTeamWidth, maxDoublesTeamWidth);
+}
+
+export function getSlotWidth(viewModel: BracketViewModel): number {
+  const reserveSeed = viewModel.rows.some((row) => row.seedNo !== undefined);
+  const controlWidth = slotHorizontalPadding * 2
+    + drawNumberZoneWidth
+    + (reserveSeed ? seedChipWidth + controlGap : 0);
+
+  if (viewModel.matchType === "doubles") {
+    const playerLabels = viewModel.rows
+      .flatMap((row) => [row.player1Label, row.player2Label])
+      .filter((label): label is string => Boolean(label));
+    const playerRequiredWidth = playerLabels.length > 0
+      ? Math.max(...playerLabels.map((label) => estimateTextWidth(truncateText(label, 14), entrantFontSize))) + 6
+      : minDoublesPlayerWidth;
+    const playerWidth = clamp(Math.ceil(playerRequiredWidth), 64, 132);
+    const teamWidth = getDoublesTeamColumnWidth(viewModel.rows);
+    const contentWidth = playerWidth + (teamWidth > 0 ? doublesColumnGap + teamWidth : 0);
+
+    return clamp(Math.ceil(contentWidth + controlWidth), minDoublesSlotWidth, maxDoublesSlotWidth);
+  }
+
+  const requiredWidths = viewModel.rows.flatMap((row) => [
+    estimateTextWidth(truncateText(row.label || "未配置", 21), entrantFontSize),
+    estimateTextWidth(truncateText(row.teamLabel || "-", 26), teamFontSize),
+  ]);
+  const contentWidth = clamp(Math.ceil(Math.max(...requiredWidths, 0) + 8), 96, 170);
+
+  return clamp(contentWidth + controlWidth, minSinglesSlotWidth, maxSinglesSlotWidth);
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
 
 export function DrawPreview({
   viewModel,
   generatedAt,
+  renderMode = "full",
+  pageNumber,
 }: {
   viewModel: BracketViewModel;
   generatedAt: string;
+  renderMode?: "full" | "canvas";
+  pageNumber?: number;
 }) {
   const roundCount = Math.log2(viewModel.drawSize);
-  const rounds = Array.from({ length: roundCount }, (_, index) => index + 1);
+  const bothSides = viewModel.outputOptions.bracketLayout === "bothSides";
+  const doubles = viewModel.matchType === "doubles";
+  const slotWidth = getSlotWidth(viewModel);
+  const reserveSeed = viewModel.rows.some((row) => row.seedNo !== undefined);
+  const doublesTeamColumnWidth = doubles ? getDoublesTeamColumnWidth(viewModel.rows) : 0;
+  const slotHeight = doubles ? doublesSlotHeight : singleSlotHeight;
+  const visibleRowCount = bothSides ? viewModel.drawSize / 2 : viewModel.drawSize;
   const rowPitch = slotHeight + slotGap;
-  const svgWidth = leftPadding + slotWidth + connectorOffset + roundGap * (roundCount - 1) + resultWidth + rightPadding;
-  const svgHeight = topPadding + viewModel.rows.length * rowPitch - slotGap + bottomPadding;
-
+  const sideTrackWidth = slotWidth + connectorOffset + roundGap * Math.max(roundCount - 2, 0);
+  const svgWidth = bothSides
+    ? leftPadding + sideTrackWidth + centerGap + sideTrackWidth + rightPadding
+    : leftPadding + slotWidth + connectorOffset + roundGap * (roundCount - 1) + rightPadding;
+  const svgHeight = topPadding + visibleRowCount * rowPitch - slotGap + bottomPadding;
+  const rounds = Array.from({ length: roundCount }, (_, index) => index + 1);
+  const sideRounds = Array.from({ length: Math.max(roundCount - 1, 1) }, (_, index) => index + 1);
   const rowCenterY = (rowIndex: number): number => topPadding + rowIndex * rowPitch + slotHeight / 2;
-  const roundX = (round: number): number => leftPadding + slotWidth + connectorOffset + roundGap * (round - 1);
-  const sourceX = (round: number): number => round === 1 ? leftPadding + slotWidth : roundX(round - 1) + resultWidth;
-  const matchCenterY = (round: number, matchIndex: number): number => {
+  const leftBaseX = leftPadding;
+  const rightBaseX = svgWidth - rightPadding - slotWidth;
+  const leftRoundX = (round: number): number => leftBaseX + slotWidth + connectorOffset + roundGap * (round - 1);
+  const rightRoundX = (round: number): number => rightBaseX - connectorOffset - roundGap * (round - 1);
+  const connectorStrokeWidth = getLineWidth(viewModel.outputOptions.lineWeight);
+
+  const matchCenterY = (round: number, matchIndex: number, side: "single" | "left" | "right"): number => {
+    const rowCount = side === "single" ? viewModel.drawSize : viewModel.drawSize / 2;
     const span = 2 ** round;
     const startRow = matchIndex * span;
     const endRow = startRow + span - 1;
-    return (rowCenterY(startRow) + rowCenterY(endRow)) / 2;
+    return (rowCenterY(startRow) + rowCenterY(Math.min(endRow, rowCount - 1))) / 2;
   };
 
-  return (
-    <section className="print-page draw-preview">
-      <div className="draw-sheet-heading">
-        <div>
-          <h2>{viewModel.title || "無題のトーナメント"}</h2>
-          <p>
-            {viewModel.date ? `開催日: ${viewModel.date}` : "開催日: 未設定"}
-            {viewModel.venue ? ` | 会場: ${viewModel.venue}` : ""}
-            {viewModel.eventName ? ` | 種目: ${viewModel.eventName}` : ""}
-          </p>
-        </div>
-        <div className="draw-meta">
-          <span>{viewModel.drawSize}ドロー</span>
-          <span>{formatDateTime(generatedAt)}</span>
-        </div>
-      </div>
-      <div className="bracket-scroll">
-        <svg
-          className="svg-bracket"
-          role="img"
-          aria-label={`${viewModel.title || "トーナメント"}のトーナメント表`}
-          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          width={svgWidth}
-          height={svgHeight}
+  const renderSlot = (row: BracketRow, index: number, side: "single" | "left" | "right") => {
+    const slotX = side === "right" ? rightBaseX : leftBaseX;
+    const y = topPadding + index * rowPitch;
+    const slotLayout = getSlotContentLayout(
+      slotX,
+      slotWidth,
+      side,
+      viewModel.outputOptions,
+      reserveSeed,
+    );
+    const textRange = slotLayout.content;
+    const name = truncateText(row.label || "未配置", 21);
+    const sub = truncateText(row.teamLabel || "-", 26);
+    const nameLayout = getColumnTextLayout(
+      name,
+      textRange.startX,
+      textRange.endX,
+      viewModel.outputOptions.textAlign,
+      entrantFontSize,
+    );
+    const subLayout = getColumnTextLayout(
+      sub,
+      textRange.startX,
+      textRange.endX,
+      viewModel.outputOptions.textAlign,
+      teamFontSize,
+    );
+    const doublesColumnRanges = doubles
+      ? getDoublesColumnRanges(textRange, doublesTeamColumnWidth)
+      : undefined;
+    const isDoublesEntrant = doubles && !row.isBye && Boolean(row.player1Label || row.player2Label);
+
+    return (
+      <g className={`svg-slot ${row.isBye ? "bye" : ""}`} key={`${side}-${row.position}`}>
+        <rect x={slotX} y={y} width={slotWidth} height={slotHeight} rx={6} />
+        <text
+          className="svg-slot-position"
+          x={slotLayout.drawNumberX}
+          y={y + 27}
+          textAnchor={slotLayout.drawNumberAnchor}
         >
-          <text className="svg-round-heading" x={leftPadding} y={22}>出場者</text>
-          {rounds.map((round) => (
-            <text className="svg-round-heading" x={roundX(round)} y={22} key={`heading-${round}`}>
-              {getRoundName(round, roundCount)}
-            </text>
-          ))}
-
-          <g className="svg-connectors">
-            {rounds.flatMap((round) => {
-              const matchCount = viewModel.drawSize / 2 ** round;
-              const x = roundX(round);
-              const previousX = sourceX(round);
-              const connectorX = round === 1 ? previousX + connectorOffset / 2 : x - connectorOffset;
-
-              return Array.from({ length: matchCount }, (_, matchIndex) => {
-                const topY = round === 1 ? rowCenterY(matchIndex * 2) : matchCenterY(round - 1, matchIndex * 2);
-                const bottomY = round === 1 ? rowCenterY(matchIndex * 2 + 1) : matchCenterY(round - 1, matchIndex * 2 + 1);
-                const centerY = (topY + bottomY) / 2;
-
-                return (
-                  <path
-                    className="svg-connector"
-                    key={`connector-${round}-${matchIndex}`}
-                    d={`M ${previousX - connectorOverlap} ${topY} H ${connectorX} V ${bottomY} H ${previousX - connectorOverlap} M ${connectorX} ${centerY} H ${x + connectorOverlap}`}
-                  />
-                );
-              });
-            })}
+          {row.position}
+        </text>
+        {row.seedNo ? (
+          <g>
+            <rect className="svg-seed-chip" x={slotLayout.seedX} y={y + 10} width={seedChipWidth} height={22} rx={11} />
+            <text className="svg-seed-text" x={slotLayout.seedX + seedChipWidth / 2} y={y + 25}>S{row.seedNo}</text>
           </g>
+        ) : null}
+        {isDoublesEntrant && doublesColumnRanges ? (
+          <>
+            <text
+              className="svg-entrant-name"
+              y={y + 20}
+              {...getColumnTextLayout(
+                truncateText(row.player1Label || "未配置", 14),
+                doublesColumnRanges.player.startX,
+                doublesColumnRanges.player.endX,
+                viewModel.outputOptions.textAlign,
+                entrantFontSize,
+              )}
+            >
+              {truncateText(row.player1Label || "未配置", 14)}
+            </text>
+            {row.player2Label ? (
+              <text
+                className="svg-entrant-name"
+                y={y + 40}
+                {...getColumnTextLayout(
+                  truncateText(row.player2Label, 14),
+                  doublesColumnRanges.player.startX,
+                  doublesColumnRanges.player.endX,
+                  viewModel.outputOptions.textAlign,
+                  entrantFontSize,
+                )}
+              >
+                {truncateText(row.player2Label, 14)}
+              </text>
+            ) : null}
+            {row.team1Label ? (
+              <text
+                className="svg-entrant-team"
+                y={row.team2Label ? y + 20 : y + 30}
+                {...getColumnTextLayout(
+                  truncateText(row.team1Label, 12),
+                  doublesColumnRanges.team.startX,
+                  doublesColumnRanges.team.endX,
+                  viewModel.outputOptions.textAlign,
+                  teamFontSize,
+                )}
+              >
+                {truncateText(row.team1Label, 12)}
+              </text>
+            ) : null}
+            {row.team2Label ? (
+              <text
+                className="svg-entrant-team"
+                y={y + 40}
+                {...getColumnTextLayout(
+                  truncateText(row.team2Label, 12),
+                  doublesColumnRanges.team.startX,
+                  doublesColumnRanges.team.endX,
+                  viewModel.outputOptions.textAlign,
+                  teamFontSize,
+                )}
+              >
+                {truncateText(row.team2Label, 12)}
+              </text>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <text className="svg-entrant-name" y={y + 18} {...nameLayout}>
+              {name}
+            </text>
+            <text className="svg-entrant-sub" y={y + 36} {...subLayout}>
+              {sub}
+            </text>
+          </>
+        )}
+      </g>
+    );
+  };
 
-          {viewModel.rows.map((row, index) => {
-            const y = topPadding + index * rowPitch;
+  const renderConnectors = (side: "single" | "left" | "right", connectorRounds: number[]) => (
+    connectorRounds.flatMap((round) => {
+      const isLeft = side !== "right";
+      const matchCount = side === "single"
+        ? viewModel.drawSize / 2 ** round
+        : viewModel.drawSize / 2 / 2 ** round;
+      const sourceX = round === 1
+        ? (isLeft ? leftBaseX + slotWidth : rightBaseX)
+        : (isLeft ? leftRoundX(round - 1) : rightRoundX(round - 1));
+      const targetX = isLeft ? leftRoundX(round) : rightRoundX(round);
 
-            return (
-              <g className={`svg-slot ${row.isBye ? "bye" : ""}`} key={row.position}>
-                <rect x={leftPadding} y={y} width={slotWidth} height={slotHeight} rx={6} />
-                <text className="svg-slot-position" x={leftPadding + 12} y={y + 27}>{row.position}</text>
-                {row.seedNo ? (
-                  <g>
-                    <rect className="svg-seed-chip" x={leftPadding + 46} y={y + 10} width={38} height={22} rx={11} />
-                    <text className="svg-seed-text" x={leftPadding + 65} y={y + 25}>S{row.seedNo}</text>
-                  </g>
-                ) : null}
-                <text className="svg-entrant-name" x={entrantNameX} y={y + 18}>
-                  {truncateText(row.label || "未配置", 21)}
-                </text>
-                <text className="svg-entrant-sub" x={entrantNameX} y={y + 36}>
-                  {truncateText([row.teamLabel, row.region].filter(Boolean).join(" / ") || "-", 26)}
-                </text>
-              </g>
-            );
-          })}
+      return Array.from({ length: matchCount }, (_, matchIndex) => {
+        const topY = round === 1
+          ? rowCenterY(matchIndex * 2)
+          : matchCenterY(round - 1, matchIndex * 2, side);
+        const bottomY = round === 1
+          ? rowCenterY(matchIndex * 2 + 1)
+          : matchCenterY(round - 1, matchIndex * 2 + 1, side);
 
-          {rounds.flatMap((round) => {
-            const matchCount = viewModel.drawSize / 2 ** round;
-            const x = roundX(round);
+        return (
+          <path
+            className="svg-connector"
+            key={`connector-${side}-${round}-${matchIndex}`}
+            style={{ strokeWidth: connectorStrokeWidth }}
+            d={getRoundConnectorPath(sourceX, targetX, topY, bottomY)}
+          />
+        );
+      });
+    })
+  );
 
-            return Array.from({ length: matchCount }, (_, matchIndex) => {
-              const centerY = matchCenterY(round, matchIndex);
-              const label = round === roundCount ? "優勝" : `勝者 M${round}-${matchIndex + 1}`;
+  const renderBothSideFinalConnector = () => {
+    const lastSideRound = sideRounds[sideRounds.length - 1];
+    const finalCenterY = getBothSideJoinCenterY(viewModel.drawSize, slotHeight);
+    const leftSourceX = leftRoundX(lastSideRound);
+    const rightSourceX = rightRoundX(lastSideRound);
 
-              return (
-                <g className="svg-match" key={`match-${round}-${matchIndex}`}>
-                  <rect x={x} y={centerY - resultHeight / 2} width={resultWidth} height={resultHeight} rx={6} />
-                  <text x={x + 12} y={centerY + 5}>{label}</text>
-                </g>
-              );
-            });
-          })}
-        </svg>
+    return (
+      <path
+        className="svg-connector svg-final-connector"
+        style={{ strokeWidth: connectorStrokeWidth }}
+        d={getBothSideJoinPath(leftSourceX, rightSourceX, finalCenterY)}
+      />
+    );
+  };
+
+  const { leftRows, rightRows } = getBothSideRowGroups(viewModel.rows, viewModel.drawSize);
+  const renderBracketSvg = (
+    className: string,
+    svgPageNumber?: number,
+  ) => (
+    <svg
+      className={className}
+      role="img"
+      aria-label={`${viewModel.title || "トーナメント"}のトーナメント表${svgPageNumber ? ` ${svgPageNumber}ページ目` : ""}`}
+      viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+      width={svgWidth}
+      height={svgHeight}
+      preserveAspectRatio={svgPageNumber ? "xMidYMin meet" : "xMidYMid meet"}
+    >
+      <g className="svg-connectors">
+        {bothSides ? (
+          <>
+            {renderConnectors("left", sideRounds)}
+            {renderConnectors("right", sideRounds)}
+            {renderBothSideFinalConnector()}
+          </>
+        ) : renderConnectors("single", rounds)}
+      </g>
+
+      {bothSides
+        ? <>{leftRows.map((row, index) => renderSlot(row, index, "left"))}{rightRows.map((row, index) => renderSlot(row, index, "right"))}</>
+        : viewModel.rows.map((row, index) => renderSlot(row, index, "single"))}
+    </svg>
+  );
+
+  if (renderMode === "canvas") {
+    return renderBracketSvg("svg-bracket page-svg-bracket", pageNumber);
+  }
+
+  const pageCount = getEffectiveOutputPageCount(
+    viewModel.outputOptions.outputPageCount,
+    viewModel.drawSize,
+    viewModel.outputOptions.bracketLayout,
+  );
+  const pageBrackets = getPrintPageBrackets(
+    viewModel.rows,
+    viewModel.drawSize,
+    pageCount,
+  );
+
+  const renderHeading = () => (
+    <div className="draw-sheet-heading">
+      <div>
+        <h2>{viewModel.title || "無題のトーナメント"}</h2>
+        <p>
+          {viewModel.date ? `開催日: ${viewModel.date}` : "開催日: 未設定"}
+          {viewModel.venue ? ` | 会場: ${viewModel.venue}` : ""}
+          {viewModel.eventName ? ` | 種目: ${viewModel.eventName}` : ""}
+        </p>
+      </div>
+      <div className="draw-meta">
+        <span>{viewModel.drawSize}ドロー</span>
+        <span>{formatDateTime(generatedAt)}</span>
+      </div>
+    </div>
+  );
+
+  const renderPage = (
+    pageBracket: PrintPageBracket,
+    index: number,
+    output: "screen" | "print",
+  ) => (
+    <section
+      className={output === "screen"
+        ? "draw-preview screen-draw-page"
+        : "print-page draw-preview print-draw-page"}
+      key={`${output}-${index + 1}`}
+    >
+      <div className="draw-page-content">
+        {renderHeading()}
+        <div className="page-bracket-viewport">
+          <DrawPreview
+            viewModel={{
+              ...viewModel,
+              drawSize: pageBracket.drawSize,
+              rows: pageBracket.rows,
+            }}
+            generatedAt={generatedAt}
+            renderMode="canvas"
+            pageNumber={index + 1}
+          />
+        </div>
+        <footer className="draw-page-footer" aria-label={`${index + 1} / ${pageCount}ページ`}>
+          {index + 1} / {pageCount}ページ
+        </footer>
       </div>
     </section>
   );
+
+  return (
+    <>
+      <div className="draw-page-preview-list">
+        {pageBrackets.map((pageBracket, index) => renderPage(pageBracket, index, "screen"))}
+      </div>
+
+      <div className="print-draw-pages">
+        {pageBrackets.map((pageBracket, index) => renderPage(pageBracket, index, "print"))}
+      </div>
+    </>
+  );
 }
 
-function getRoundName(round: number, roundCount: number): string {
-  const remaining = roundCount - round;
-
-  if (remaining === 0) {
-    return "決勝";
-  }
-
-  if (remaining === 1) {
-    return "準決勝";
-  }
-
-  if (remaining === 2) {
-    return "準々決勝";
-  }
-
-  return `${round}回戦`;
+function getLineWidth(lineWeight: "thin" | "normal" | "bold" | "extraBold"): number {
+  return {
+    thin: 1,
+    normal: 2,
+    bold: 3,
+    extraBold: 4,
+  }[lineWeight];
 }
 
 function truncateText(value: string, maxLength: number): string {
