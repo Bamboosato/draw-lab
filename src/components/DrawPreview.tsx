@@ -147,6 +147,10 @@ export function getRoundConnectorPath(
   return `M ${sourceX} ${topY} H ${targetX} V ${bottomY} H ${sourceX}`;
 }
 
+export function getSingleSideFinalConnectorPath(targetX: number, centerY: number): string {
+  return `M ${targetX} ${centerY} H ${targetX + connectorLength}`;
+}
+
 export function getBothSideRowGroups(
   rows: BracketRow[],
   drawSize: number,
@@ -495,6 +499,21 @@ export function DrawPreview({
     );
   };
 
+  const renderSingleSideFinalConnector = () => {
+    const finalTopY = matchCenterY(roundCount - 1, 0, "single");
+    const finalBottomY = matchCenterY(roundCount - 1, 1, "single");
+    const finalCenterY = (finalTopY + finalBottomY) / 2;
+    const targetX = leftRoundX(roundCount);
+
+    return (
+      <path
+        className="svg-connector svg-final-connector"
+        style={{ strokeWidth: connectorStrokeWidth }}
+        d={getSingleSideFinalConnectorPath(targetX, finalCenterY)}
+      />
+    );
+  };
+
   const { leftRows, rightRows } = getBothSideRowGroups(viewModel.rows, viewModel.drawSize);
   const renderBracketSvg = (
     className: string,
@@ -516,7 +535,12 @@ export function DrawPreview({
             {renderConnectors("right", sideRounds)}
             {renderBothSideFinalConnector()}
           </>
-        ) : renderConnectors("single", rounds)}
+        ) : (
+          <>
+            {renderConnectors("single", rounds)}
+            {renderSingleSideFinalConnector()}
+          </>
+        )}
       </g>
 
       {bothSides
