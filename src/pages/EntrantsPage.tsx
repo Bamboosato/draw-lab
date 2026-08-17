@@ -9,6 +9,7 @@ import {
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
+import { CompactSummary } from "../components/CompactSummary";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ValidationBanner } from "../components/ValidationBanner";
 import type { Entrant } from "../domain/types";
@@ -73,12 +74,15 @@ export function EntrantsPage() {
       </section>
 
       {stats ? (
-        <section className="summary-grid">
-          <Metric label="有効参加者数" value={String(stats.activeEntrantCount)} />
-          <Metric label="ドローサイズ" value={`${tournament.drawSize}枠`} />
-          <Metric label="BYE数" value={stats.byeCount === undefined ? "不正" : String(stats.byeCount)} />
-          <Metric label="シード指定" value={String(stats.seedAssignedCount)} />
-        </section>
+        <CompactSummary
+          ariaLabel="名簿入力概要"
+          items={[
+            { label: "有効参加者数", value: String(stats.activeEntrantCount) },
+            { label: "ドローサイズ", value: `${tournament.drawSize}枠` },
+            { label: "BYE数", value: stats.byeCount === undefined ? "不正" : String(stats.byeCount) },
+            { label: "シード指定", value: String(stats.seedAssignedCount) },
+          ]}
+        />
       ) : null}
 
       {checked ? (
@@ -232,13 +236,4 @@ function renderRequiredHeader(label: string) {
 
 function normalizeRankingInput(value: string): string {
   return value.replace(/\D/g, "").slice(0, 4);
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
 }

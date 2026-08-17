@@ -3,6 +3,7 @@ import { generateDraw } from "../domain/drawGenerator";
 import type {
   DrawSize,
   DrawOptions,
+  DrawOutputOptions,
   Entrant,
   GeneratedDraw,
   MatchType,
@@ -10,6 +11,7 @@ import type {
   ValidationResult,
 } from "../domain/types";
 import { VALID_DRAW_SIZES, VALID_SEED_COUNTS } from "../domain/types";
+import { DEFAULT_DRAW_OUTPUT_OPTIONS, getDrawOutputOptions } from "../domain/outputOptions";
 import { getValidEntrants, validateTournament } from "../domain/validation";
 
 export const DRAW_SIZES: DrawSize[] = [...VALID_DRAW_SIZES];
@@ -43,6 +45,7 @@ export function createDefaultTournament(): Tournament {
       fixByePositionOnSeedLottery: true,
       entrantPlacementOrder: "largeTeamFirst",
     },
+    outputOptions: { ...DEFAULT_DRAW_OUTPUT_OPTIONS },
     createdAt: now,
     updatedAt: now,
   };
@@ -127,6 +130,16 @@ export function applyOptionsPatch(tournament: Tournament, patch: Partial<DrawOpt
   }
 
   return { ...next, generatedDraw: undefined };
+}
+
+export function applyOutputOptionsPatch(
+  tournament: Tournament,
+  patch: Partial<DrawOutputOptions>,
+): Tournament {
+  return {
+    ...tournament,
+    outputOptions: getDrawOutputOptions({ ...tournament.outputOptions, ...patch }),
+  };
 }
 
 export function validateTournamentForUi(tournament: Tournament): ValidationResult {
