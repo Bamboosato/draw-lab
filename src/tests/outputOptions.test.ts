@@ -8,6 +8,7 @@ import {
   getDistributedTextLayout,
   getPrintPageBrackets,
   getRoundConnectorPath,
+  getSingleSideFinalConnectorPath,
   getSlotContentLayout,
   getSlotWidth,
   isSeedOnLeft,
@@ -244,6 +245,10 @@ describe("draw output options", () => {
     [124, 100, "M 124 50 H 100 V 100 H 124"],
   ])("keeps each round connector at the entrant-card horizontal length", (sourceX, targetX, expected) => {
     expect(getRoundConnectorPath(sourceX, targetX, 50, 100)).toBe(expected);
+  });
+
+  it("adds one horizontal connector from the single-side final line toward the winner", () => {
+    expect(getSingleSideFinalConnectorPath(196, 231)).toBe("M 196 231 H 220");
   });
 
   it("keeps the right-side draw numbers in ascending top-to-bottom order", () => {
