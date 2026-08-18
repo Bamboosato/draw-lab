@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { createRandomSeed, generateTournamentDraw, validateTournamentForUi } from "../app/tournamentModel";
+import {
+  createRandomSeed,
+  generateTournamentDraw,
+  isTournamentDrawCurrent,
+  validateTournamentForUi,
+} from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import { DrawPreview } from "../components/DrawPreview";
 import { ValidationBanner } from "../components/ValidationBanner";
@@ -18,6 +23,8 @@ export function PreviewPage() {
     return <section className="empty-state"><h2>トーナメントが見つかりません。</h2></section>;
   }
 
+  const drawCurrent = isTournamentDrawCurrent(tournament);
+
   const regenerate = (): void => {
     setShowIssues(true);
     const result = generateTournamentDraw(tournament, createRandomSeed());
@@ -29,7 +36,7 @@ export function PreviewPage() {
     updateTournament(result.tournament);
   };
 
-  const viewModel = tournament.generatedDraw
+  const viewModel = drawCurrent && tournament.generatedDraw
     ? buildBracketViewModel(tournament, tournament.generatedDraw)
     : undefined;
 
@@ -39,7 +46,7 @@ export function PreviewPage() {
         <p className="page-description">生成済みトーナメント表を確認し、ブラウザ印刷を実行します。</p>
         <div className="button-row">
           <button type="button" className="button secondary" title="トーナメント表を再生成" onClick={regenerate}>再生成</button>
-          <button type="button" className="button primary" title="トーナメント表をPDF保存または印刷" onClick={() => window.print()}>PDF / 印刷</button>
+          <button type="button" className="button primary" title="トーナメント表をPDF保存または印刷" disabled={!drawCurrent} onClick={() => window.print()}>PDF / 印刷</button>
         </div>
       </section>
 
@@ -60,13 +67,15 @@ export function PreviewPage() {
       ) : (
         <section className="empty-state">
           <h2>トーナメント表は未生成です。</h2>
-          <p>トーナメント生成画面でトーナメント表を生成してください。</p>
-          <button type="button" className="button primary" title="トーナメント生成画面へ進む" onClick={() => navigate(`/tournaments/${tournament.id}/edit/options`)}>トーナメント生成へ</button>
+          <p>{tournament.generatedDraw || tournament.options.randomSeed
+            ? "入力内容のエラーを修正すると、トーナメント表は自動生成されます。"
+            : "オプション設定画面で設定を確認し、トーナメント表を初回生成してください。"}</p>
+          <button type="button" className="button primary" title="オプション設定画面へ進む" onClick={() => navigate(`/tournaments/${tournament.id}/edit/options`)}>オプション設定へ</button>
         </section>
       )}
 
       <div className="bottom-actions preview-footer-actions no-print">
-        <button type="button" className="button secondary" title="トーナメント生成へ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/options`)}>戻る</button>
+        <button type="button" className="button secondary" title="オプション設定へ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/options`)}>戻る</button>
         <button type="button" className="button primary" title="トーナメント一覧へ戻る" onClick={() => navigate("/")}>一覧</button>
       </div>
     </div>

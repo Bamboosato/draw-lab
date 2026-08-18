@@ -1,6 +1,7 @@
 # 処理ロジック仕様書
 
 作成日: 2026-07-02  
+更新日: 2026-08-18
 対象: draw-lab WEB版トーナメント表作成アプリ PoC  
 参照: `docs/requirements.md`, `docs/screen-spec.md`
 
@@ -142,6 +143,7 @@ type GeneratedDraw = {
   randomSeed: string;
   slots: DrawSlot[];
   generatedAt: string;
+  generationInputSignature?: string;
 };
 ```
 
@@ -267,8 +269,8 @@ function validateTournament(tournament: Tournament): ValidationResult;
 | `SEED_COUNT_EXCEEDS_DRAW_SIZE` | seedCount > drawSize | シード数はドローサイズ以下にしてください |
 | `NO_ENTRANTS` | 有効参加者が0件 | 参加者を1件以上入力してください |
 | `ENTRANTS_EXCEED_DRAW_SIZE` | 有効参加者数 > drawSize | 参加者数がドローサイズを超えています |
-| `PLAYER_NAME_REQUIRED` | シングルスでplayer1Nameなし | 選手名を入力してください |
-| `DOUBLES_PLAYER_MISSING` | ダブルスでplayer1Nameまたはplayer2Nameなし | ダブルスの選手名1・選手名2を入力してください |
+| `PLAYER_NAME_REQUIRED` | 完全空行ではないシングルス行でplayer1Nameなし | 選手名を入力してください |
+| `DOUBLES_PLAYER_MISSING` | 完全空行ではないダブルス行でplayer1Nameまたはplayer2Nameなし | ダブルスの選手名1・選手名2を入力してください |
 | `SEED_NO_INVALID` | seedNoが数値でない | シード番号は数値で入力してください |
 | `SEED_COUNT_MISMATCH` | seedCountと実際のseed指定数に差がある | シード数とシード指定人数が一致していません |
 | `RANKING_INVALID` | rankingが1〜9999の整数でない | ランキングは1〜9999の整数で入力してください |
@@ -287,7 +289,17 @@ function validateTournament(tournament: Tournament): ValidationResult;
 - シングルス: `player1Name` が存在する
 - ダブルス: `player1Name` または `player2Name` が存在する
 
-ただし、ダブルスで片方しかない場合は警告とする。
+名簿の全入力項目が空の完全空行は、保存データである `Tournament.entrants` から削除しない。検証・生成時だけ除外し、有効参加者数、BYE数、シード指定人数の計算対象に含めない。
+
+名簿入力画面の初期表示行数は `max(drawSize, 最後の非完全空行のindex + 1)` とする。これを超える末尾の完全空行は非表示にするだけで、保存データから削除しない。
+
+選手名が空でも、シード番号、所属チーム、地区、ランキングなどに入力がある行は不完全行として検証対象に含める。シングルスでは `PLAYER_NAME_REQUIRED`、ダブルスで片方または両方の選手名が不足する場合は `DOUBLES_PLAYER_MISSING` エラーとする。
+
+完全空行はBYEの明示指定として扱わない。BYE数は `drawSize - 有効参加者数` により自動算出する。
+
+`getEntrantStats()` は `activeEntrantCount > drawSize` の場合に `hasEntrantOverflow = true`、`byeCount = undefined` を返す。UIは有効参加者数をエラー対象として表示し、未算出のBYE数は「—」と表示する。
+
+`getEntrantStats()` は名簿のシード指定人数を基本情報の `seedCount` と比較し、`seedAssignmentStatus` として `matched`、`shortage`、`excess` のいずれかを返す。UIは不一致の場合にシード指定人数をエラー対象として表示する。
 
 ---
 
@@ -647,6 +659,23 @@ type CreateGeneratedDrawParams = {
 - `randomSeed` を保持する
 - `slots` はposition昇順に並べる
 - `generatedAt` を保持する
+- 生成結果へ影響する入力から決定的な `generationInputSignature` を作成して保持する
+
+## 14.3 生成時入力署名と自動再生成
+
+`generationInputSignature` は、次の値を順序が安定した形へ正規化し、決定的に直列化して作成する。
+
+- `matchType`、`drawSize`、`seedCount`
+- 完全空行を除いた `entrants` の順序と、生成に使用する全フィールド
+- シード位置、BYE位置、選手配置順序、乱数シードを含む `DrawOptions`
+
+大会名、開催日、会場、種目名などの表示情報と `DrawOutputOptions` は署名へ含めない。生成済みドローがある場合を「生成済み」、ない場合を「未生成」とする。
+
+初回生成前は入力変更だけで生成しない。初回生成に成功した時点で採用した乱数シードを `DrawOptions.randomSeed` と `GeneratedDraw.randomSeed` の両方へ保存する。初回生成後に署名が変化した場合は、保存した乱数シードを使用して自動再生成し、生成済み状態を維持する。
+
+入力検証でエラーになった場合は `generatedDraw` を削除して未生成とするが、`DrawOptions.randomSeed` は保持する。参加者行の削除によって旧ドローの参照整合性を保てない場合も同様とする。入力を修正して有効な状態へ戻した時点で、保持している乱数シードを使って自動再生成し、生成済みへ戻す。したがって、初回生成後にユーザーによる明示的な再生成を必須とするタイミングは設けない。完全空行の追加・削除、表示情報、`DrawOutputOptions` の変更は署名を変化させず、生成済みドローをそのまま保持する。
+
+生成時入力署名がない既存データは有効な生成結果として読み込み、最初の編集時に編集前の入力から署名を補完する。署名が不一致の個別大会JSONは生成済みドローを復元せず、未生成として追加する。
 
 ---
 
@@ -655,16 +684,15 @@ type CreateGeneratedDrawParams = {
 ## 15.1 推奨関数
 
 ```ts
-function exportTournamentToJson(tournament: Tournament): string;
+function exportTournamentToJson(tournament: Tournament, exportedAt: string): string;
+function exportAllTournamentsToJson(tournaments: readonly Tournament[], exportedAt: string): string;
 ```
 
-## 15.2 要件
+時刻を引数で受け取り、同じ入力から同じJSONを生成できる純粋関数に寄せる。
 
-- Tournament一式をJSON文字列へ変換する
-- 可能であれば `schemaVersion` を含める
-- インデント付きで人間が読める形式にする
+## 15.2 個別大会JSON
 
-推奨形式:
+個別大会JSONは、選択した1大会の共有、複製、不具合調査に使用する。
 
 ```ts
 type TournamentExport = {
@@ -674,64 +702,175 @@ type TournamentExport = {
 };
 ```
 
+## 15.3 全大会バックアップJSON
+
+全大会バックアップJSONは、IndexedDBに保存されている全大会のバックアップと、別PC・別ブラウザへの移行に使用する。
+
+```ts
+type TournamentBackup = {
+  schemaVersion: 1;
+  exportedAt: string;
+  tournaments: Tournament[];
+};
+```
+
+要件は以下。
+
+- 1ファイルに全大会を含める
+- 各大会のID、参加者ID、生成済みドローのIDと参照関係を保持する
+- 生成オプション、出力形式オプション、生成済みドロー、乱数シード、作成日時、更新日時を欠落させない
+- 配列順は一覧表示時の順序を保持する
+- インデント付きUTF-8 JSONとして出力する
+- 大会が0件の場合も、空の `tournaments` 配列を持つ有効なバックアップとして出力できる
+
 ---
 
-## 16. JSONインポート
+## 16. JSONインポート / 復元
+
+JSONの解析・検証と、IndexedDBへの反映を分離する。解析・検証段階では保存済みデータを変更しない。
 
 ## 16.1 推奨関数
 
 ```ts
-function importTournamentFromJson(jsonText: string): ImportTournamentResult;
-```
+type JsonImportKind = "singleTournament" | "allTournamentsBackup";
 
-```ts
-type ImportTournamentResult = {
-  tournament?: Tournament;
-  validation: ValidationResult;
+type ParsedJsonImport =
+  | { kind: "singleTournament"; tournament: Tournament }
+  | { kind: "allTournamentsBackup"; backup: TournamentBackup };
+
+type JsonImportIssue = {
+  code: string;
+  message: string;
+  path?: string;
+  tournamentId?: string;
 };
+
+type JsonImportParseResult = {
+  parsed?: ParsedJsonImport;
+  errors: JsonImportIssue[];
+  warnings: JsonImportIssue[];
+};
+
+type RestoreAllResult =
+  | { state: "success"; restoredCount: number }
+  | { state: "error"; error: JsonImportIssue };
+
+function parseJsonImport(jsonText: string): JsonImportParseResult;
+function cloneImportedTournament(tournament: Tournament, now: string): Tournament;
+async function restoreAllTournaments(
+  backup: TournamentBackup,
+  repository: TournamentRepository,
+): Promise<RestoreAllResult>;
 ```
 
-## 16.2 要件
+`parseJsonImport` はJSON形状から個別大会JSONと全大会バックアップJSONを判別する。既存互換のため、個別大会ではラッパーのない `Tournament` も読み込み対象に含めてよい。
 
-- JSONとして解析できない場合はエラー
-- `schemaVersion` が未設定でも、PoCでは可能な範囲で読み込む
-- インポート時は新しいTournament IDを採番する
+## 16.2 個別大会インポート
+
+- 既存大会を変更せず、新しい大会として追加する
+- Tournament ID、Entrant ID、GeneratedDraw IDを新規採番する
+- `GeneratedDraw.tournamentId` と `DrawSlot.entrantId` は、新しいIDへ対応付けて更新する
+- ID再採番前に生成済みだったデータは、新しいTournament IDとEntrant IDを反映した入力から生成時入力署名を再計算する。入力と署名が不一致の生成済みドローは復元せず、未生成として追加する
 - createdAt / updatedAt はインポート時点で更新する
-- generatedDrawが含まれている場合も復元する
+- generatedDrawが含まれている場合は、参照整合性を保った状態で復元する
+- `schemaVersion` が未設定の既存個別JSONは、検証可能な範囲で読み込む
 
-## 16.3 エラー例
+## 16.3 全大会バックアップ復元
+
+- `schemaVersion` が対応範囲内であることを必須とする
+- 全大会と、各大会内のID参照を事前検証する
+- 復元時は大会ID、参加者ID、生成済みドローのIDを再採番しない
+- 現在の全大会をバックアップ内の全大会で置き換える
+- 初期PoCではマージ復元を行わない
+- 0大会のバックアップも復元可能とするが、現在の全大会が削除されることを明示して確認を必須とする
+
+全置換は `TournamentRepository.replaceAll` の1トランザクションで行う。同一トランザクション内で既存全件の削除、バックアップ全件の保存、件数とID集合の再読込確認を行い、不一致またはリクエスト失敗時はabortする。全確認後にtransactionがcompleteした場合だけ成功を返す。
+
+## 16.4 エラー例
 
 | code | 条件 | message |
 |---|---|---|
 | `JSON_PARSE_ERROR` | JSONとして解析不能 | JSONを解析できません |
-| `IMPORT_MISSING_TOURNAMENT` | tournamentが存在しない | トーナメントデータが見つかりません |
+| `IMPORT_KIND_UNKNOWN` | 個別大会・全大会バックアップのどちらでもない | 対応していないJSON形式です |
+| `IMPORT_MISSING_TOURNAMENT` | 個別大会JSONにtournamentが存在しない | トーナメントデータが見つかりません |
 | `IMPORT_INVALID_TOURNAMENT` | Tournamentとして不正 | トーナメントデータが不正です |
+| `BACKUP_SCHEMA_UNSUPPORTED` | schemaVersionが未対応 | このバックアップ形式には対応していません |
+| `BACKUP_DUPLICATE_ID` | バックアップ内でIDが重複 | バックアップ内のIDが重複しています |
+| `BACKUP_REFERENCE_INVALID` | generatedDraw等の参照先が不正 | バックアップ内の参照関係が不正です |
+| `BACKUP_RESTORE_FAILED` | IndexedDBの全置換またはトランザクション内確認に失敗 | バックアップを復元できませんでした。元のデータは保持されています |
 
 ---
 
 ## 17. ローカル保存
 
-## 17.1 推奨関数
+## 17.1 保存層インターフェース
 
 ```ts
-async function listTournaments(): Promise<Tournament[]>;
-async function getTournament(id: string): Promise<Tournament | undefined>;
-async function saveTournament(tournament: Tournament): Promise<void>;
-async function deleteTournament(id: string): Promise<void>;
-async function duplicateTournament(id: string): Promise<Tournament>;
+interface TournamentRepository {
+  list(): Promise<Tournament[]>;
+  get(id: string): Promise<Tournament | undefined>;
+  save(tournament: Tournament): Promise<void>;
+  delete(id: string): Promise<void>;
+  duplicate(id: string): Promise<Tournament>;
+  replaceAll(tournaments: readonly Tournament[]): Promise<void>;
+}
 ```
 
-## 17.2 初期実装
+UIとReact Providerは永続化に `TournamentRepository` を使用し、IndexedDB APIとlocalStorageを直接操作しない。JSON変換とダウンロードは保存層と分離したJSON入出力サービスを経由する。
 
-PoCではlocalStorageでも可。
+## 17.2 IndexedDB構造
 
-localStorageを使う場合のキー例:
+ブラウザ内の正式な保存先はIndexedDBとする。
+
+```ts
+const DATABASE_NAME = "draw-lab";
+const DATABASE_VERSION = 1;
+const TOURNAMENT_STORE = "tournaments";
+const METADATA_STORE = "metadata";
+```
+
+| object store | key | 用途 |
+|---|---|---|
+| `tournaments` | `Tournament.id` | 大会単位の保存、取得、更新、削除 |
+| `metadata` | 文字列キー | schemaVersion、localStorage移行完了状態 |
+
+`tournaments` には `updatedAt` のインデックスを用意し、一覧は更新日時の降順で取得する。1大会の更新で全大会を再書き込みしない。
+
+`replaceAll` は `tournaments` storeを対象とする1つのreadwriteトランザクション内で、既存全件の削除、バックアップ全件の保存、件数とID集合の再読込確認を行う。書き込み失敗または確認不一致の場合はtransactionをabortし、completeイベント後にのみ処理成功とする。
+
+## 17.3 localStorageからの移行
+
+既存実装のlocalStorageキーは以下。
 
 ```text
-draw-lab:tournaments
+drawlab:tournaments
 ```
 
-ただし、将来的にはIndexedDBへ差し替えられるよう、UIからは直接localStorageを呼ばず、storage層の関数経由にする。
+初期化時の処理順序は以下。
+
+1. IndexedDBを開く
+2. `metadata` の移行完了状態を確認する
+3. 未移行の場合のみlocalStorageを読み込む
+4. JSONを解析し、全Tournamentを検証・正規化する
+5. 1トランザクションで全件をIndexedDBへ保存する
+6. IndexedDBから再読込し、件数とID集合が一致することを確認する
+7. 移行完了状態を保存する
+8. 移行成功後に限り、旧localStorageキーを削除してよい
+
+解析、検証、保存、再読込確認に失敗した場合は移行完了状態を保存せず、localStorageの元データを保持する。失敗を空一覧へ変換せず、UIへエラーとして返す。
+
+## 17.4 初期化・保存状態
+
+```ts
+type StorageStatus = "loading" | "ready" | "saving" | "error";
+```
+
+- `loading` 中は空状態を表示しない
+- UI更新は即時反映し、IndexedDB書き込みは順序を保証するキューで直列化する
+- 古い保存処理が新しい編集内容を上書きしないよう、同一大会の保存順序を保証する
+- 複数タブから同じ大会を更新した場合は、最後に完了したトランザクションを採用する。複数タブ間の編集マージと競合解決UIはPoC対象外とする
+- 保存失敗時は `error` とし、未保存であることをユーザーへ通知する
+- OPFSは本PoCの保存実装に含めない
 
 ---
 
@@ -773,7 +912,7 @@ type BracketRow = {
 
 ---
 
-## 19. 単体テスト観点
+## 19. テスト観点
 
 ## 19.1 validation.test.ts
 
@@ -842,6 +981,52 @@ type BracketRow = {
 | シードあり | シードが所定位置に配置される |
 | 参加者超過 | drawが返らずvalidation errorになる |
 
+## 19.8 tournamentStorage.test.ts
+
+テスト観点は、機能、データ、異常系・境界値、状態遷移に分ける。
+
+| 観点 | ケース | 期待結果 |
+|---|---|---|
+| 機能・正常系 | 大会の追加、更新、取得、削除 | 対象大会だけが変更される |
+| 機能・正常系 | 複数大会を保存して再初期化 | 更新日時順の一覧を復元できる |
+| データ | generatedDraw、乱数seed、出力形式を含む大会 | 保存前後で欠落しない |
+| 移行・正常系 | 有効なlocalStorage全大会 | IndexedDBへ全件移行し、移行完了になる |
+| 移行・異常系 | localStorageのJSON破損 | IndexedDBを空データ扱いせず、移行元を保持してエラーになる |
+| 異常系 | IndexedDB書き込み失敗 | 保存済みデータを壊さず `error` になる |
+| 状態遷移 | `loading` 中 | 空状態を表示可能な結果として返さない |
+| 競合 | 同一大会を短時間に連続保存 | 最後の更新内容が残る |
+| 境界値 | 0件、1件、多数大会 | 一覧、保存、削除が正しく完了する |
+
+## 19.9 jsonBackup.test.ts
+
+| 観点 | ケース | 期待結果 |
+|---|---|---|
+| 個別・正常系 | 個別大会JSONをインポート | 新IDへ再採番され、関連IDも整合した大会が追加される |
+| バックアップ・正常系 | 複数大会をエクスポートして全置換復元 | 全大会とID参照が同一内容で復元される |
+| データ | generatedDraw、乱数seed、作成・更新日時 | エクスポート・復元後も保持される |
+| 境界値 | 0大会のバックアップ | 有効なJSONを出力でき、確認後に0件へ全置換できる |
+| 異常系 | JSON構文不正 | `JSON_PARSE_ERROR` となり保存済みデータは変化しない |
+| 異常系 | 未対応schemaVersion | `BACKUP_SCHEMA_UNSUPPORTED` となり全置換しない |
+| 異常系 | 重複IDまたは不正参照 | 検証エラーとなり全置換しない |
+| トランザクション | 全置換の途中で保存失敗 | transactionがabortされ、復元前の全大会が残る |
+| 再現性 | 同じ入力とexportedAt | 同じJSON文字列を返す |
+
+## 19.10 ブラウザ結合テスト観点
+
+修正範囲に応じて対象ケースを選び、全E2Eを既定としない。IndexedDB実装または全置換復元を変更した場合は、少なくとも対象フローを実ブラウザで確認する。
+
+| 観点 | ケース | 期待結果 |
+|---|---|---|
+| 環境差異 | 対象Chromium系ブラウザとFirefox | 保存、再読込、全置換復元が同じ結果になる |
+| オリジン | localhostと本番HTTPS | オリジンごとに独立して保存される |
+| プライベート利用 | IndexedDB利用不可または制限時 | 空一覧にせず、保存不可を通知する |
+| 容量不足 | QuotaExceeded相当 | 既存大会を保持し、保存失敗を通知する |
+| 再読込 | 保存完了後にページ再読込 | 一覧と大会詳細が復元される |
+| 複数タブ | 同一大会を別タブで更新 | 最後に完了したトランザクションの内容が、破損なく残る |
+| PC移行 | PC Aで全件出力しPC Bで全置換復元 | 全大会数、ID、generatedDraw、乱数seedが一致する |
+
+テスト結果には、実施ブラウザ、対象ケースを選んだ理由、未実施範囲、失敗時のログと再現手順を記録する。
+
 ---
 
 ## 20. 実装優先順位
@@ -857,11 +1042,12 @@ Codexに実装させる場合は、以下の順序を推奨する。
 6. src/domain/byePlacement.ts + tests
 7. src/domain/scoring.ts + tests
 8. src/domain/drawGenerator.ts + tests
-9. src/storage/tournamentStorage.ts
-10. src/storage/jsonExport.ts / jsonImport.ts
-11. src/renderers/svgBracketRenderer.ts
-12. UI components
-13. print CSS
+9. src/storage/tournamentRepository.ts + IndexedDB実装 + tests
+10. src/storage/localStorageMigration.ts + tests
+11. src/storage/jsonExport.ts / jsonImport.ts / jsonBackup.ts + tests
+12. src/renderers/svgBracketRenderer.ts
+13. UI components
+14. print CSS
 ```
 
 ---
@@ -878,5 +1064,10 @@ Codexに実装させる場合は、以下の順序を推奨する。
 - ノーシードが空き枠に配置される
 - チーム・地区偏り回避スコアが動作する
 - 同じ乱数seedで同じ結果が再現される
-- JSONエクスポート / インポートができる
+- IndexedDBへ大会単位で保存し、再初期化後に全大会を復元できる
+- localStorageからIndexedDBへ既存データを安全に移行できる
+- 個別大会JSONを新しい大会として追加インポートできる
+- 全大会バックアップJSONをエクスポートできる
+- 全大会バックアップを1トランザクションで全置換復元できる
+- 不正JSONまたは復元失敗時に、復元前の全大会が保持される
 - 主要ロジックにVitestの単体テストがある

@@ -31,10 +31,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SidebarToggleIcon isCollapsed={isSidebarCollapsed} />
           </button>
           <div className="brand">
-            <div>
-              <strong>DrawLab</strong>
-              <span>PoC / ローカル保存</span>
-            </div>
+            <strong>DrawLab</strong>
           </div>
         </div>
         <nav className="nav-list" aria-label="グローバルナビゲーション">
@@ -101,7 +98,7 @@ function getScreenName(pathname: string): string {
   }
 
   if (pathname === "/import") {
-    return "大会情報読込";
+    return "大会情報の復元";
   }
 
   if (pathname.includes("/entrants")) {
@@ -109,7 +106,7 @@ function getScreenName(pathname: string): string {
   }
 
   if (pathname.includes("/options")) {
-    return "トーナメント生成";
+    return "オプション設定";
   }
 
   if (pathname.includes("/preview")) {

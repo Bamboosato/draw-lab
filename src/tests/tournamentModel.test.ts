@@ -7,9 +7,16 @@ import {
   createDefaultTournament,
   createEmptyEntrant,
   createEmptyEntrants,
+  createGenerationInputSignature,
   ensureEntrantRows,
   generateTournamentDraw,
+  getEntrantStats,
+  getVisibleEntrantRowCount,
+  hasTournamentContentChanged,
+  isTournamentDrawCurrent,
+  mergeEntrantsIntoEmptyRows,
   parseEntrantsFromText,
+  touchTournament,
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { makeEntrant } from "./testFactory";
@@ -45,25 +52,155 @@ describe("tournamentModel", () => {
     expect(rows).toHaveLength(20);
   });
 
-  it("keeps complete blank rows as validation errors until they are deleted", () => {
+  it("shows only the draw size when stored rows beyond it are completely blank", () => {
+    const rows = createEmptyEntrants(32, "singles").map((entrant, index) => (
+      index < 4 ? { ...entrant, player1Name: `Player ${index + 1}` } : entrant
+    ));
+
+    expect(getVisibleEntrantRowCount(rows, 8)).toBe(8);
+    expect(rows).toHaveLength(32);
+  });
+
+  it("keeps a row beyond the draw size visible when it contains incomplete input", () => {
+    const rows = createEmptyEntrants(32, "singles");
+    rows[19] = { ...rows[19], team1: "Team A" };
+
+    expect(getVisibleEntrantRowCount(rows, 8)).toBe(20);
+  });
+
+  it("identifies participant overflow while leaving the BYE count unavailable", () => {
+    const overflow = getEntrantStats({
+      ...createDefaultTournament(),
+      drawSize: 4,
+      entrants: Array.from({ length: 5 }, (_, index) => makeEntrant(index + 1)),
+    });
+    const boundary = getEntrantStats({
+      ...createDefaultTournament(),
+      drawSize: 4,
+      entrants: Array.from({ length: 4 }, (_, index) => makeEntrant(index + 1)),
+    });
+
+    expect(overflow).toMatchObject({
+      activeEntrantCount: 5,
+      hasEntrantOverflow: true,
+      byeCount: undefined,
+    });
+    expect(boundary).toMatchObject({
+      activeEntrantCount: 4,
+      hasEntrantOverflow: false,
+      byeCount: 0,
+    });
+  });
+
+  it("classifies the assigned seed count against the configured seed count", () => {
+    const entrants = [
+      { ...makeEntrant(1), seedNo: 1 },
+      { ...makeEntrant(2), seedNo: 2 },
+      makeEntrant(3),
+    ];
+
+    expect(getEntrantStats({
+      ...createDefaultTournament(),
+      seedCount: 4,
+      entrants,
+    })).toMatchObject({
+      seedAssignedCount: 2,
+      seedAssignmentStatus: "shortage",
+    });
+    expect(getEntrantStats({
+      ...createDefaultTournament(),
+      seedCount: 2,
+      entrants,
+    })).toMatchObject({
+      seedAssignedCount: 2,
+      seedAssignmentStatus: "matched",
+    });
+    expect(getEntrantStats({
+      ...createDefaultTournament(),
+      seedCount: 0,
+      entrants,
+    })).toMatchObject({
+      seedAssignedCount: 2,
+      seedAssignmentStatus: "excess",
+    });
+  });
+
+  it("treats a timestamp-only difference as unchanged tournament content", () => {
+    const tournament = createDefaultTournament();
+    const timestampOnlyUpdate = {
+      ...tournament,
+      updatedAt: "2026-08-18T00:00:00.000Z",
+    };
+
+    expect(hasTournamentContentChanged(tournament, timestampOnlyUpdate)).toBe(false);
+  });
+
+  it("detects an actual tournament content change and assigns the supplied timestamp", () => {
+    const tournament = createDefaultTournament();
+    const changed = { ...tournament, title: "Updated title" };
+    const updated = touchTournament(changed, "2026-08-18T00:00:00.000Z");
+
+    expect(hasTournamentContentChanged(tournament, changed)).toBe(true);
+    expect(updated.updatedAt).toBe("2026-08-18T00:00:00.000Z");
+    expect(tournament.updatedAt).not.toBe(updated.updatedAt);
+  });
+
+  it("ignores complete blank rows during validation without removing them", () => {
     const tournament = {
       ...createDefaultTournament(),
       entrants: [makeEntrant(1), createEmptyEntrant(2, "singles")],
     };
     const validation = validateTournamentForUi(tournament);
 
-    expect(validation.errors.map((issue) => issue.code)).toContain("PLAYER_NAME_REQUIRED");
+    expect(validation.errors.map((issue) => issue.code)).not.toContain("PLAYER_NAME_REQUIRED");
+    expect(tournament.entrants).toHaveLength(2);
   });
 
-  it("does not generate a draw while complete blank rows remain", () => {
+  it("generates one BYE from 15 entrants and one complete blank row while preserving all 16 rows", () => {
     const tournament = {
       ...createDefaultTournament(),
-      entrants: [makeEntrant(1), createEmptyEntrant(2, "singles")],
+      entrants: [
+        ...Array.from({ length: 15 }, (_, index) => makeEntrant(index + 1)),
+        createEmptyEntrant(16, "singles"),
+      ],
     };
     const result = generateTournamentDraw(tournament, "blank-row-check");
 
+    expect(result.draw).toBeDefined();
+    expect(result.validation.errors.map((issue) => issue.code)).not.toContain("PLAYER_NAME_REQUIRED");
+    expect(result.draw?.slots.filter((slot) => slot.isBye)).toHaveLength(1);
+    expect(result.tournament.options.randomSeed).toBe("blank-row-check");
+    expect(result.draw?.generationInputSignature).toBe(createGenerationInputSignature(result.tournament));
+    expect(isTournamentDrawCurrent(result.tournament)).toBe(true);
+    expect(result.tournament.entrants).toHaveLength(16);
+    expect(result.tournament.entrants).toEqual(tournament.entrants);
+  });
+
+  it("keeps a partially entered row as an error and blocks generation", () => {
+    const incompleteEntrant = {
+      ...createEmptyEntrant(2, "singles"),
+      team1: "Team A",
+    };
+    const tournament = {
+      ...createDefaultTournament(),
+      entrants: [makeEntrant(1), incompleteEntrant],
+    };
+    const validation = validateTournamentForUi(tournament);
+    const result = generateTournamentDraw(tournament, "incomplete-row-check");
+
+    expect(validation.errors.map((issue) => issue.code)).toContain("PLAYER_NAME_REQUIRED");
     expect(result.draw).toBeUndefined();
-    expect(result.validation.errors.map((issue) => issue.code)).toContain("PLAYER_NAME_REQUIRED");
+    expect(result.tournament.entrants).toEqual(tournament.entrants);
+  });
+
+  it("fills existing blank rows from pasted entrants without deleting unused blank rows", () => {
+    const blank1 = createEmptyEntrant(1, "singles");
+    const blank2 = createEmptyEntrant(2, "singles");
+    const incoming = makeEntrant(3);
+
+    const merged = mergeEntrantsIntoEmptyRows([blank1, blank2], [incoming]);
+
+    expect(merged).toEqual([incoming, blank2]);
   });
 
   it("parses same-team group values from doubles roster text", () => {
@@ -125,17 +262,24 @@ describe("tournamentModel", () => {
     };
     const updated = applyBasicInfoPatch(tournament, { title: "Updated title" });
 
-    expect(updated.generatedDraw).toBe(generatedDraw);
+    expect(updated.generatedDraw).toMatchObject(generatedDraw);
+    expect(updated.generatedDraw?.generationInputSignature).toBeDefined();
+    expect(isTournamentDrawCurrent(updated)).toBe(true);
   });
 
-  it("clears generated draw when generation-related basic settings change", () => {
+  it("automatically regenerates after a valid generation-related basic change", () => {
+    const entrant = makeEntrant(1);
     const tournament = {
       ...createDefaultTournament(),
+      entrants: [entrant],
       generatedDraw,
     };
-    const updated = applyBasicInfoPatch(tournament, { seedCount: 4 });
+    const changed = applyBasicInfoPatch(tournament, { drawSize: 32 });
 
-    expect(updated.generatedDraw).toBeUndefined();
+    expect(changed.generatedDraw).toBeDefined();
+    expect(changed.generatedDraw?.id).not.toBe(generatedDraw.id);
+    expect(changed.generatedDraw?.randomSeed).toBe(generatedDraw.randomSeed);
+    expect(isTournamentDrawCurrent(changed)).toBe(true);
   });
 
   it("keeps generated draw when only blank roster rows are added or removed", () => {
@@ -148,20 +292,105 @@ describe("tournamentModel", () => {
     const withBlankRows = applyEntrantsUpdate(tournament, [entrant, createEmptyEntrant(2, "singles")]);
     const compactedAgain = applyEntrantsUpdate(withBlankRows, [entrant]);
 
-    expect(withBlankRows.generatedDraw).toBe(generatedDraw);
-    expect(compactedAgain.generatedDraw).toBe(generatedDraw);
+    expect(withBlankRows.generatedDraw).toBeDefined();
+    expect(compactedAgain.generatedDraw).toBeDefined();
+    expect(isTournamentDrawCurrent(withBlankRows)).toBe(true);
+    expect(isTournamentDrawCurrent(compactedAgain)).toBe(true);
   });
 
-  it("clears generated draw when active roster data changes", () => {
+  it("automatically regenerates after a valid active roster change", () => {
     const entrant = makeEntrant(1);
     const tournament = {
       ...createDefaultTournament(),
       entrants: [entrant],
       generatedDraw,
     };
-    const updated = applyEntrantsUpdate(tournament, [{ ...entrant, player1Name: "Changed Player" }]);
+    const changed = applyEntrantsUpdate(tournament, [{ ...entrant, player1Name: "Changed Player" }]);
 
-    expect(updated.generatedDraw).toBeUndefined();
+    expect(changed.generatedDraw).toBeDefined();
+    expect(changed.generatedDraw?.id).not.toBe(generatedDraw.id);
+    expect(changed.generatedDraw?.randomSeed).toBe(generatedDraw.randomSeed);
+    expect(isTournamentDrawCurrent(changed)).toBe(true);
+  });
+
+  it("automatically regenerates after an entrant is added", () => {
+    const entrant = makeEntrant(1);
+    const addedEntrant = makeEntrant(2);
+    const tournament = {
+      ...createDefaultTournament(),
+      entrants: [entrant],
+      generatedDraw,
+    };
+    const changed = applyEntrantsUpdate(tournament, [entrant, addedEntrant]);
+
+    expect(changed.generatedDraw).toBeDefined();
+    expect(changed.generatedDraw?.id).not.toBe(generatedDraw.id);
+    expect(isTournamentDrawCurrent(changed)).toBe(true);
+  });
+
+  it("automatically regenerates when a referenced entrant is deleted and the remaining roster is valid", () => {
+    const removedEntrant = makeEntrant(1);
+    const remainingEntrant = makeEntrant(2);
+    const tournament = {
+      ...createDefaultTournament(),
+      entrants: [removedEntrant, remainingEntrant],
+      generatedDraw: {
+        ...generatedDraw,
+        slots: [{ position: 1, entrantId: removedEntrant.id, isBye: false }],
+      },
+    };
+
+    const updated = applyEntrantsUpdate(tournament, [remainingEntrant]);
+
+    expect(updated.generatedDraw).toBeDefined();
+    expect(updated.generatedDraw?.slots.some((slot) => slot.entrantId === removedEntrant.id)).toBe(false);
+    expect(isTournamentDrawCurrent(updated)).toBe(true);
+  });
+
+  it("automatically regenerates after an invalid empty roster is corrected", () => {
+    const entrant = makeEntrant(1);
+    const tournament = {
+      ...createDefaultTournament(),
+      entrants: [entrant],
+      generatedDraw: {
+        ...generatedDraw,
+        slots: [{ position: 1, entrantId: entrant.id, isBye: false }],
+      },
+    };
+    const invalid = applyEntrantsUpdate(tournament, []);
+    const corrected = applyEntrantsUpdate(invalid, [makeEntrant(2)]);
+
+    expect(invalid.generatedDraw).toBeUndefined();
+    expect(invalid.options.randomSeed).toBe(generatedDraw.randomSeed);
+    expect(corrected.generatedDraw).toBeDefined();
+    expect(corrected.generatedDraw?.randomSeed).toBe(generatedDraw.randomSeed);
+    expect(isTournamentDrawCurrent(corrected)).toBe(true);
+  });
+
+  it("is ungenerated while a roster edit has errors and automatically regenerates after correction", () => {
+    const entrant = makeEntrant(1);
+    const tournament = {
+      ...createDefaultTournament(),
+      entrants: [entrant],
+      generatedDraw,
+    };
+    const invalid = applyEntrantsUpdate(tournament, [{
+      ...entrant,
+      player1Name: "",
+      team1: "Team A",
+    }]);
+    const corrected = applyEntrantsUpdate(invalid, [{
+      ...entrant,
+      player1Name: "Corrected Player",
+      team1: "Team A",
+    }]);
+
+    expect(invalid.generatedDraw).toBeUndefined();
+    expect(invalid.options.randomSeed).toBe(generatedDraw.randomSeed);
+    expect(isTournamentDrawCurrent(invalid)).toBe(false);
+    expect(corrected.generatedDraw).toBeDefined();
+    expect(corrected.generatedDraw?.id).not.toBe(generatedDraw.id);
+    expect(isTournamentDrawCurrent(corrected)).toBe(true);
   });
 
   it("keeps generated draw when an option patch does not change values", () => {
@@ -171,17 +400,35 @@ describe("tournamentModel", () => {
     };
     const updated = applyOptionsPatch(tournament, { seedPositionMode: tournament.options.seedPositionMode });
 
-    expect(updated.generatedDraw).toBe(generatedDraw);
+    expect(updated.generatedDraw).toMatchObject(generatedDraw);
+    expect(isTournamentDrawCurrent(updated)).toBe(true);
   });
 
-  it("clears generated draw when draw generation options change", () => {
+  it("automatically regenerates after a generation option change", () => {
+    const entrant = makeEntrant(1);
     const tournament = {
       ...createDefaultTournament(),
+      entrants: [entrant],
       generatedDraw,
     };
-    const updated = applyOptionsPatch(tournament, { seedPositionMode: "fixed" });
+    const changed = applyOptionsPatch(tournament, { seedPositionMode: "fixed" });
 
-    expect(updated.generatedDraw).toBeUndefined();
+    expect(changed.generatedDraw).toBeDefined();
+    expect(changed.generatedDraw?.id).not.toBe(generatedDraw.id);
+    expect(changed.generatedDraw?.randomSeed).toBe(generatedDraw.randomSeed);
+    expect(isTournamentDrawCurrent(changed)).toBe(true);
+  });
+
+  it("does not generate automatically before the first explicit generation", () => {
+    const tournament = {
+      ...createDefaultTournament(),
+      entrants: [makeEntrant(1)],
+    };
+
+    const changed = applyOptionsPatch(tournament, { seedPositionMode: "fixed" });
+
+    expect(changed.generatedDraw).toBeUndefined();
+    expect(isTournamentDrawCurrent(changed)).toBe(false);
   });
 
   it("keeps generated draw when display output options change", () => {
@@ -200,6 +447,7 @@ describe("tournamentModel", () => {
       outputPageCount: 2,
       lineWeight: "bold",
     });
-    expect(updated.generatedDraw).toBe(generatedDraw);
+    expect(updated.generatedDraw).toMatchObject(generatedDraw);
+    expect(isTournamentDrawCurrent(updated)).toBe(true);
   });
 });

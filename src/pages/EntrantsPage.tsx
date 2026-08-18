@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   applyEntrantsUpdate,
   compactTournament,
   createEmptyEntrant,
   getEntrantStats,
+  getVisibleEntrantRowCount,
+  mergeEntrantsIntoEmptyRows,
   parseEntrantsFromText,
   validateTournamentForUi,
 } from "../app/tournamentModel";
@@ -22,6 +24,11 @@ export function EntrantsPage() {
   const [pasteText, setPasteText] = useState("");
   const [checked, setChecked] = useState(false);
   const [warningConfirmOpen, setWarningConfirmOpen] = useState(false);
+  const [manualVisibleRowCount, setManualVisibleRowCount] = useState(0);
+
+  useEffect(() => {
+    setManualVisibleRowCount(0);
+  }, [tournament?.id, tournament?.drawSize]);
 
   const validation = useMemo(() => tournament ? validateTournamentForUi(tournament) : { errors: [], warnings: [] }, [tournament]);
   const stats = useMemo(() => tournament ? getEntrantStats(tournament) : undefined, [tournament]);
@@ -31,6 +38,9 @@ export function EntrantsPage() {
   }
 
   const rows = tournament.entrants;
+  const defaultVisibleRowCount = getVisibleEntrantRowCount(rows, tournament.drawSize);
+  const visibleRowCount = Math.max(defaultVisibleRowCount, manualVisibleRowCount);
+  const visibleRows = rows.slice(0, visibleRowCount);
   const hasValidationErrors = validation.errors.length > 0;
   const shouldBlockNext = checked && hasValidationErrors;
 
@@ -42,8 +52,17 @@ export function EntrantsPage() {
     updateEntrants(rows.map((entrant) => entrant.id === entrantId ? { ...entrant, ...patch } : entrant));
   };
 
+  const addVisibleRow = (): void => {
+    if (visibleRows.length < rows.length) {
+      setManualVisibleRowCount(visibleRows.length + 1);
+      return;
+    }
+
+    setManualVisibleRowCount(rows.length + 1);
+    updateEntrants([...rows, createEmptyEntrant(rows.length + 1, tournament.matchType)]);
+  };
+
   const proceedNext = (): void => {
-    updateTournament(applyEntrantsUpdate(tournament, compactTournament(tournament).entrants));
     navigate(`/tournaments/${tournament.id}/edit/options`);
   };
 
@@ -67,7 +86,7 @@ export function EntrantsPage() {
       <section className="page-heading">
         <p className="page-description">ExcelまたはスプレッドシートからのTSV/CSV貼り付けにも対応します。</p>
         <div className="button-row no-print">
-          <button type="button" className="button secondary" title="名簿の入力行を追加" onClick={() => updateEntrants([...rows, createEmptyEntrant(rows.length + 1, tournament.matchType)])}>行追加</button>
+          <button type="button" className="button secondary" title="名簿の入力行を追加" onClick={addVisibleRow}>行追加</button>
           <button type="button" className="button secondary" title="空の名簿行を削除" onClick={() => updateTournament(applyEntrantsUpdate(tournament, compactTournament(tournament).entrants))}>空行削除</button>
           <button type="button" className="button secondary" title="名簿の入力内容をチェック" onClick={() => setChecked(true)}>入力チェック</button>
         </div>
@@ -77,10 +96,28 @@ export function EntrantsPage() {
         <CompactSummary
           ariaLabel="名簿入力概要"
           items={[
-            { label: "有効参加者数", value: String(stats.activeEntrantCount) },
+            {
+              label: "有効参加者数",
+              value: String(stats.activeEntrantCount),
+              tone: stats.hasEntrantOverflow ? "danger" : undefined,
+              title: stats.hasEntrantOverflow
+                ? `有効参加者数がドローサイズ（${tournament.drawSize}枠）を超えています`
+                : undefined,
+            },
             { label: "ドローサイズ", value: `${tournament.drawSize}枠` },
-            { label: "BYE数", value: stats.byeCount === undefined ? "不正" : String(stats.byeCount) },
-            { label: "シード指定", value: String(stats.seedAssignedCount) },
+            { label: "BYE数", value: stats.byeCount === undefined ? "—" : String(stats.byeCount) },
+            {
+              label: "シード指定",
+              value: stats.seedAssignmentStatus === "matched"
+                ? String(stats.seedAssignedCount)
+                : `${stats.seedAssignedCount}（${stats.seedAssignmentStatus === "shortage" ? "不足" : "超過"}）`,
+              tone: stats.seedAssignmentStatus === "matched" ? undefined : "danger",
+              title: stats.seedAssignmentStatus === "shortage"
+                ? `シード指定数が基本情報のシード数（${tournament.seedCount}）に対して不足しています`
+                : stats.seedAssignmentStatus === "excess"
+                  ? `シード指定数が基本情報のシード数（${tournament.seedCount}）を超えています`
+                  : undefined,
+            },
           ]}
         />
       ) : null}
@@ -106,7 +143,7 @@ export function EntrantsPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((entrant, index) => (
+            {visibleRows.map((entrant, index) => (
               <tr key={entrant.id}>
                 <td className="row-number">{index + 1}</td>
                 <td>
@@ -186,7 +223,7 @@ export function EntrantsPage() {
             title="貼り付けたTSV/CSVを名簿に取り込む"
             onClick={() => {
               const parsed = parseEntrantsFromText(pasteText, tournament.matchType);
-              updateEntrants([...compactTournament(tournament).entrants, ...parsed]);
+              updateEntrants(mergeEntrantsIntoEmptyRows(rows, parsed));
               setPasteText("");
               setChecked(true);
             }}
@@ -197,11 +234,12 @@ export function EntrantsPage() {
       </section>
 
       <div className="bottom-actions no-print">
+        <button type="button" className="button secondary" title="トーナメント一覧へ戻る" onClick={() => navigate("/")}>一覧</button>
         <button type="button" className="button secondary" title="基本情報へ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/basic`)}>戻る</button>
         <button
           type="button"
           className="button primary"
-          title="トーナメント生成へ進む"
+          title="オプション設定へ進む"
           disabled={shouldBlockNext}
           onClick={goNext}
         >

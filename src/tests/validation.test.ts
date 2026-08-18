@@ -15,7 +15,18 @@ describe("validateTournament", () => {
     expect(result.errors.map((issue) => issue.code)).toContain("ENTRANTS_EXCEED_DRAW_SIZE");
   });
 
-  it("returns PLAYER_NAME_REQUIRED for a blank singles name", () => {
+  it("ignores a complete blank row and returns NO_ENTRANTS", () => {
+    const result = validateTournament(
+      makeTournament({
+        entrants: [{ id: "entrant-blank", player1Name: " ", team1: "", region: "" }],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).not.toContain("PLAYER_NAME_REQUIRED");
+    expect(result.errors.map((issue) => issue.code)).toContain("NO_ENTRANTS");
+  });
+
+  it("returns PLAYER_NAME_REQUIRED for an incomplete singles row", () => {
     const result = validateTournament(
       makeTournament({
         entrants: [makeEntrant(1, { player1Name: " " })],

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  TOURNAMENT_STEPS,
+  getTournamentEditSteps,
   getTournamentStepAccess,
   getTournamentStepPath,
   isTournamentStepComplete,
@@ -8,7 +10,16 @@ import { createDefaultTournament } from "../app/tournamentModel";
 import { makeTournament } from "./testFactory";
 
 describe("tournamentFlow", () => {
-  it("blocks tournament generation while roster input has errors", () => {
+  it("uses the approved labels for the editing flow", () => {
+    expect(TOURNAMENT_STEPS.map((step) => step.label)).toEqual([
+      "基本情報",
+      "名簿入力",
+      "オプション設定",
+      "プレビュー",
+    ]);
+  });
+
+  it("blocks options settings while roster input has errors", () => {
     const tournament = createDefaultTournament();
     const access = getTournamentStepAccess(tournament, "options");
 
@@ -16,7 +27,28 @@ describe("tournamentFlow", () => {
     expect(access.redirectStep).toBe("entrants");
   });
 
-  it("allows tournament generation after roster errors are resolved", () => {
+  it("opens basic information directly before a draw is generated", () => {
+    const tournament = makeTournament({ drawSize: 4, generatedDraw: undefined });
+
+    expect(getTournamentEditSteps(tournament)).toEqual(["basic"]);
+  });
+
+  it("offers all saved editing steps after a draw is generated", () => {
+    const tournament = makeTournament({
+      drawSize: 4,
+      generatedDraw: {
+        id: "draw-1",
+        tournamentId: "tournament-1",
+        randomSeed: "seed-1",
+        generatedAt: "2026-07-03T00:00:00.000Z",
+        slots: [],
+      },
+    });
+
+    expect(getTournamentEditSteps(tournament)).toEqual(["basic", "entrants", "options"]);
+  });
+
+  it("allows options settings after roster errors are resolved", () => {
     const tournament = makeTournament({ drawSize: 4 });
     const access = getTournamentStepAccess(tournament, "options");
 
@@ -46,6 +78,28 @@ describe("tournamentFlow", () => {
     expect(isTournamentStepComplete(tournament, "options")).toBe(true);
     expect(isTournamentStepComplete(tournament, "preview")).toBe(true);
     expect(getTournamentStepAccess(tournament, "preview").canEnter).toBe(true);
+  });
+
+  it("keeps editing steps available but blocks preview while generated inputs are stale", () => {
+    const tournament = makeTournament({
+      drawSize: 4,
+      generatedDraw: {
+        id: "draw-1",
+        tournamentId: "tournament-1",
+        randomSeed: "seed-1",
+        generatedAt: "2026-07-03T00:00:00.000Z",
+        generationInputSignature: "stale-signature",
+        slots: [],
+      },
+    });
+
+    expect(getTournamentEditSteps(tournament)).toEqual(["basic", "entrants", "options"]);
+    expect(isTournamentStepComplete(tournament, "options")).toBe(false);
+    expect(isTournamentStepComplete(tournament, "preview")).toBe(false);
+    expect(getTournamentStepAccess(tournament, "preview")).toMatchObject({
+      canEnter: false,
+      redirectStep: "options",
+    });
   });
 
   it("builds stable step paths", () => {
