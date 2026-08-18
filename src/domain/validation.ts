@@ -54,6 +54,19 @@ export function normalizeEntrants(entrants: Entrant[], matchType: MatchType): En
   }));
 }
 
+export function isEntrantCompletelyEmpty(entrant: Entrant): boolean {
+  return [
+    entrant.seedNo,
+    entrant.player1Name,
+    entrant.player2Name,
+    entrant.team1,
+    entrant.team2,
+    entrant.sameTeamGroup,
+    entrant.region,
+    entrant.ranking,
+  ].every((value) => value === undefined || String(value).trim() === "") && entrant.sameTeam !== true;
+}
+
 export function validateTournament(tournament: Tournament): ValidationResult {
   const normalized = normalizeTournament(tournament);
   const errors: ValidationIssue[] = [];
@@ -108,9 +121,10 @@ export function validateTournament(tournament: Tournament): ValidationResult {
   }
 
   const matchType = isMatchType(normalized.matchType) ? normalized.matchType : "singles";
-  const validEntrants = getValidEntrants(normalized.entrants, matchType);
+  const entrantsToValidate = normalized.entrants.filter((entrant) => !isEntrantCompletelyEmpty(entrant));
+  const validEntrants = getValidEntrants(entrantsToValidate, matchType);
 
-  for (const entrant of normalized.entrants) {
+  for (const entrant of entrantsToValidate) {
     if (matchType === "singles" && !entrant.player1Name) {
       errors.push({
         code: "PLAYER_NAME_REQUIRED",
@@ -199,7 +213,7 @@ export function validateTournament(tournament: Tournament): ValidationResult {
   }
 
   errors.push(...findSeedErrors(validEntrants, seedCount));
-  warnings.push(...findDuplicatePlayerWarnings(normalized.entrants));
+  warnings.push(...findDuplicatePlayerWarnings(entrantsToValidate));
   warnings.push(...findSeedWarnings(validEntrants));
 
   return { errors, warnings };

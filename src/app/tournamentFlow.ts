@@ -1,14 +1,15 @@
 import type { Tournament } from "../domain/types";
-import { validateTournamentForUi } from "./tournamentModel";
+import { isTournamentDrawCurrent, validateTournamentForUi } from "./tournamentModel";
 
 export const TOURNAMENT_STEPS = [
   { key: "basic", label: "基本情報", path: "edit/basic" },
   { key: "entrants", label: "名簿入力", path: "edit/entrants" },
-  { key: "options", label: "トーナメント生成", path: "edit/options" },
+  { key: "options", label: "オプション設定", path: "edit/options" },
   { key: "preview", label: "プレビュー", path: "preview" },
 ] as const;
 
 export type TournamentStep = (typeof TOURNAMENT_STEPS)[number]["key"];
+export type TournamentEditStep = Exclude<TournamentStep, "preview">;
 
 export type StepAccess = {
   canEnter: boolean;
@@ -19,6 +20,12 @@ export type StepAccess = {
 export function getTournamentStepPath(tournamentId: string, step: TournamentStep): string {
   const definition = TOURNAMENT_STEPS.find((item) => item.key === step);
   return `/tournaments/${tournamentId}/${definition?.path ?? "edit/basic"}`;
+}
+
+export function getTournamentEditSteps(tournament: Tournament): readonly TournamentEditStep[] {
+  return tournament.generatedDraw
+    ? ["basic", "entrants", "options"]
+    : ["basic"];
 }
 
 export function getTournamentStepFromPath(pathname: string): TournamentStep | undefined {
@@ -63,7 +70,7 @@ export function isTournamentStepComplete(tournament: Tournament, step: Tournamen
       return isRosterComplete(tournament);
     case "options":
     case "preview":
-      return Boolean(tournament.generatedDraw);
+      return isTournamentDrawCurrent(tournament);
   }
 }
 
@@ -87,7 +94,7 @@ export function getTournamentStepAccess(tournament: Tournament, step: Tournament
   if (!isRosterComplete(tournament)) {
     return {
       canEnter: false,
-      reason: "名簿入力を完了してからトーナメント生成へ進んでください。",
+      reason: "名簿入力を完了してからオプション設定へ進んでください。",
       redirectStep: "entrants",
     };
   }
@@ -96,10 +103,12 @@ export function getTournamentStepAccess(tournament: Tournament, step: Tournament
     return { canEnter: true };
   }
 
-  if (!tournament.generatedDraw) {
+  if (!isTournamentDrawCurrent(tournament)) {
     return {
       canEnter: false,
-      reason: "トーナメント表を生成してからプレビューへ進んでください。",
+      reason: tournament.generatedDraw
+        ? "入力内容が生成時から変更されています。設定を元に戻すか、再生成してください。"
+        : "トーナメント表を生成してからプレビューへ進んでください。",
       redirectStep: "options",
     };
   }

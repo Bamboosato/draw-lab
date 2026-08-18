@@ -45,7 +45,7 @@ a {
 }
 
 .app-shell {
-  --sidebar-width: 260px;
+  --sidebar-width: 224px;
   --content-gutter: max(28px, calc((100vw - var(--sidebar-width) - 1280px) / 2 + 28px));
   --header-height: 88px;
   display: grid;
@@ -130,19 +130,11 @@ a {
   align-items: center;
 }
 
-.brand div {
-  min-width: 0;
-}
-
-.brand strong,
-.brand span {
+.brand strong {
   display: block;
-}
-
-.brand span {
-  margin-top: 2px;
-  color: #69758a;
-  font-size: 12px;
+  font-size: 20px;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .nav-list {
@@ -175,6 +167,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-top: 7px;
   background: #f8fafc;
   color: #94a3b8;
   cursor: not-allowed;
@@ -182,8 +175,15 @@ a {
 
 .nav-badge {
   flex: 0 0 auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: #e2e8f0;
+  color: #64748b;
   font-size: 11px;
   font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .main-area {
@@ -319,6 +319,10 @@ a {
   min-width: 0;
 }
 
+.tournament-list-page {
+  margin-top: -8px;
+}
+
 .page-heading {
   display: flex;
   flex-wrap: wrap;
@@ -368,13 +372,26 @@ a {
   background: #f2f6fd;
 }
 
+.action-menu-trigger.action-menu-trigger-text {
+  display: inline-block;
+  width: auto;
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: normal;
+}
+
 .action-menu-popover {
   position: fixed;
   top: 0;
   left: 0;
   z-index: 20;
   display: grid;
-  min-width: 96px;
+  min-width: 160px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   gap: 4px;
   padding: 6px;
   border: 1px solid #dce2ed;
@@ -384,8 +401,11 @@ a {
 }
 
 .action-menu-popover button {
+  display: flex;
+  align-items: center;
   height: 40px;
   min-height: 40px;
+  gap: 10px;
   padding: 8px 10px;
   border: 0;
   border-radius: 6px;
@@ -401,6 +421,47 @@ a {
 
 .action-menu-popover button.danger {
   color: #b42336;
+}
+
+.action-menu-section {
+  display: grid;
+  gap: 2px;
+}
+
+.action-menu-section + .action-menu-section {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid #e4e9f2;
+}
+
+.action-menu-section-label {
+  padding: 4px 10px 2px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.action-menu-popover button.menu-item-divider {
+  margin-top: 4px;
+  padding-top: 9px;
+  border-top: 1px solid #e4e9f2;
+  border-radius: 0 0 6px 6px;
+}
+
+.action-menu-popover button:disabled {
+  background: #ffffff;
+  color: #94a3b8;
+}
+
+.action-menu-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .bottom-actions {
@@ -436,7 +497,7 @@ a {
   font-weight: 750;
 }
 
-.inline-actions .action-menu-trigger {
+.inline-actions .action-menu-trigger:not(.action-menu-trigger-text) {
   padding: 0;
 }
 
@@ -467,6 +528,16 @@ a {
   background: #f2f6fd;
 }
 
+.inline-actions button:disabled,
+.inline-actions button:disabled:hover {
+  border-color: #dce2ed;
+  background: #f1f5f9;
+  color: #94a3b8;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .danger-link {
   border-color: #fecdd3;
   color: #b42336;
@@ -493,6 +564,18 @@ a {
   gap: 12px;
   padding: 9px 14px;
   background: #ffffff;
+}
+
+.summary-metric.danger {
+  gap: 6px;
+  padding-inline: 12px;
+  background: #fff1f2;
+  box-shadow: inset 0 0 0 1px #fecdd3;
+}
+
+.summary-metric.danger dt,
+.summary-metric.danger dd {
+  color: #b42336;
 }
 
 .summary-metric dt,
@@ -622,7 +705,7 @@ a {
   font-size: 14px;
 }
 
-.tournament-list-table .inline-actions .action-menu-trigger {
+.tournament-list-table .inline-actions .action-menu-trigger:not(.action-menu-trigger-text) {
   padding: 0;
 }
 
@@ -631,6 +714,41 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.table-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.table-sort-button:hover {
+  color: #1d4ed8;
+}
+
+.table-sort-button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.table-sort-icon {
+  min-width: 1em;
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+}
+
+.table-sort-icon.active {
+  color: #2563eb;
 }
 
 .data-table th,
@@ -871,6 +989,185 @@ a {
 .settings-panel,
 .import-result {
   padding: 18px;
+}
+
+.file-picker-container {
+  padding: 24px;
+}
+
+.file-picker-panel {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+}
+
+.file-picker-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.visually-hidden-file-input {
+  display: none;
+}
+
+.file-drop-zone {
+  display: flex;
+  min-width: 0;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  border: 1px dashed #94a3b8;
+  border-radius: 10px;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.file-drop-zone:not(.disabled):hover,
+.file-drop-zone.dragging {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.file-drop-zone:focus-visible {
+  outline: 3px solid rgb(37 99 235 / 28%);
+  outline-offset: 3px;
+  border-color: #2563eb;
+}
+
+.file-drop-zone.disabled {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.file-selection-icon {
+  width: 42px;
+  height: 42px;
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.file-drop-zone.disabled .file-selection-icon {
+  stroke: #64748b;
+}
+
+.file-drop-primary {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.file-drop-or,
+.file-picker-format,
+.file-picker-auto-hint {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.file-drop-button {
+  pointer-events: none;
+}
+
+.file-picker-auto-hint {
+  margin: 0;
+}
+
+.file-picker-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #dce2ed;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.file-picker-status.complete {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.file-picker-status.error {
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
+.file-process-indicator {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.file-process-indicator.complete {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.file-process-indicator.error {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+.file-process-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #bfdbfe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: file-process-spin 800ms linear infinite;
+}
+
+@keyframes file-process-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.file-picker-status-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+
+.file-picker-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-picker-status-label {
+  color: #526176;
+  font-size: 13px;
+}
+
+.file-reselect-button {
+  flex: 0 0 auto;
+}
+
+.sample-data-action {
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid #e4e9f2;
 }
 
 .settings-panel h3,
@@ -1295,6 +1592,10 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .tournament-list-page {
+    margin-top: 0;
+  }
+
   .sidebar {
     position: static;
     height: auto;
@@ -1304,6 +1605,28 @@ a {
   .option-layout,
   .import-layout {
     grid-template-columns: 1fr;
+  }
+
+  .file-picker-container {
+    padding: 20px;
+  }
+
+  .file-drop-zone {
+    min-height: 200px;
+    padding: 20px 16px;
+  }
+
+  .file-picker-status {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .file-picker-status-copy {
+    width: calc(100% - 36px);
+  }
+
+  .file-reselect-button {
+    width: 100%;
   }
 
   .compact-summary {

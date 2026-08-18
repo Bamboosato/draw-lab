@@ -74,6 +74,7 @@ export type GeneratedDraw = {
   randomSeed: string;
   slots: DrawSlot[];
   generatedAt: string;
+  generationInputSignature?: string;
 };
 
 export type ValidationResult = {

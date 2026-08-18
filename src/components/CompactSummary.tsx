@@ -1,6 +1,8 @@
 type SummaryItem = {
   label: string;
   value: string;
+  tone?: "danger";
+  title?: string;
 };
 
 export function CompactSummary({
@@ -13,7 +15,12 @@ export function CompactSummary({
   return (
     <dl className="compact-summary" aria-label={ariaLabel}>
       {items.map((item) => (
-        <div className="summary-metric" key={item.label}>
+        <div
+          className={`summary-metric${item.tone ? ` ${item.tone}` : ""}`}
+          key={item.label}
+          title={item.title}
+          aria-invalid={item.tone === "danger" ? true : undefined}
+        >
           <dt>{item.label}</dt>
           <dd>{item.value}</dd>
         </div>

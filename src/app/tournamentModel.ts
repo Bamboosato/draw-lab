@@ -12,7 +12,7 @@ import type {
 } from "../domain/types";
 import { VALID_DRAW_SIZES, VALID_SEED_COUNTS } from "../domain/types";
 import { DEFAULT_DRAW_OUTPUT_OPTIONS, getDrawOutputOptions } from "../domain/outputOptions";
-import { getValidEntrants, validateTournament } from "../domain/validation";
+import { getValidEntrants, isEntrantCompletelyEmpty, validateTournament } from "../domain/validation";
 
 export const DRAW_SIZES: DrawSize[] = [...VALID_DRAW_SIZES];
 export const SEED_COUNTS = [...VALID_SEED_COUNTS];
@@ -73,6 +73,21 @@ export function ensureEntrantRows(
   ];
 }
 
+export function getVisibleEntrantRowCount(
+  entrants: readonly Entrant[],
+  drawSize: DrawSize,
+): number {
+  let lastEnteredRowIndex = -1;
+
+  entrants.forEach((entrant, index) => {
+    if (!isEntrantEmpty(entrant)) {
+      lastEnteredRowIndex = index;
+    }
+  });
+
+  return Math.max(drawSize, lastEnteredRowIndex + 1);
+}
+
 export function createEmptyEntrant(index: number, matchType: MatchType): Entrant {
   return {
     id: createId(`entrant-${index}`),
@@ -87,10 +102,18 @@ export function createEmptyEntrant(index: number, matchType: MatchType): Entrant
   };
 }
 
-export function touchTournament(tournament: Tournament): Tournament {
+export function hasTournamentContentChanged(current: Tournament, next: Tournament): boolean {
+  return JSON.stringify({ ...current, updatedAt: undefined })
+    !== JSON.stringify({ ...next, updatedAt: undefined });
+}
+
+export function touchTournament(
+  tournament: Tournament,
+  updatedAt = new Date().toISOString(),
+): Tournament {
   return {
     ...tournament,
-    updatedAt: new Date().toISOString(),
+    updatedAt,
   };
 }
 
@@ -101,45 +124,72 @@ export function compactTournament(tournament: Tournament): Tournament {
   };
 }
 
+export function mergeEntrantsIntoEmptyRows(
+  currentEntrants: readonly Entrant[],
+  incomingEntrants: readonly Entrant[],
+): Entrant[] {
+  const remaining = [...incomingEntrants];
+  const merged = currentEntrants.map((entrant) => {
+    if (!isEntrantEmpty(entrant) || remaining.length === 0) {
+      return entrant;
+    }
+
+    return remaining.shift()!;
+  });
+
+  return [...merged, ...remaining];
+}
+
 export function applyBasicInfoPatch(tournament: Tournament, patch: Partial<Tournament>): Tournament {
-  const next = { ...tournament, ...patch };
-
-  if (hasGenerationBasicInfoChanged(tournament, next)) {
-    return { ...next, generatedDraw: undefined };
-  }
-
-  return next;
+  const baseline = withGenerationInputSignature(tournament);
+  return refreshGeneratedDrawAfterChange(baseline, { ...baseline, ...patch });
 }
 
 export function applyEntrantsUpdate(tournament: Tournament, entrants: Entrant[]): Tournament {
-  const next = { ...tournament, entrants };
-
-  if (haveDrawEntrantsChanged(tournament.entrants, entrants)) {
-    return { ...next, generatedDraw: undefined };
-  }
-
-  return next;
+  const baseline = withGenerationInputSignature(tournament);
+  return refreshGeneratedDrawAfterChange(baseline, { ...baseline, entrants });
 }
 
 export function applyOptionsPatch(tournament: Tournament, patch: Partial<DrawOptions>): Tournament {
-  const options = { ...tournament.options, ...patch };
-  const next = { ...tournament, options };
-
-  if (areDrawOptionsEqual(tournament.options, options)) {
-    return next;
-  }
-
-  return { ...next, generatedDraw: undefined };
+  const baseline = withGenerationInputSignature(tournament);
+  return refreshGeneratedDrawAfterChange(baseline, {
+    ...baseline,
+    options: { ...baseline.options, ...patch },
+  });
 }
 
 export function applyOutputOptionsPatch(
   tournament: Tournament,
   patch: Partial<DrawOutputOptions>,
 ): Tournament {
+  const baseline = withGenerationInputSignature(tournament);
+
   return {
-    ...tournament,
-    outputOptions: getDrawOutputOptions({ ...tournament.outputOptions, ...patch }),
+    ...baseline,
+    outputOptions: getDrawOutputOptions({ ...baseline.outputOptions, ...patch }),
   };
+}
+
+export function createGenerationInputSignature(tournament: Tournament): string {
+  return JSON.stringify({
+    version: 1,
+    matchType: tournament.matchType,
+    drawSize: tournament.drawSize,
+    seedCount: tournament.seedCount,
+    entrants: toEntrantDrawSignature(tournament.entrants),
+    options: toDrawOptionsSignature(tournament.options),
+  });
+}
+
+export function isTournamentDrawCurrent(tournament: Tournament): boolean {
+  const generatedDraw = tournament.generatedDraw;
+
+  if (!generatedDraw) {
+    return false;
+  }
+
+  return generatedDraw.generationInputSignature === undefined
+    || generatedDraw.generationInputSignature === createGenerationInputSignature(tournament);
 }
 
 export function validateTournamentForUi(tournament: Tournament): ValidationResult {
@@ -162,72 +212,141 @@ export function generateTournamentDraw(tournament: Tournament, seedOverride?: st
     };
   }
 
-  const compact = compactTournament(tournament);
-  const randomSeed = seedOverride ?? compact.options.randomSeed ?? createRandomSeed();
+  const randomSeed = seedOverride ?? tournament.options.randomSeed ?? createRandomSeed();
   const result = generateDraw({
-    tournament: compact,
+    tournament,
     randomSeed,
     now,
   });
 
   if (!result.draw) {
     return {
-      tournament: compact,
+      tournament,
       validation: result.validation,
     };
   }
 
+  const generatedTournament = {
+    ...tournament,
+    options: {
+      ...tournament.options,
+      randomSeed,
+    },
+  };
+  const generatedDraw = {
+    ...result.draw,
+    generationInputSignature: createGenerationInputSignature(generatedTournament),
+  };
+
   return {
     tournament: {
-      ...compact,
-      generatedDraw: result.draw,
+      ...generatedTournament,
+      generatedDraw,
       updatedAt: now,
     },
-    draw: result.draw,
+    draw: generatedDraw,
     validation: result.validation,
   };
 }
 
 export function getEntrantStats(tournament: Tournament): {
   activeEntrantCount: number;
+  hasEntrantOverflow: boolean;
   byeCount: number | undefined;
   seedAssignedCount: number;
+  seedAssignmentStatus: "matched" | "shortage" | "excess";
 } {
   const compact = compactTournament(tournament);
   const activeEntrantCount = getValidEntrants(compact.entrants, compact.matchType).length;
+  const hasEntrantOverflow = activeEntrantCount > compact.drawSize;
+  const seedAssignedCount = compact.entrants.filter(
+    (entrant) => entrant.seedNo !== undefined && String(entrant.seedNo).trim() !== "",
+  ).length;
+  const seedAssignmentStatus = seedAssignedCount < compact.seedCount
+    ? "shortage"
+    : seedAssignedCount > compact.seedCount
+      ? "excess"
+      : "matched";
 
   return {
     activeEntrantCount,
-    byeCount: activeEntrantCount <= compact.drawSize ? calculateByeCount(compact.drawSize, activeEntrantCount) : undefined,
-    seedAssignedCount: compact.entrants.filter((entrant) => entrant.seedNo !== undefined && String(entrant.seedNo).trim() !== "").length,
+    hasEntrantOverflow,
+    byeCount: hasEntrantOverflow ? undefined : calculateByeCount(compact.drawSize, activeEntrantCount),
+    seedAssignedCount,
+    seedAssignmentStatus,
   };
 }
 
 export function isEntrantEmpty(entrant: Entrant): boolean {
-  return [
-    entrant.seedNo,
-    entrant.player1Name,
-    entrant.player2Name,
-    entrant.team1,
-    entrant.team2,
-    entrant.sameTeamGroup,
-    entrant.region,
-    entrant.ranking,
-  ].every((value) => value === undefined || String(value).trim() === "") && entrant.sameTeam !== true;
+  return isEntrantCompletelyEmpty(entrant);
 }
 
-function hasGenerationBasicInfoChanged(current: Tournament, next: Tournament): boolean {
-  return current.matchType !== next.matchType
-    || current.drawSize !== next.drawSize
-    || current.seedCount !== next.seedCount;
+function withGenerationInputSignature(tournament: Tournament): Tournament {
+  if (!tournament.generatedDraw) {
+    return tournament;
+  }
+
+  const randomSeed = tournament.options.randomSeed?.trim() || tournament.generatedDraw.randomSeed;
+  const normalizedTournament = tournament.options.randomSeed === randomSeed
+    ? tournament
+    : {
+        ...tournament,
+        options: {
+          ...tournament.options,
+          randomSeed,
+        },
+      };
+
+  if (
+    tournament.generatedDraw.generationInputSignature !== undefined
+    && normalizedTournament === tournament
+  ) {
+    return tournament;
+  }
+
+  return {
+    ...normalizedTournament,
+    generatedDraw: {
+      ...tournament.generatedDraw,
+      generationInputSignature: createGenerationInputSignature(normalizedTournament),
+    },
+  };
 }
 
-function haveDrawEntrantsChanged(current: readonly Entrant[], next: readonly Entrant[]): boolean {
-  return JSON.stringify(toEntrantDrawSignature(current)) !== JSON.stringify(toEntrantDrawSignature(next));
-}
+function refreshGeneratedDrawAfterChange(previous: Tournament, next: Tournament): Tournament {
+  const generatedDraw = previous.generatedDraw;
+  const seed = next.options.randomSeed?.trim()
+    || generatedDraw?.randomSeed
+    || previous.options.randomSeed?.trim();
 
-function areDrawOptionsEqual(current: DrawOptions, next: DrawOptions): boolean {
-  return JSON.stringify(toDrawOptionsSignature(current)) === JSON.stringify(toDrawOptionsSignature(next));
+  if (!seed) {
+    return next;
+  }
+
+  const candidate = next.options.randomSeed === seed
+    ? next
+    : {
+        ...next,
+        options: {
+          ...next.options,
+          randomSeed: seed,
+        },
+      };
+
+  if (generatedDraw?.generationInputSignature === createGenerationInputSignature(candidate)) {
+    return candidate;
+  }
+
+  const result = generateTournamentDraw(candidate, seed);
+
+  if (!result.draw) {
+    return {
+      ...candidate,
+      generatedDraw: undefined,
+    };
+  }
+
+  return result.tournament;
 }
 
 function toEntrantDrawSignature(entrants: readonly Entrant[]) {
@@ -252,10 +371,10 @@ function toDrawOptionsSignature(options: DrawOptions) {
     avoidSameTeam: options.avoidSameTeam,
     avoidSameRegion: options.avoidSameRegion,
     prioritizeSeedBye: options.prioritizeSeedBye,
-    seedPositionMode: options.seedPositionMode,
-    thirdFourthSeedPlacement: options.thirdFourthSeedPlacement,
-    fixByePositionOnSeedLottery: options.fixByePositionOnSeedLottery,
-    entrantPlacementOrder: options.entrantPlacementOrder,
+    seedPositionMode: options.seedPositionMode ?? "jtaRulebook",
+    thirdFourthSeedPlacement: options.thirdFourthSeedPlacement ?? "tennisRule",
+    fixByePositionOnSeedLottery: options.fixByePositionOnSeedLottery ?? true,
+    entrantPlacementOrder: options.entrantPlacementOrder ?? "largeTeamFirst",
     randomSeed: normalizeSignatureValue(options.randomSeed),
   };
 }

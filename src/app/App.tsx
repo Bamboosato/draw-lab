@@ -75,21 +75,25 @@ function GuardedTournamentStep({
 function NewTournamentRoute() {
   const navigate = useNavigate();
   const params = useParams();
-  const { createTournament } = useTournaments();
+  const { createTournament, storageError, storageStatus } = useTournaments();
   const createdRef = useRef(false);
 
   useEffect(() => {
-    if (createdRef.current || params.id) {
+    if (createdRef.current || params.id || storageStatus !== "ready") {
       return;
     }
 
     createdRef.current = true;
     const tournament = createTournament();
     navigate(`/tournaments/${tournament.id}/edit/basic`, { replace: true });
-  }, [createTournament, navigate, params.id]);
+  }, [createTournament, navigate, params.id, storageStatus]);
 
   if (params.id) {
     return <Navigate to={`/tournaments/${params.id}/edit/basic`} replace />;
+  }
+
+  if (storageStatus === "error") {
+    return <div className="loading-panel">{storageError || "保存領域を準備できませんでした。"}</div>;
   }
 
   return <div className="loading-panel">新規トーナメントを作成しています。</div>;
