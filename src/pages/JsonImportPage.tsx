@@ -1,14 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { getEntrantStats, validateTournamentForUi } from "../app/tournamentModel";
 import { createSampleJson, parseJsonImport } from "../app/tournamentPersistence";
 import { useTournaments } from "../app/TournamentProvider";
+import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { TournamentFilePicker, type FileProcessStatus } from "../components/TournamentFilePicker";
 import { ValidationBanner } from "../components/ValidationBanner";
 
 export function JsonImportPage() {
-  const navigate = useNavigate();
+  const navigate = useViewTransitionNavigate();
   const {
     importTournament,
     replaceAllTournaments,

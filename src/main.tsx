@@ -1,10 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import { App } from "./app/App";
-import { TournamentProvider } from "./app/TournamentProvider";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { appRoutes } from "./app/App";
 import "./styles/globals.css";
 import "./styles/print.css";
+
+const router = createBrowserRouter(appRoutes);
 
 const root = document.getElementById("root");
 
@@ -14,10 +15,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <BrowserRouter>
-      <TournamentProvider>
-        <App />
-      </TournamentProvider>
-    </BrowserRouter>
+    <RouterProvider router={router} />
   </StrictMode>,
 );

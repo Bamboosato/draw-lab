@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   applyOptionsPatch,
   applyOutputOptionsPatch,
@@ -8,6 +8,7 @@ import {
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
+import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { ValidationBanner } from "../components/ValidationBanner";
 import {
   getAvailableOutputPageCounts,
@@ -17,7 +18,7 @@ import {
 import type { DrawOptions, DrawOutputOptions } from "../domain/types";
 
 export function OptionsPage() {
-  const navigate = useNavigate();
+  const navigate = useViewTransitionNavigate();
   const { id } = useParams();
   const tournament = useTournament(id);
   const { updateTournament } = useTournaments();
