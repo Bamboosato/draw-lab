@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { getOverflowMenuPosition, type OverflowMenuPosition } from "../app/overflowMenuPosition";
 import {
   getTournamentEditSteps,
@@ -22,8 +22,15 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { Tournament } from "../domain/types";
 
 export function TournamentListPage() {
-  const navigate = useNavigate();
-  const { tournaments, deleteTournament, duplicateTournament, storageError, storageStatus } = useTournaments();
+  const navigate = useViewTransitionNavigate();
+  const {
+    createTournament,
+    deleteTournament,
+    duplicateTournament,
+    storageError,
+    storageStatus,
+    tournaments,
+  } = useTournaments();
   const [deleteTargetId, setDeleteTargetId] = useState<string | undefined>();
   const [sort, setSort] = useState<TournamentSort>(DEFAULT_TOURNAMENT_SORT);
   const deleteTarget = tournaments.find((tournament) => tournament.id === deleteTargetId);
@@ -40,7 +47,10 @@ export function TournamentListPage() {
             className="button primary"
             title="新しいトーナメントを作成"
             disabled={!storageReady}
-            onClick={() => navigate("/tournaments/new")}
+            onClick={() => {
+              const tournament = createTournament();
+              navigate(`/tournaments/${tournament.id}/edit/basic`);
+            }}
           >
             新規作成
           </button>

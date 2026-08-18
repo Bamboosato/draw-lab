@@ -1,12 +1,13 @@
 import { useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { getBasicInfoErrors } from "../app/tournamentFlow";
 import { applyBasicInfoPatch, applyEntrantsUpdate, DRAW_SIZES, ensureEntrantRows, SEED_COUNTS } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
+import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import type { DrawSize, MatchType, Tournament } from "../domain/types";
 
 export function BasicInfoPage() {
-  const navigate = useNavigate();
+  const navigate = useViewTransitionNavigate();
   const { id } = useParams();
   const tournament = useTournament(id);
   const { updateTournament } = useTournaments();

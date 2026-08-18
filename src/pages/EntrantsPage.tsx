@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   applyEntrantsUpdate,
   compactTournament,
@@ -11,13 +11,14 @@ import {
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
+import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { CompactSummary } from "../components/CompactSummary";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ValidationBanner } from "../components/ValidationBanner";
 import type { Entrant } from "../domain/types";
 
 export function EntrantsPage() {
-  const navigate = useNavigate();
+  const navigate = useViewTransitionNavigate();
   const { id } = useParams();
   const tournament = useTournament(id);
   const { updateTournament } = useTournaments();

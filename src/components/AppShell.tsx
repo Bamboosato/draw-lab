@@ -5,6 +5,7 @@ import {
   TOURNAMENT_STEPS,
   type TournamentStep,
 } from "../app/tournamentFlow";
+import { useViewTransitionsEnabled } from "../app/viewTransitionNavigation";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -15,6 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const currentStep = getTournamentStepFromPath(location.pathname);
   const flowNotice = getFlowNotice(location.state);
   const isTournamentArea = isTournamentPath(location.pathname);
+  const viewTransitionsEnabled = useViewTransitionsEnabled();
 
   return (
     <div className={isSidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
@@ -35,7 +37,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav className="nav-list" aria-label="グローバルナビゲーション">
-          <NavLink to="/" className={isTournamentArea ? "active" : undefined}>
+          <NavLink
+            to="/"
+            className={isTournamentArea ? "active" : undefined}
+            viewTransition={viewTransitionsEnabled}
+          >
             トーナメント
           </NavLink>
           <span className="nav-disabled" aria-disabled="true">

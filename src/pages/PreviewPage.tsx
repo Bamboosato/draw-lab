@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   createRandomSeed,
   generateTournamentDraw,
@@ -7,12 +7,13 @@ import {
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
+import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { DrawPreview } from "../components/DrawPreview";
 import { ValidationBanner } from "../components/ValidationBanner";
 import { buildBracketViewModel } from "../domain/bracketViewModel";
 
 export function PreviewPage() {
-  const navigate = useNavigate();
+  const navigate = useViewTransitionNavigate();
   const { id } = useParams();
   const tournament = useTournament(id);
   const { updateTournament } = useTournaments();

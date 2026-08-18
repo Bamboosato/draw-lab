@@ -308,9 +308,50 @@ a {
 }
 
 .content {
+  view-transition-name: page-content;
   width: min(100%, 1280px);
   margin: 0 auto;
   padding: 28px var(--content-gutter) 104px;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-group(page-content) {
+  animation-duration: 180ms;
+  animation-timing-function: ease-out;
+}
+
+::view-transition-old(page-content) {
+  animation: page-content-fade-out 120ms ease-in both;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(page-content) {
+  animation: page-content-fade-in 180ms ease-out both;
+  mix-blend-mode: normal;
+}
+
+@keyframes page-content-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes page-content-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(page-content),
+  ::view-transition-old(page-content),
+  ::view-transition-new(page-content) {
+    animation: none;
+  }
 }
 
 .page-stack {

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Outlet, useLocation, useParams, type RouteObject } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
 import { BasicInfoPage } from "../pages/BasicInfoPage";
 import { EntrantsPage } from "../pages/EntrantsPage";
@@ -12,33 +12,48 @@ import {
   getTournamentStepPath,
   type TournamentStep,
 } from "./tournamentFlow";
-import { useTournament, useTournaments } from "./TournamentProvider";
+import { TournamentProvider, useTournament, useTournaments } from "./TournamentProvider";
+import {
+  useViewTransitionNavigate,
+  ViewTransitionRedirect,
+} from "./viewTransitionNavigation";
 
 export function App() {
   return (
     <AppShell>
-      <Routes>
-        <Route path="/" element={<TournamentListPage />} />
-        <Route path="/tournaments/new" element={<NewTournamentRoute />} />
-        <Route path="/tournaments/:id/edit/basic" element={<BasicInfoPage />} />
-        <Route
-          path="/tournaments/:id/edit/entrants"
-          element={<GuardedTournamentStep step="entrants"><EntrantsPage /></GuardedTournamentStep>}
-        />
-        <Route
-          path="/tournaments/:id/edit/options"
-          element={<GuardedTournamentStep step="options"><OptionsPage /></GuardedTournamentStep>}
-        />
-        <Route
-          path="/tournaments/:id/preview"
-          element={<GuardedTournamentStep step="preview"><PreviewPage /></GuardedTournamentStep>}
-        />
-        <Route path="/import" element={<JsonImportPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Outlet />
     </AppShell>
   );
 }
+
+export const appRoutes: RouteObject[] = [
+  {
+    element: (
+      <TournamentProvider>
+        <App />
+      </TournamentProvider>
+    ),
+    children: [
+      { index: true, element: <TournamentListPage /> },
+      { path: "tournaments/new", element: <NewTournamentRoute /> },
+      { path: "tournaments/:id/edit/basic", element: <BasicInfoPage /> },
+      {
+        path: "tournaments/:id/edit/entrants",
+        element: <GuardedTournamentStep step="entrants"><EntrantsPage /></GuardedTournamentStep>,
+      },
+      {
+        path: "tournaments/:id/edit/options",
+        element: <GuardedTournamentStep step="options"><OptionsPage /></GuardedTournamentStep>,
+      },
+      {
+        path: "tournaments/:id/preview",
+        element: <GuardedTournamentStep step="preview"><PreviewPage /></GuardedTournamentStep>,
+      },
+      { path: "import", element: <JsonImportPage /> },
+      { path: "*", element: <ViewTransitionRedirect to="/" replace /> },
+    ],
+  },
+];
 
 function GuardedTournamentStep({
   children,
@@ -61,7 +76,7 @@ function GuardedTournamentStep({
     const redirectStep = access.redirectStep ?? "basic";
 
     return (
-      <Navigate
+      <ViewTransitionRedirect
         to={getTournamentStepPath(tournament.id, redirectStep)}
         replace
         state={{ flowNotice: access.reason, from: location.pathname }}
@@ -73,7 +88,7 @@ function GuardedTournamentStep({
 }
 
 function NewTournamentRoute() {
-  const navigate = useNavigate();
+  const navigate = useViewTransitionNavigate();
   const params = useParams();
   const { createTournament, storageError, storageStatus } = useTournaments();
   const createdRef = useRef(false);
@@ -89,7 +104,7 @@ function NewTournamentRoute() {
   }, [createTournament, navigate, params.id, storageStatus]);
 
   if (params.id) {
-    return <Navigate to={`/tournaments/${params.id}/edit/basic`} replace />;
+    return <ViewTransitionRedirect to={`/tournaments/${params.id}/edit/basic`} replace />;
   }
 
   if (storageStatus === "error") {
