@@ -795,7 +795,8 @@ a {
 
 .tournament-list-table th:last-child,
 .tournament-list-table td:last-child {
-  width: 200px;
+  width: 220px;
+  white-space: nowrap;
 }
 
 .tournament-list-table .inline-actions {
@@ -803,9 +804,15 @@ a {
   gap: 4px;
 }
 
+.tournament-list-table .inline-actions > button,
+.tournament-list-table .inline-actions > .action-menu {
+  flex: 0 0 auto;
+}
+
 .tournament-list-table .inline-actions button {
   padding: 8px;
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .tournament-list-table .inline-actions .action-menu-trigger:not(.action-menu-trigger-text) {
