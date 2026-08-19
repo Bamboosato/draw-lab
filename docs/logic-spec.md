@@ -1,7 +1,7 @@
 # 処理ロジック仕様書
 
 作成日: 2026-07-02  
-更新日: 2026-08-18
+更新日: 2026-08-19
 対象: draw-lab WEB版トーナメント表作成アプリ PoC  
 参照: `docs/requirements.md`, `docs/screen-spec.md`
 
@@ -872,6 +872,62 @@ type StorageStatus = "loading" | "ready" | "saving" | "error";
 - 保存失敗時は `error` とし、未保存であることをユーザーへ通知する
 - OPFSは本PoCの保存実装に含めない
 
+## 17.5 PWA / Service Worker設計
+
+PWA機能は、トーナメント生成ロジック、描画ロジック、IndexedDB保存層から分離する。Service Workerは公開アプリ資産を配信するための実行環境であり、`TournamentRepository` やJSON入出力サービスを呼び出さない。
+
+### 17.5.1 正規Originと登録範囲
+
+```ts
+const CANONICAL_ORIGIN = "https://draw-lab.bamboosato.com";
+const SERVICE_WORKER_URL = "/sw.js";
+const SERVICE_WORKER_SCOPE = "/";
+const MANIFEST_URL = "/manifest.webmanifest";
+```
+
+- 本番では正規Originの `/sw.js` を登録する
+- Service Workerのscopeは `/` とし、React Routerの全画面URLを対象にする
+- localhostは開発・テスト用Originとして扱い、本番のIndexedDBやService Workerと共有しない
+- 開発サーバーではService Workerを登録しない、または本番相当ビルドの検証時だけ登録する
+- `/manifest.webmanifest`、`/sw.js`、アイコンはSPAフォールバックではなく静的資産として返す
+
+### 17.5.2 キャッシュ戦略
+
+| リソース | 戦略 | キャッシュ可否 | 備考 |
+|---|---|---|---|
+| 画面ナビゲーション / `index.html` | network-first、失敗時にアプリシェルへフォールバック | 可 | 更新を検知し、オフライン起動を維持する |
+| Manifest | network-first | 可 | 新しい名前・アイコン・表示設定を検知する |
+| ハッシュ付きJS / CSS | cache-first | 可 | ビルド世代ごとに管理する |
+| 公開アイコン・公開画像 | cache-first | 可 | `public/` の公開資産に限る |
+| `/assets/*` 以外の未知のURL | 通常のネットワーク処理 | 原則不可 | APIやユーザーデータをアプリシェルに混ぜない |
+| IndexedDBの大会データ | Service Workerから参照しない | 不可 | `TournamentRepository` の責務 |
+| JSON本文・Blob URL・クリップボード内容 | Service Workerから参照しない | 不可 | ファイル入出力とUIの責務 |
+
+Cache Storageに保存してよいのは、アプリの公開資産だけとする。参加者名簿、所属、地区、生成済みドロー、入力途中の状態、JSONバックアップは保存しない。Service Workerのキャッシュ世代を変更した場合は、不要な旧世代を削除する。
+
+### 17.5.3 オフライン・更新状態
+
+```ts
+type PwaRuntimeState =
+  | "unsupported"
+  | "registering"
+  | "ready"
+  | "offline"
+  | "updateAvailable"
+  | "updating"
+  | "error";
+```
+
+- `unsupported` は通常のWebアプリとして継続利用する。空の大会一覧へ置き換えない
+- `ready` は通常の画面へ中立な完了メッセージを常時表示しない
+- 通信断を検知した場合は `offline` とし、キャッシュ済みアプリシェルとIndexedDBの利用可否を区別して表示する
+- 新しいService Workerを検知した場合は `updateAvailable` とし、ユーザー操作なしに `skipWaiting` やページ再読み込みを実行しない
+- `storageStatus === "saving"` 中は更新適用を開始しない。保存完了後にユーザーが更新を選択できるようにする
+- 更新適用に失敗した場合は `error` とし、現行アプリとIndexedDBデータを保持して再試行できるようにする
+- 初回起動がオフラインでアプリシェル未取得の場合は、保存データがない状態と混同しないエラーとして扱う
+
+Service Workerの実装を変更しても、`generateDraw()`、`buildBracketViewModel()`、`TournamentRepository` の公開責務は変更しない。
+
 ---
 
 ## 18. レンダラーへの入力
@@ -1027,6 +1083,30 @@ type BracketRow = {
 
 テスト結果には、実施ブラウザ、対象ケースを選んだ理由、未実施範囲、失敗時のログと再現手順を記録する。
 
+## 19.11 PWAブラウザ結合テスト観点
+
+PWA変更では、機能、非機能、データ、UIの観点を先に分け、正常系、異常系、境界値、状態遷移を切り分ける。全E2Eを既定とせず、Service Worker、Manifest、配信rewrite、IndexedDB、更新処理に影響する対象ケースを優先する。
+
+| 観点 | 区分 | ケース | 期待結果 |
+|---|---|---|---|
+| 機能 | 正常系 | 正規OriginでManifestを取得してインストール導線を確認 | `name`、`short_name`、`start_url`、`scope`、`display`、192px / 512pxアイコンが認識される |
+| 機能 | 正常系 | オンラインで初回起動後に通信を切断して再起動 | アプリシェルが起動し、IndexedDBの大会一覧を表示できる |
+| 機能 | 状態遷移 | オンライン → オフライン → オンライン | `offline` 表示、復帰、更新確認が順序どおりに行われる |
+| 機能 | 状態遷移 | 新Service Worker検知 → 後で → 更新 | 編集中は画面を再読み込みせず、ユーザー選択後だけ更新する |
+| 機能 | 異常系 | `/tournaments/new`、`/import`、大会編集URLを直接再読み込み | SPAフォールバックで404にならず、対象画面を表示する |
+| 非機能 | 環境差異 | Chrome / Edgeデスクトップ、Android Chrome、iOS Safari | PWAインストール可否を含む差異を記録し、通常Web利用は継続できる |
+| 非機能 | 異常系 | Service Worker登録失敗、Manifest取得失敗、初回オフライン | 通常Webアプリとして動作し、空一覧や成功扱いにしない |
+| 非機能 | 境界値 | キャッシュ世代更新、古いService Workerが残った状態 | 新資産を取得し、不要な旧キャッシュを残さない |
+| データ | 正常系 | オフライン中に入力・生成・保存・再読込 | IndexedDBの大会データが欠落せず、画面再読込後も復元される |
+| データ | 異常系 | Cache Storageの内容を検査 | 名簿、所属、地区、generatedDraw、JSON本文が存在しない |
+| データ | 境界値 | 0大会、1大会、多数大会でオフライン起動 | 空状態と保存失敗を混同せず、件数が一致する |
+| データ | Origin | 正規Origin、localhost、別ホストを順に利用 | 保存領域とService WorkerがOriginごとに分離される |
+| UI | 正常系 | standalone起動、320px幅、100% / 125%表示 | ヘッダー、操作、保存状態、横スクロールが破綻しない |
+| UI | 異常系 | 保存中に更新通知の「更新」を押す | 更新を保留し、未保存データを破棄しない |
+| UI | 正常系 | オフラインでJSON入出力とブラウザ印刷 | ファイル操作と印刷がネットワークなしで実行できる |
+
+実行結果には、実施ブラウザ・OS・ビルド識別子・通信切替方法・選定理由・未実施範囲・ログ・再現手順を記録する。同一実機に対するブラウザテストは並列実行しない。
+
 ---
 
 ## 20. 実装優先順位
@@ -1048,6 +1128,11 @@ Codexに実装させる場合は、以下の順序を推奨する。
 12. src/renderers/svgBracketRenderer.ts
 13. UI components
 14. print CSS
+15. public/manifest.webmanifest + PWAアイコン
+16. vite.config.ts + Service Worker生成・登録
+17. 本番ホスティングのSPAフォールバック
+18. 更新通知と更新適用制御
+19. PWA対象ブラウザ結合テスト
 ```
 
 ---
@@ -1070,4 +1155,10 @@ Codexに実装させる場合は、以下の順序を推奨する。
 - 全大会バックアップJSONをエクスポートできる
 - 全大会バックアップを1トランザクションで全置換復元できる
 - 不正JSONまたは復元失敗時に、復元前の全大会が保持される
+- 正規OriginでManifestとService Workerを取得できる
+- 初回オンライン起動後にオフラインでアプリシェルを起動できる
+- オフライン中もIndexedDBの大会データを保持して利用できる
+- Cache Storageにユーザーデータを保存しない
+- 更新適用時に編集中・保存中のデータを破棄しない
+- 画面URLの直接再読み込みがSPAフォールバックで成功する
 - 主要ロジックにVitestの単体テストがある
