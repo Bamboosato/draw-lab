@@ -26,10 +26,12 @@ export function EntrantsPage() {
   const [checked, setChecked] = useState(false);
   const [warningConfirmOpen, setWarningConfirmOpen] = useState(false);
   const [manualVisibleRowCount, setManualVisibleRowCount] = useState(0);
+  const [showRosterDetails, setShowRosterDetails] = useState(false);
 
   useEffect(() => {
     setManualVisibleRowCount(0);
-  }, [tournament?.id, tournament?.drawSize]);
+    setShowRosterDetails(false);
+  }, [tournament?.id, tournament?.drawSize, tournament?.matchType]);
 
   const validation = useMemo(() => tournament ? validateTournamentForUi(tournament) : { errors: [], warnings: [] }, [tournament]);
   const stats = useMemo(() => tournament ? getEntrantStats(tournament) : undefined, [tournament]);
@@ -44,6 +46,19 @@ export function EntrantsPage() {
   const visibleRows = rows.slice(0, visibleRowCount);
   const hasValidationErrors = validation.errors.length > 0;
   const shouldBlockNext = checked && hasValidationErrors;
+  const rosterDetailsToggle = (
+    <button
+      type="button"
+      className="roster-details-toggle no-print"
+      aria-controls="roster-details-columns"
+      aria-expanded={showRosterDetails}
+      aria-label={showRosterDetails ? "名簿の詳細列を閉じる" : "名簿の詳細列を開く"}
+      title={showRosterDetails ? "詳細列を閉じる" : "詳細列を開く"}
+      onClick={() => setShowRosterDetails((current) => !current)}
+    >
+      {showRosterDetails ? "⊖" : "⊕"}
+    </button>
+  );
 
   const updateEntrants = (entrants: Entrant[]): void => {
     updateTournament(applyEntrantsUpdate(tournament, entrants));
@@ -131,19 +146,31 @@ export function EntrantsPage() {
         <ValidationBanner errors={validation.errors} warnings={validation.warnings} entrants={rows} />
       ) : null}
 
-      <section className="table-panel roster-panel">
-        <table className="data-table roster-table">
+      <section className={`table-panel roster-panel${showRosterDetails ? " roster-details-open" : " roster-details-collapsed"}`}>
+        <table id="roster-details-columns" className="data-table roster-table">
           <thead>
             <tr>
               <th>No.</th>
               <th>シード</th>
               <th>{renderRequiredHeader(tournament.matchType === "doubles" ? "選手名1" : "選手名")}</th>
               {tournament.matchType === "doubles" ? <th>{renderRequiredHeader("選手名2")}</th> : null}
-              <th>{tournament.matchType === "doubles" ? "所属チーム1" : "所属チーム"}</th>
-              {tournament.matchType === "doubles" ? <th>所属チーム2</th> : null}
-              {tournament.matchType === "doubles" ? <th className="same-team-group-column">同チーム扱い</th> : null}
-              <th>地区</th>
-              <th className="ranking-column">ランキング</th>
+              <th className="roster-team-boundary-column">
+                <span className="roster-team-heading">
+                  {tournament.matchType === "doubles" ? "所属チーム1" : "所属チーム"}
+                  {tournament.matchType === "singles" ? rosterDetailsToggle : null}
+                </span>
+              </th>
+              {tournament.matchType === "doubles" ? (
+                <th className="roster-team-boundary-column">
+                  <span className="roster-team-heading">
+                    所属チーム2
+                    {rosterDetailsToggle}
+                  </span>
+                </th>
+              ) : null}
+              {tournament.matchType === "doubles" ? <th className="roster-detail-column same-team-group-column">同チーム扱い</th> : null}
+              <th className="roster-detail-column">地区</th>
+              <th className="roster-detail-column ranking-column">ランキング</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -181,7 +208,7 @@ export function EntrantsPage() {
                   </td>
                 ) : null}
                 {tournament.matchType === "doubles" ? (
-                  <td className="same-team-group-column">
+                  <td className="roster-detail-column same-team-group-column">
                     <input
                       maxLength={5}
                       value={entrant.sameTeamGroup ?? ""}
@@ -189,10 +216,10 @@ export function EntrantsPage() {
                     />
                   </td>
                 ) : null}
-                <td>
+                <td className="roster-detail-column">
                   <input value={entrant.region ?? ""} onChange={(event) => updateEntrant(entrant.id, { region: event.target.value })} />
                 </td>
-                <td className="ranking-column">
+                <td className="roster-detail-column ranking-column">
                   <input
                     inputMode="numeric"
                     maxLength={4}

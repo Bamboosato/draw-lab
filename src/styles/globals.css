@@ -1059,9 +1059,69 @@ a {
   padding: 8px;
 }
 
+.roster-table .roster-detail-column {
+  display: none;
+}
+
+.roster-panel.roster-details-open .roster-table .roster-detail-column {
+  display: table-cell;
+}
+
+.roster-panel.roster-details-collapsed .roster-table {
+  min-width: 0;
+}
+
+.roster-team-boundary-column {
+  position: relative;
+  padding-right: 40px !important;
+}
+
+.roster-team-heading {
+  display: block;
+  min-height: 24px;
+  white-space: nowrap;
+}
+
+.roster-details-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.roster-details-toggle:hover {
+  background: #dbeafe;
+}
+
+.roster-details-toggle:focus-visible {
+  outline: 3px solid #bfdbfe;
+  outline-offset: 1px;
+}
+
 .roster-table .same-team-group-column {
   width: 118px;
   min-width: 118px;
+}
+
+.roster-table th:nth-child(2),
+.roster-table td:nth-child(2) {
+  width: 64px;
+  min-width: 64px;
+  white-space: nowrap;
 }
 
 .roster-table .ranking-column {
