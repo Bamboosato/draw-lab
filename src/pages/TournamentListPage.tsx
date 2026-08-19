@@ -93,7 +93,6 @@ export function TournamentListPage() {
           { label: "全トーナメント", value: String(tournaments.length) },
           { label: "生成済み", value: String(tournaments.filter(isTournamentDrawCurrent).length) },
           { label: "編集中", value: String(tournaments.filter((item) => !isTournamentDrawCurrent(item)).length) },
-          { label: "保存先", value: "IndexedDB" },
         ]}
       />
 
@@ -163,7 +162,7 @@ export function TournamentListPage() {
                     <span className="muted-line">（{tournament.matchType === "doubles" ? "ダブルス" : "シングルス"}）</span>
                   </td>
                   <td>{tournament.date || "-"}</td>
-                  <td>{tournament.drawSize}枠</td>
+                  <td>{tournament.drawSize}</td>
                   <td><StatusBadge tournament={tournament} /></td>
                   <td>{formatDateTime(tournament.updatedAt)}</td>
                   <td>

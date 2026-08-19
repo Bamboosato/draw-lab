@@ -77,20 +77,24 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 function TournamentStepper({ currentStep }: { currentStep: TournamentStep | undefined }) {
+  const currentStepIndex = TOURNAMENT_STEPS.findIndex((step) => step.key === currentStep);
+
   return (
     <ol className="stepper" aria-label="作成フロー">
       {TOURNAMENT_STEPS.map((step, index) => {
         const isActive = currentStep === step.key;
-        const className = getStepperItemClassName(step.key, isActive);
+        const isComplete = currentStepIndex >= 0 && index < currentStepIndex;
+        const className = getStepperItemClassName(step.key, isActive, isComplete);
 
         return (
           <li
             key={step.key}
             className={className}
             aria-current={isActive ? "step" : undefined}
+            aria-label={`${index + 1}. ${step.label}${isActive ? "（現在）" : isComplete ? "（完了）" : "（未到達）"}`}
           >
-            <span className="stepper-pill">
-              <span className="step-number">{index + 1}</span>
+            <span className="stepper-step">
+              <span className="step-number">{isComplete ? "✓" : index + 1}</span>
               <span className="step-label">{step.label}</span>
             </span>
           </li>
@@ -124,11 +128,13 @@ function getScreenName(pathname: string): string {
   return "基本情報";
 }
 
-function getStepperItemClassName(step: TournamentStep, isActive: boolean): string {
+function getStepperItemClassName(step: TournamentStep, isActive: boolean, isComplete: boolean): string {
   return [
     "stepper-item",
     `stepper-${step}`,
     isActive ? "active" : "",
+    !isActive && isComplete ? "complete" : "",
+    !isActive && !isComplete ? "upcoming" : "",
   ].filter(Boolean).join(" ");
 }
 

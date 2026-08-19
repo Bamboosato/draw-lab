@@ -83,7 +83,7 @@ export function EntrantsPage() {
   };
 
   return (
-    <div className="page-stack">
+    <div className="page-stack entrants-page">
       <section className="page-heading">
         <p className="page-description">ExcelまたはスプレッドシートからのTSV/CSV貼り付けにも対応します。</p>
         <div className="button-row no-print">
@@ -102,23 +102,27 @@ export function EntrantsPage() {
               value: String(stats.activeEntrantCount),
               tone: stats.hasEntrantOverflow ? "danger" : undefined,
               title: stats.hasEntrantOverflow
-                ? `有効参加者数がドローサイズ（${tournament.drawSize}枠）を超えています`
+                ? `有効参加者数がドローサイズ（${tournament.drawSize}）を超えています`
                 : undefined,
             },
-            { label: "ドローサイズ", value: `${tournament.drawSize}枠` },
-            { label: "BYE数", value: stats.byeCount === undefined ? "—" : String(stats.byeCount) },
+            { label: "ドローサイズ", value: String(tournament.drawSize) },
             {
               label: "シード指定",
-              value: stats.seedAssignmentStatus === "matched"
-                ? String(stats.seedAssignedCount)
-                : `${stats.seedAssignedCount}（${stats.seedAssignmentStatus === "shortage" ? "不足" : "超過"}）`,
+              value: String(stats.seedAssignedCount),
               tone: stats.seedAssignmentStatus === "matched" ? undefined : "danger",
               title: stats.seedAssignmentStatus === "shortage"
                 ? `シード指定数が基本情報のシード数（${tournament.seedCount}）に対して不足しています`
                 : stats.seedAssignmentStatus === "excess"
                   ? `シード指定数が基本情報のシード数（${tournament.seedCount}）を超えています`
-                  : undefined,
+                : undefined,
             },
+            { label: "BYE数", value: stats.byeCount === undefined ? "—" : String(stats.byeCount) },
+          ]}
+          statusMessages={[
+            ...(stats.hasEntrantOverflow ? ["有効参加者数がドローサイズを超過しています。"] : []),
+            ...(stats.seedAssignmentStatus === "matched"
+              ? []
+              : [stats.seedAssignmentStatus === "shortage" ? "シード指定数が不足しています。" : "シード指定数が超過しています。"]),
           ]}
         />
       ) : null}
