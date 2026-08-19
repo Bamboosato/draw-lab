@@ -8,12 +8,16 @@ type SummaryItem = {
 export function CompactSummary({
   ariaLabel,
   items,
+  statusMessages = [],
 }: {
   ariaLabel: string;
   items: readonly SummaryItem[];
+  statusMessages?: readonly string[];
 }) {
+  const hasStatusMessages = statusMessages.length > 0;
+
   return (
-    <dl className="compact-summary" aria-label={ariaLabel}>
+    <dl className={`compact-summary${hasStatusMessages ? " has-summary-alert" : ""}`} aria-label={ariaLabel}>
       {items.map((item) => (
         <div
           className={`summary-metric${item.tone ? ` ${item.tone}` : ""}`}
@@ -25,6 +29,14 @@ export function CompactSummary({
           <dd>{item.value}</dd>
         </div>
       ))}
+      {hasStatusMessages ? (
+        <div className="summary-alert" role="status" aria-live="polite">
+          <p>
+            {statusMessages[0]}
+            {statusMessages.length > 1 ? " 他" : ""}
+          </p>
+        </div>
+      ) : null}
     </dl>
   );
 }
