@@ -6,6 +6,7 @@ import {
   type TournamentStep,
 } from "../app/tournamentFlow";
 import { useViewTransitionsEnabled } from "../app/viewTransitionNavigation";
+import { PwaStatus } from "./PwaStatus";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -68,6 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {flowNotice}
           </div>
         ) : null}
+        <PwaStatus />
         <main className="content">{children}</main>
       </div>
     </div>
