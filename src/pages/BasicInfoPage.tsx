@@ -61,7 +61,7 @@ export function BasicInfoPage() {
           <input value={tournament.eventName ?? ""} onChange={(event) => update({ eventName: event.target.value })} />
         </label>
         <label className="field">
-          <span>種目区分</span>
+          {renderRequiredLabel("種目区分")}
           <select
             value={tournament.matchType}
             onChange={(event) => update({ matchType: event.target.value as MatchType })}
@@ -71,7 +71,7 @@ export function BasicInfoPage() {
           </select>
         </label>
         <label className="field">
-          <span>ドローサイズ</span>
+          {renderRequiredLabel("ドローサイズ")}
           <select
             value={tournament.drawSize}
             onChange={(event) => update({ drawSize: Number(event.target.value) as DrawSize })}
@@ -80,7 +80,7 @@ export function BasicInfoPage() {
           </select>
         </label>
         <label className="field">
-          <span>シード数</span>
+          {renderRequiredLabel("シード数")}
           <select
             value={tournament.seedCount}
             onChange={(event) => update({ seedCount: Number(event.target.value) })}
@@ -105,6 +105,15 @@ export function BasicInfoPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+function renderRequiredLabel(label: string) {
+  return (
+    <span className="required-header">
+      {label}
+      <span className="required-marker" aria-label="必須">*</span>
+    </span>
   );
 }
 
