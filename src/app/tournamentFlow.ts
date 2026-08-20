@@ -5,7 +5,7 @@ export const TOURNAMENT_STEPS = [
   { key: "basic", label: "基本情報", path: "edit/basic" },
   { key: "entrants", label: "名簿入力", path: "edit/entrants" },
   { key: "options", label: "オプション設定", path: "edit/options" },
-  { key: "preview", label: "プレビュー", path: "preview" },
+  { key: "preview", label: "生成・プレビュー", path: "preview" },
 ] as const;
 
 export type TournamentStep = (typeof TOURNAMENT_STEPS)[number]["key"];
