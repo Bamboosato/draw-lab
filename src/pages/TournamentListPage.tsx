@@ -64,7 +64,7 @@ export function TournamentListPage() {
                 items: [
                   {
                     label: "全大会バックアップ",
-                    title: "全大会をJSONファイルへバックアップ",
+                    title: "全大会をファイルへバックアップ",
                     icon: "backup",
                     disabled: tournaments.length === 0,
                     onSelect: () => downloadAllTournaments(tournaments),
@@ -76,7 +76,7 @@ export function TournamentListPage() {
                 items: [
                   {
                     label: "大会情報の復元",
-                    title: "大会情報をJSONから復元",
+                    title: "大会情報をファイルから復元",
                     icon: "restore",
                     onSelect: () => navigate("/import"),
                   },
@@ -287,7 +287,7 @@ function ActionMenu({
             },
             {
               label: "出力",
-              title: "大会情報(個別)をJSONへ出力",
+              title: "大会情報(個別)をファイルへ出力",
               icon: "export",
               onSelect: onExport,
             },
