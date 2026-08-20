@@ -415,9 +415,13 @@ a {
 
 .content {
   view-transition-name: page-content;
-  width: min(100%, 1280px);
+  width: min(100%, calc(1280px + (var(--content-gutter) * 2)));
   margin: 0 auto;
   padding: 28px var(--content-gutter) 104px;
+}
+
+.content:has(> .tournament-list-page) {
+  padding-bottom: 28px;
 }
 
 ::view-transition-old(root),
