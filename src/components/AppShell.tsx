@@ -50,6 +50,37 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="nav-badge">未実装</span>
           </span>
         </nav>
+        <section className="related-apps" aria-label="関連アプリ" hidden={isSidebarCollapsed}>
+          <a
+            className="related-app-link"
+            href="https://matchup-lab.bamboosato.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="別タブでアプリを開きます"
+          >
+            <img
+              className="related-app-icon"
+              src="https://matchup-lab.bamboosato.com/favicon.ico"
+              alt=""
+              width="24"
+              height="24"
+              loading="lazy"
+              decoding="async"
+            />
+            <span>MatchupLab</span>
+            <svg
+              className="related-app-external-icon"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M9 2h5v5" />
+              <path d="M14 2 8 8" />
+              <path d="M13 9v3.5A1.5 1.5 0 0 1 11.5 14h-7A1.5 1.5 0 0 1 3 12.5v-7A1.5 1.5 0 0 1 4.5 4H8" />
+            </svg>
+          </a>
+          <p className="related-app-description">対戦表作成・参加者管理</p>
+        </section>
       </aside>
       <div className="main-area">
         {showStepper && tournamentId ? (

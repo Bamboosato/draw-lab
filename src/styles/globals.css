@@ -185,6 +185,64 @@ a {
   white-space: nowrap;
 }
 
+.related-apps {
+  margin-top: 36px;
+  padding-top: 16px;
+  border-top: 1px solid #e4e9f2;
+}
+
+.related-app-link {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.related-app-link:hover,
+.related-app-link:focus-visible {
+  background: #f8fafc;
+  color: #1d4ed8;
+}
+
+.related-app-link:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.related-app-icon {
+  display: block;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  object-fit: contain;
+}
+
+.related-app-external-icon {
+  display: block;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.related-app-description {
+  margin: 6px 10px 0 42px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .main-area {
   min-width: 0;
 }
