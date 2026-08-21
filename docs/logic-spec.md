@@ -1,8 +1,8 @@
 # 処理ロジック仕様書
 
 作成日: 2026-07-02  
-更新日: 2026-08-19
-対象: draw-lab WEB版トーナメント表作成アプリ PoC  
+更新日: 2026-08-21
+対象: draw-lab WEB版トーナメント表作成アプリ PoC（正式リリース版 1.0.0）
 参照: `docs/requirements.md`, `docs/screen-spec.md`
 
 ---
