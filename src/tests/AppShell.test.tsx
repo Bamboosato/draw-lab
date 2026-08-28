@@ -50,6 +50,22 @@ describe("AppShell related app link", () => {
   });
 });
 
+describe("AppShell league stepper", () => {
+  it("uses a five-step layout for league editing routes", () => {
+    render(
+      <MemoryRouter initialEntries={["/leagues/league-1/edit/basic"]}>
+        <AppShell>
+          <div>本文</div>
+        </AppShell>
+      </MemoryRouter>,
+    );
+
+    const stepper = document.querySelector(".stepper");
+    expect(stepper?.classList.contains("stepper-league")).toBe(true);
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
+  });
+});
+
 function renderAppShell() {
   return render(
     <MemoryRouter>
