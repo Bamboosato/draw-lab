@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { getLeagueStepFromPath, LEAGUE_STEPS, type LeagueStep } from "../app/leagueFlow";
 import {
   getTournamentStepFromPath,
   TOURNAMENT_STEPS,
@@ -12,11 +13,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const location = useLocation();
   const screenName = getScreenName(location.pathname);
-  const showStepper = location.pathname.includes("/tournaments/") && location.pathname !== "/tournaments/new";
+  const showTournamentStepper = location.pathname.includes("/tournaments/") && location.pathname !== "/tournaments/new";
+  const showLeagueStepper = location.pathname.includes("/leagues/") && location.pathname !== "/leagues/new" && location.pathname !== "/leagues/import";
   const tournamentId = getTournamentId(location.pathname);
   const currentStep = getTournamentStepFromPath(location.pathname);
+  const leagueId = getLeagueId(location.pathname);
+  const currentLeagueStep = getLeagueStepFromPath(location.pathname);
   const flowNotice = getFlowNotice(location.state);
   const isTournamentArea = isTournamentPath(location.pathname);
+  const isLeagueArea = isLeaguePath(location.pathname);
   const viewTransitionsEnabled = useViewTransitionsEnabled();
 
   return (
@@ -45,10 +50,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             トーナメント
           </NavLink>
-          <span className="nav-disabled" aria-disabled="true">
-            <span>リーグ表</span>
-            <span className="nav-badge">未実装</span>
-          </span>
+          <NavLink
+            to="/leagues"
+            className={isLeagueArea ? "active" : undefined}
+            viewTransition={viewTransitionsEnabled}
+          >
+            リーグ表
+          </NavLink>
         </nav>
         <section className="related-apps" aria-label="関連アプリ" hidden={isSidebarCollapsed}>
           <a
@@ -83,9 +91,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         </section>
       </aside>
       <div className="main-area">
-        {showStepper && tournamentId ? (
+        {showTournamentStepper && tournamentId ? (
           <div className="stepper-band no-print">
             <TournamentStepper currentStep={currentStep} />
+          </div>
+        ) : showLeagueStepper && leagueId ? (
+          <div className="stepper-band no-print">
+            <LeagueStepper currentStep={currentLeagueStep} />
           </div>
         ) : (
           <header className="topbar no-print">
@@ -144,6 +156,18 @@ function getScreenName(pathname: string): string {
     return "大会情報の復元";
   }
 
+  if (pathname === "/leagues" || pathname === "/leagues/import") {
+    return pathname.endsWith("import") ? "リーグ情報の復元" : "リーグ表";
+  }
+
+  if (pathname.includes("/leagues/")) {
+    if (pathname.includes("/participants") || pathname.includes("/selection")) return "名簿入力・選出";
+    if (pathname.includes("/groups")) return "グループ・対戦設定";
+    if (pathname.includes("/matches")) return "対戦カード";
+    if (pathname.includes("/dashboard")) return "リーグ表";
+    return "リーグ基本情報";
+  }
+
   if (pathname.includes("/entrants")) {
     return "名簿入力";
   }
@@ -159,7 +183,7 @@ function getScreenName(pathname: string): string {
   return "基本情報";
 }
 
-function getStepperItemClassName(step: TournamentStep, isActive: boolean, isComplete: boolean): string {
+function getStepperItemClassName(step: string, isActive: boolean, isComplete: boolean): string {
   return [
     "stepper-item",
     `stepper-${step}`,
@@ -183,8 +207,43 @@ function getTournamentId(pathname: string): string | undefined {
   return match?.[1] === "new" ? undefined : match?.[1];
 }
 
+function getLeagueId(pathname: string): string | undefined {
+  const match = pathname.match(/^\/leagues\/([^/]+)/);
+  return match?.[1] === "new" || match?.[1] === "import" ? undefined : match?.[1];
+}
+
 function isTournamentPath(pathname: string): boolean {
   return pathname === "/" || pathname === "/import" || pathname.startsWith("/tournaments/");
+}
+
+function isLeaguePath(pathname: string): boolean {
+  return pathname === "/leagues" || pathname === "/leagues/import" || pathname.startsWith("/leagues/");
+}
+
+function LeagueStepper({ currentStep }: { currentStep: LeagueStep | undefined }) {
+  const currentStepIndex = LEAGUE_STEPS.findIndex((step) => step.key === currentStep);
+
+  return (
+    <ol className="stepper stepper-league" aria-label="リーグ作成フロー">
+      {LEAGUE_STEPS.map((step, index) => {
+        const isActive = currentStep === step.key;
+        const isComplete = currentStepIndex >= 0 && index < currentStepIndex;
+        return (
+          <li
+            key={step.key}
+            className={getStepperItemClassName(step.key, isActive, isComplete)}
+            aria-current={isActive ? "step" : undefined}
+            aria-label={`${index + 1}. ${step.label}${isActive ? "（現在）" : isComplete ? "（完了）" : "（未到達）"}`}
+          >
+            <span className="stepper-step">
+              <span className="step-number">{isComplete ? "✓" : index + 1}</span>
+              <span className="step-label">{step.label}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 function SidebarToggleIcon({ isCollapsed }: { isCollapsed: boolean }) {
