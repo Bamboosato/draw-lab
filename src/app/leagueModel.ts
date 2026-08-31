@@ -31,7 +31,6 @@ export function createDefaultLeague(): League {
       reserveParticipantIds: [],
     },
     groups: [],
-    matchPolicy: { mode: "roundRobin" },
     scoringPolicy: { ...DEFAULT_LEAGUE_SCORING_POLICY },
     matches: [],
     standings: [],
@@ -93,7 +92,7 @@ export function hasLeagueContentChanged(current: League, next: League): boolean 
 }
 
 export function updateParticipants(league: League, participants: LeagueParticipant[]): League {
-  if (hasLeagueResults(league)) return league;
+  if (league.status === "completed" || league.matchSelectionStatus === "confirmed") return league;
   const previousById = new Map(league.participants.map((participant) => [participant.id, participant]));
   const nextParticipants = participants.map((participant) => {
     const normalized = participant.participantType === "individual"
@@ -153,7 +152,7 @@ export function updateSelection(
   reserveParticipantIds: readonly string[],
   randomSeed?: string,
 ): League {
-  if (hasLeagueResults(league)) return league;
+  if (league.status === "completed" || league.matchSelectionStatus === "confirmed") return league;
   const selected = new Set(selectedParticipantIds);
   const reserve = new Set(reserveParticipantIds);
   const participants = league.participants.map((participant) => ({
@@ -191,13 +190,8 @@ export function selectParticipantIds(ids: readonly string[], capacity: number, s
 }
 
 export function updateGroups(league: League, groups: League["groups"]): League {
-  if (hasLeagueResults(league)) return league;
+  if (league.status === "completed" || league.matchSelectionStatus === "confirmed") return league;
   return rebuildLeague({ ...league, groups, matchSelectionStatus: "pending" }, true);
-}
-
-export function updateMatchPolicy(league: League, matchPolicy: League["matchPolicy"]): League {
-  if (hasLeagueResults(league)) return league;
-  return rebuildLeague({ ...league, matchPolicy, matchSelectionStatus: "pending" }, true);
 }
 
 export function updateScoringPolicy(league: League, scoringPolicy: League["scoringPolicy"]): League {
@@ -209,6 +203,7 @@ export function updateScoringPolicy(league: League, scoringPolicy: League["scori
 }
 
 export function prepareLeagueMatches(league: League): League {
+  if (league.status === "completed" || league.matchSelectionStatus === "confirmed") return league;
   const matches = createCandidateMatches(league.groups, () => createId("match"));
   return {
     ...league,
@@ -220,6 +215,7 @@ export function prepareLeagueMatches(league: League): League {
 }
 
 export function updateMatchValidity(league: League, matchId: string, isValid: boolean): League {
+  if (league.status === "completed" || league.matchSelectionStatus === "confirmed") return league;
   const matches = league.matches.map((match) => match.id === matchId ? { ...match, isValid } : match);
   return {
     ...league,
@@ -253,7 +249,20 @@ export function updateManualRank(league: League, participantId: string, manualRa
 }
 
 export function markMatchSelectionConfirmed(league: League): League {
-  return { ...league, matchSelectionStatus: "confirmed", status: "scheduled" };
+  if (league.status === "completed" || league.matches.length === 0) return league;
+  return { ...league, matchSelectionStatus: "confirmed", status: hasLeagueResults(league) ? "inProgress" : "scheduled" };
+}
+
+export function unconfirmMatchSelection(league: League): League {
+  if (league.status === "completed" || league.matchSelectionStatus !== "confirmed") return league;
+  const matches = league.matches.map((match) => ({ ...match, result: "unplayed" as const }));
+  return {
+    ...league,
+    matches,
+    matchSelectionStatus: "pending",
+    status: "draft",
+    standings: calculateStandings(league.groups, matches, league.scoringPolicy, league.standings),
+  };
 }
 
 export function reopenLeague(league: League): League {

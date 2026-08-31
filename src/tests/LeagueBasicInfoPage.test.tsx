@@ -45,6 +45,8 @@ describe("LeagueBasicInfoPage", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText("IndexedDBへ自動保存しています。")).toBeNull();
     expect((screen.getByRole("button", { name: "次へ" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByRole("button", { name: "一覧" }).getAttribute("title")).toBe("リーグ一覧へ戻る");
+    expect(screen.getByRole("button", { name: "次へ" }).getAttribute("title")).toBe("名簿入力・選出へ進む");
     expect(screen.getByRole("textbox", { name: "大会名" }).closest("label")?.querySelector(".required-marker")).toBeNull();
   });
 
@@ -70,5 +72,34 @@ describe("LeagueBasicInfoPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "次へ" }));
     expect(screen.queryByRole("alert")).toBeNull();
     expect(navigateMock).toHaveBeenCalledWith("/leagues/league-1/edit/participants");
+  });
+
+  it("対戦カード確定後は種別区分と定員を変更できない", () => {
+    useLeagueMock.mockReturnValue({
+      ...createDefaultLeague(),
+      id: "league-1",
+      matchSelectionStatus: "confirmed",
+      status: "scheduled",
+    });
+
+    render(<LeagueBasicInfoPage />);
+
+    expect(screen.getByRole("combobox")).toHaveProperty("disabled", true);
+    expect(screen.getByRole("spinbutton", { name: /定員/ })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("status").textContent).toBe("対戦カード確定後のため、種目区分と定員は変更できません。");
+  });
+
+  it("未確定なら結果入力済みでも種別区分と定員を変更できる", () => {
+    useLeagueMock.mockReturnValue({
+      ...createDefaultLeague(),
+      id: "league-1",
+      matchSelectionStatus: "pending",
+      status: "inProgress",
+    });
+
+    render(<LeagueBasicInfoPage />);
+
+    expect(screen.getByRole("combobox")).toHaveProperty("disabled", false);
+    expect(screen.getByRole("spinbutton", { name: /定員/ })).toHaveProperty("disabled", false);
   });
 });

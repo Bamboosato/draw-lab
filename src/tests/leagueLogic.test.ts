@@ -1,10 +1,65 @@
 import { describe, expect, it } from "vitest";
-import { calculateStandings, createCandidateMatches, validateLeague, validateManualRanks, validatePartialMatchSelection } from "../domain/leagueLogic";
-import type { League, LeagueGroup, LeagueMatch } from "../domain/leagueTypes";
+import { calculateStandings, countValidMatchesByParticipant, createCandidateMatches, validateLeague, validateManualRanks } from "../domain/leagueLogic";
+import { distributeLeagueParticipants } from "../domain/leagueGrouping";
+import type { League, LeagueGroup, LeagueMatch, LeagueParticipant } from "../domain/leagueTypes";
 
 describe("league domain logic", () => {
+  describe("機能観点: 所属・地区を考慮したグループ振り分け", () => {
+    it("同じ所属・地区を分散しながらグループ人数差を1以内にする", () => {
+      const participants = [
+        makeParticipant("a1", "チームA", "東地区"),
+        makeParticipant("a2", "チームA", "東地区"),
+        makeParticipant("a3", "チームA", "東地区"),
+        makeParticipant("b1", "チームB", "西地区"),
+        makeParticipant("b2", "チームB", "西地区"),
+        makeParticipant("b3", "チームB", "西地区"),
+      ];
+
+      const groups = distributeLeagueParticipants(participants, 3);
+
+      expect(groups.map((group) => group.length)).toEqual([2, 2, 2]);
+      expect(groups.every((group) => new Set(group.map((id) => participants.find((participant) => participant.id === id)?.team)).size === 2)).toBe(true);
+      expect(groups.every((group) => new Set(group.map((id) => participants.find((participant) => participant.id === id)?.region)).size === 2)).toBe(true);
+    });
+
+    it("完全分散できない場合も全員を保持し、人数バランスを優先する", () => {
+      const participants = [
+        makeParticipant("p1", "同一所属", "同一地区"),
+        makeParticipant("p2", "同一所属", "同一地区"),
+        makeParticipant("p3", "同一所属", "同一地区"),
+      ];
+
+      const groups = distributeLeagueParticipants(participants, 2);
+
+      expect(groups.flat()).toHaveLength(3);
+      expect(new Set(groups.flat())).toEqual(new Set(["p1", "p2", "p3"]));
+      expect(groups.map((group) => group.length).sort()).toEqual([1, 2]);
+      expect(Math.max(...groups.map((group) => group.length))).toBe(2);
+    });
+  });
+
+  describe("非機能観点: 振り分け結果の再現性", () => {
+    it("同じ入力とグループ数で同じ振り分け結果になる", () => {
+      const participants = [
+        makeParticipant("p1"),
+        makeParticipant("p2", "チームA"),
+        makeParticipant("p3", "チームA"),
+        makeParticipant("p4", undefined, "東地区"),
+        makeParticipant("p5", undefined, "東地区"),
+      ];
+
+      expect(distributeLeagueParticipants(participants, 2)).toEqual(distributeLeagueParticipants(participants, 2));
+    });
+
+    it("属性がない場合も人数差1以内で振り分ける", () => {
+      const groups = distributeLeagueParticipants([makeParticipant("p1"), makeParticipant("p2"), makeParticipant("p3"), makeParticipant("p4"), makeParticipant("p5")], 2);
+
+      expect(groups.map((group) => group.length)).toEqual([3, 2]);
+    });
+  });
+
   describe("機能観点: 対戦カード生成", () => {
-    it("総当たり相当の全組合せを重複なく生成する", () => {
+    it("全組合せを重複なく候補カードとして生成する", () => {
       const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p1", "p2", "p3", "p4"] }];
       const matches = createCandidateMatches(groups, () => `m${Math.random()}`);
       expect(matches).toHaveLength(6);
@@ -12,26 +67,42 @@ describe("league domain logic", () => {
       expect(matches.every((match) => match.isValid)).toBe(true);
     });
 
-    it("4参加単位で各2試合を有効にすると4カードになる", () => {
+    it("5参加単位以上では同じ参加単位が連続しない決定的な対戦順にする", () => {
+      const createMatches = (participantCount: number) => {
+        let id = 0;
+        return createCandidateMatches(
+          [{ id: "g1", name: "A", participantIds: Array.from({ length: participantCount }, (_, index) => `p${index + 1}`) }],
+          () => `m${++id}`,
+        );
+      };
+
+      for (const participantCount of [5, 6]) {
+        const matches = createMatches(participantCount);
+
+        expect(countAdjacentParticipantRepeats(matches)).toBe(0);
+        expect(matches).toEqual(createMatches(participantCount));
+      }
+    });
+
+    it("参加単位数が少なく完全に分離できない場合も、全組合せを保持する", () => {
+      const matches = createCandidateMatches(
+        [{ id: "g1", name: "A", participantIds: ["p1", "p2", "p3"] }],
+        (() => { let id = 0; return () => `m${++id}`; })(),
+      );
+
+      expect(matches).toHaveLength(3);
+      expect(countAdjacentParticipantRepeats(matches)).toBe(2);
+    });
+
+    it("候補カードを無効化すると参加単位ごとの有効試合数へ反映する", () => {
       const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p1", "p2", "p3", "p4"] }];
       const allMatches = createCandidateMatches(groups, (() => { let index = 0; return () => `m${++index}`; })());
-      const matches = allMatches.map((match) => ({ ...match, isValid: ["m1", "m2", "m5", "m6"].includes(match.id) }));
-      const league = makeLeague(groups, matches, 2);
-      expect(validatePartialMatchSelection(league).errors).toEqual([]);
-    });
-
-    it("3参加単位で各1試合は合計試合数が奇数のため確定できない", () => {
-      const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p1", "p2", "p3"] }];
-      const matches = createCandidateMatches(groups, (() => { let index = 0; return () => `m${++index}`; })());
-      const league = makeLeague(groups, matches, 1);
-      expect(validatePartialMatchSelection(league).errors.some((issue) => issue.code === "PARTIAL_MATCH_PARITY")).toBe(true);
-    });
-
-    it("指定試合数と参加単位ごとの有効試合数が一致しない場合を検出する", () => {
-      const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p1", "p2", "p3", "p4"] }];
-      const matches = createCandidateMatches(groups, (() => { let index = 0; return () => `m${++index}`; })()).map((match, index) => ({ ...match, isValid: index < 2 }));
-      const league = makeLeague(groups, matches, 2);
-      expect(validatePartialMatchSelection(league).errors.some((issue) => issue.code === "PARTIAL_MATCH_COUNT_MISMATCH")).toBe(true);
+      const matches = allMatches.map((match) => match.id === "m1" ? { ...match, isValid: false } : match);
+      const counts = countValidMatchesByParticipant(matches, groups[0]!.participantIds);
+      expect(counts.get("p1")).toBe(2);
+      expect(counts.get("p2")).toBe(2);
+      expect(counts.get("p3")).toBe(3);
+      expect(counts.get("p4")).toBe(3);
     });
   });
 
@@ -96,7 +167,19 @@ describe("league domain logic", () => {
   });
 });
 
-function makeLeague(groups: LeagueGroup[], matches: LeagueMatch[], matchesPerParticipant?: number): League {
+function makeParticipant(id: string, team = "", region = ""): LeagueParticipant {
+  return { id, displayName: id, participantType: "individual", memberNames: [id], team, region, selectionStatus: "selected" };
+}
+
+function countAdjacentParticipantRepeats(matches: readonly LeagueMatch[]): number {
+  return matches.slice(1).reduce((count, match, index) => {
+    const previous = matches[index]!;
+    const previousParticipants = new Set([previous.participantAId, previous.participantBId]);
+    return count + (previousParticipants.has(match.participantAId) || previousParticipants.has(match.participantBId) ? 1 : 0);
+  }, 0);
+}
+
+function makeLeague(groups: LeagueGroup[], matches: LeagueMatch[]): League {
   return {
     id: "league-1",
     title: "リーグ",
@@ -105,7 +188,6 @@ function makeLeague(groups: LeagueGroup[], matches: LeagueMatch[], matchesPerPar
     participants: groups.flatMap((group) => group.participantIds.map((id) => ({ id, displayName: id, participantType: "individual" as const, memberNames: [id], selectionStatus: "selected" as const }))),
     selection: { mode: "all", selectedParticipantIds: groups.flatMap((group) => group.participantIds), reserveParticipantIds: [] },
     groups,
-    matchPolicy: { mode: "partialRoundRobin", matchesPerParticipant },
     scoringPolicy: { winPoints: 3, drawPoints: 1, lossPoints: 0 },
     matches,
     standings: [],

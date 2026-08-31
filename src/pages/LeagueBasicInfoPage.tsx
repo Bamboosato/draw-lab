@@ -5,7 +5,6 @@ import { ensureLeagueParticipantRows } from "../app/leagueModel";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { LeagueNotFound, LeaguePageHeading, LeagueStorageMessage, participantTypeLabel } from "../components/LeaguePageParts";
 import { LeagueValidationBanner } from "../components/LeagueValidationBanner";
-import { hasLeagueResults } from "../domain/leagueLogic";
 import type { League, LeagueParticipantType } from "../domain/leagueTypes";
 
 export function LeagueBasicInfoPage() {
@@ -26,12 +25,13 @@ export function LeagueBasicInfoPage() {
   );
 
   if (!league) return <LeagueNotFound />;
-  const locked = hasLeagueResults(league);
+  const locked = league.status === "completed" || league.matchSelectionStatus === "confirmed";
 
   return (
     <div className="page-stack league-page">
       <LeaguePageHeading description="リーグ表に表示する大会情報と参加単位の種別を設定します。" />
       <LeagueStorageMessage status={storageStatus} error={storageError} showSaving={false} />
+      {locked ? <section className="flow-notice" role="status">対戦カード確定後のため、種目区分と定員は変更できません。</section> : null}
       <LeagueValidationBanner errors={errors} />
       <section className="form-grid">
         <label className="field">
@@ -51,10 +51,11 @@ export function LeagueBasicInfoPage() {
         </label>
       </section>
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" onClick={() => navigate("/leagues")}>一覧</button>
+        <button type="button" className="button secondary" title="リーグ一覧へ戻る" onClick={() => navigate("/leagues")}>一覧</button>
         <button
           type="button"
           className="button primary"
+          title="名簿入力・選出へ進む"
           disabled={errors.length > 0}
           onClick={() => {
             setSubmitted(true);

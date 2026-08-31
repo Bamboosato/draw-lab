@@ -1,19 +1,41 @@
 import type { League } from "../domain/leagueTypes";
-import { hasLeagueResults, validateLeague, validateManualRanks } from "../domain/leagueLogic";
+import { hasLeagueResults, isLeagueParticipantEmpty, validateLeague, validateManualRanks } from "../domain/leagueLogic";
 
 export const LEAGUE_STEPS = [
   { key: "basic", label: "基本情報", path: "edit/basic" },
   { key: "participants", label: "名簿入力・選出", path: "edit/participants" },
-  { key: "groups", label: "グループ・対戦設定", path: "edit/groups" },
+  { key: "groups", label: "グループ設定", path: "edit/groups" },
   { key: "matches", label: "対戦カード", path: "edit/matches" },
   { key: "dashboard", label: "リーグ表", path: "dashboard" },
 ] as const;
 
 export type LeagueStep = (typeof LEAGUE_STEPS)[number]["key"];
+export type LeagueEditStep = Exclude<LeagueStep, "dashboard">;
 
 export function getLeagueStepPath(id: string, step: LeagueStep): string {
   const definition = LEAGUE_STEPS.find((item) => item.key === step);
   return `/leagues/${id}/${definition?.path ?? "edit/basic"}`;
+}
+
+export function getLeagueEditSteps(league: League): readonly LeagueEditStep[] {
+  if (league.status === "completed") {
+    return [];
+  }
+
+  const steps: LeagueEditStep[] = ["basic"];
+  const hasEnteredParticipants = league.participants.some((participant) => !isLeagueParticipantEmpty(participant));
+
+  if (hasEnteredParticipants || league.selection.selectedParticipantIds.length > 0) {
+    steps.push("participants");
+  }
+  if (league.groups.length > 0) {
+    steps.push("groups");
+  }
+  if (league.matches.length > 0 || league.matchSelectionStatus === "confirmed") {
+    steps.push("matches");
+  }
+
+  return steps;
 }
 
 export function getLeagueStepFromPath(pathname: string): LeagueStep | undefined {
