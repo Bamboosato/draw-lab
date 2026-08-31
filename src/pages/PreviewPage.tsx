@@ -11,6 +11,7 @@ import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { DrawPreview } from "../components/DrawPreview";
 import { ValidationBanner } from "../components/ValidationBanner";
 import { buildBracketViewModel } from "../domain/bracketViewModel";
+import { buildTournamentPrintFilename, printWithFilename } from "../utils/print";
 
 export function PreviewPage() {
   const navigate = useViewTransitionNavigate();
@@ -47,7 +48,7 @@ export function PreviewPage() {
         <p className="page-description">生成済みトーナメント表を確認し、ブラウザ印刷を実行します。</p>
         <div className="button-row">
           <button type="button" className="button secondary" title="トーナメント表を再生成" onClick={regenerate}>再生成</button>
-          <button type="button" className="button primary" title="トーナメント表をPDF保存または印刷" disabled={!drawCurrent} onClick={() => window.print()}>PDF / 印刷</button>
+          <button type="button" className="button primary" title="トーナメント表をPDF保存または印刷" disabled={!drawCurrent} onClick={() => printWithFilename(buildTournamentPrintFilename(tournament.title))}>PDF / 印刷</button>
         </div>
       </section>
 

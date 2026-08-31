@@ -3,8 +3,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { navigateMock, saveLeagueMock, useLeagueMock } = vi.hoisted(() => ({
+const { navigateMock, printMock, saveLeagueMock, useLeagueMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
+  printMock: vi.fn(),
   saveLeagueMock: vi.fn(),
   useLeagueMock: vi.fn(),
 }));
@@ -34,9 +35,12 @@ afterEach(cleanup);
 
 beforeEach(() => {
   navigateMock.mockReset();
+  printMock.mockReset();
   saveLeagueMock.mockReset();
   useLeagueMock.mockReset();
   useLeagueMock.mockReturnValue(makeLeague());
+  document.title = "Draw Lab";
+  window.print = printMock;
 });
 
 describe("LeagueDashboardPage", () => {
@@ -79,6 +83,35 @@ describe("LeagueDashboardPage", () => {
 
     expect(screen.getByRole("alert").textContent).toContain("グループAの順位をすべて入力してください。");
     expect(saveLeagueMock).not.toHaveBeenCalled();
+  });
+
+  it("PDF/印刷は選択中グループの専用印刷文書を対象にブラウザ印刷を起動する", () => {
+    useLeagueMock.mockReturnValue(makeLeagueWithParticipants(9));
+    render(<LeagueDashboardPage />);
+
+    const printButton = screen.getByRole("button", { name: "PDF/印刷" });
+    expect((printButton as HTMLButtonElement).disabled).toBe(false);
+    expect(printButton.getAttribute("title")).toBe("選択中グループの星取表をPDF保存または印刷");
+    expect(document.querySelector(".league-matrix-print-document")).toBeTruthy();
+    expect(document.querySelectorAll(".league-matrix-print-diagonal")).toHaveLength(9);
+    expect(document.querySelector(".league-matrix-print-diagonal line")?.getAttribute("x1")).toBe("0");
+    expect(document.querySelector(".league-matrix-print-diagonal line")?.getAttribute("y1")).toBe("0");
+    expect(document.querySelector(".league-matrix-print-diagonal line")?.getAttribute("x2")).toBe("100");
+    expect(document.querySelector(".league-matrix-print-diagonal line")?.getAttribute("y2")).toBe("100");
+
+    const printTables = Array.from(document.querySelectorAll<HTMLTableElement>(".league-matrix-print-table"));
+    expect(printTables).toHaveLength(2);
+    expect(printTables[0].style.width).toBe("190mm");
+    expect(printTables[1].style.width).toBe("53.5mm");
+    expect(Array.from(printTables[1].querySelectorAll<HTMLElement>(".league-matrix-print-result-column"), (column) => column.style.width)).toEqual(["19.5mm"]);
+
+    fireEvent.click(printButton);
+
+    expect(printMock).toHaveBeenCalledTimes(1);
+    expect(document.title).toBe("リーグ_リーグ表-グループA");
+
+    window.dispatchEvent(new Event("afterprint"));
+    expect(document.title).toBe("Draw Lab");
   });
 
   it("対戦結果では参加者を表示名とメンバー名の読み取り専用で表示する", () => {
@@ -154,4 +187,33 @@ function makeDoublesLeague(): League {
     { id: "p2", displayName: "ペア02", participantType: "doubles", memberNames: ["田中一郎", "高橋太郎"], selectionStatus: "selected" },
   ];
   return { ...league, participants };
+}
+
+function makeLeagueWithParticipants(count: number): League {
+  const league = makeLeague();
+  const participants: LeagueParticipant[] = Array.from({ length: count }, (_, index) => ({
+    id: `p${index + 1}`,
+    displayName: `参加者${index + 1}`,
+    participantType: "individual",
+    memberNames: [`参加者${index + 1}`],
+    selectionStatus: "selected",
+  }));
+
+  return {
+    ...league,
+    capacity: count,
+    participants,
+    selection: { mode: "all", selectedParticipantIds: participants.map((participant) => participant.id), reserveParticipantIds: [] },
+    groups: [{ id: "g1", name: "A", participantIds: participants.map((participant) => participant.id) }],
+    standings: participants.map((participant) => ({
+      groupId: "g1",
+      participantId: participant.id,
+      played: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      points: 0,
+      rankStatus: "unconfirmed",
+    })),
+  };
 }

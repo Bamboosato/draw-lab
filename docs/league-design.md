@@ -2,9 +2,9 @@
 
 - **対象:** Draw Lab連携プロジェクトのリーグ戦作成・運用機能
 - **文書種別:** リーグ用新規設計書
-- **バージョン:** 0.2.0（対応案No.1〜11を確定）
+- **バージョン:** 0.3.1（対応案No.1〜11、リーグ星取表PDF/印刷を確定）
 - **作成日:** 2026-08-28
-- **更新日:** 2026-08-28
+- **更新日:** 2026-08-31
 - **要件正:** `docs/league-requirements.md`
 - **UI参考:** `docs/screen-spec.md`
 - **既存実装参考:** `src/components/AppShell.tsx`、`src/app/tournamentFlow.ts`、`src/components/ConfirmDialog.tsx`、`src/components/ValidationBanner.tsx`
@@ -51,7 +51,7 @@
 - 欠員発生時は名簿の選出チェックを変更する。対戦カード確定前は再構成を許可し、確定後は現在のリーグで禁止する。
 - `completed`は読み取り専用とし、確認後に`inProgress`へ再開できる。結果・備考・順位・有効カード状態は保持する。
 - リーグ一覧はトーナメント一覧と分離し、既存`AppShell`と共通UI・操作密度を利用する。
-- リーグの印刷・PDF出力はMVP対象外とし、将来対応用に意味的構造と`.no-print`を残す。
+- リーグ表の星取表は、画面表示用UIと分離した専用印刷文書をブラウザ印刷へ渡す。対象は選択中グループだけとし、A4縦で8列単位にページ分割する。
 
 ---
 
@@ -95,12 +95,14 @@ src/
       LeagueStandings.tsx
       LeagueResultsTable.tsx
       LeagueMatrix.tsx
+      LeagueMatrixPrintDocument.tsx
   domain/
     leagueTypes.ts
     leagueValidation.ts
     leagueSelection.ts
     leagueGrouping.ts
     leagueSchedule.ts
+    leaguePrint.ts
     leagueScoring.ts
     leagueStandings.ts
     leagueViewModel.ts
@@ -137,6 +139,7 @@ src/
 | app | Provider、画面遷移、保存状態 | `League`専用の状態管理を持つ |
 | domain | 正規化、検証、生成、集計 | React、IndexedDBに依存しない |
 | view model | 順位表・星取表・カード表示用の変換 | 表示都合をドメインモデルへ逆流させない |
+| 印刷モデル | 選択中グループの星取表を印刷ページへ分割 | 結果値を含めず、参加者・対角セルの構造だけを返す |
 | storage | IndexedDB、JSONの読み書き | 既存`Tournament`保存領域と分離する |
 
 ---
@@ -526,6 +529,17 @@ type ChangeImpact = {
 - グループ選択を上段、表示タブを下段に配置して分離する。
 - 画面上部に対戦カード画面への重複導線は設けず、フッターに`戻る`（対戦カード画面）と`一覧`（リーグ一覧）を配置する。フッターの各ボタンには遷移先または操作内容のツールチップを付ける。
 
+#### 星取表のPDF/印刷
+
+- `リーグを完了`の右側に`PDF/印刷`を配置する。選択中グループの印刷対象がない場合（参加者0名、または17名以上）は無効にする。
+- 押下時は`window.print()`を起動し、ブラウザの印刷先でPDF保存または印刷を行う。
+- 印刷用DOMは画面用の星取表を流用せず、`LeagueMatrixPrintDocument`で専用生成する。画面用のタブ、サマリー、操作UI、サイドバーは印刷しない。
+- `buildLeagueMatrixPrintPages`はグループ内参加者を名簿No.順に扱い、N=1〜8は1ページ、N=9〜16は先頭8列と残り列の2ページへ分割する。
+- 印刷ページの各結果セルは、対角セルだけを`isDiagonal`で表現し、UI側のSVG線を左上から右下へ描画する。非対角セルは結果を持たない空欄とする。
+- 印刷セルはA4縦の本文幅へ収め、手書き入力用に高さ14mm以上（9pt前後の3行分以上）を確保する。
+- Nが9〜16の場合、2ページ目以降の結果列幅は1ページ目と同じ19.5mmとし、残り列が少ないページは右側に余白を残す。
+- 印刷直前に既定ファイル名を`大会名_リーグ表-グループA`形式へ切り替え、印刷後は画面タイトルへ戻す。
+
 ### 5.10 SCR-L-008 リーグJSON復元
 
 既存の大会情報復元画面と同じファイル選択、解析結果、エラー表示、確認操作を採用する。
@@ -763,6 +777,6 @@ type LeagueBackupJsonEnvelope = {
 | 8 | 1.3、3.3、5.6の選出チェック変更と結果入力前後の制約 |
 | 9 | 1.3、4.2、5.9の`completed`読み取り専用と再開 |
 | 10 | 1.3、5.1・5.3、6.1のリーグ専用一覧と共通UI |
-| 11 | 1.3、5.9、6.2の印刷/PDF対象外と将来対応用構造 |
+| 11 | 1.3、5.9、6.2の選択中グループ星取表の専用印刷モデル、A4縦、8列単位の分割、対角線、手書き用セル高 |
 
 追加確認が必要な未決定事項はない。
