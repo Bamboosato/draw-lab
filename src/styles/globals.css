@@ -1153,6 +1153,12 @@ a {
   color: #ffffff;
 }
 
+.inline-actions .button.primary {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
 .button.danger {
   border-color: #be123c;
   background: #be123c;
@@ -1172,6 +1178,12 @@ a {
 .inline-actions button:hover,
 .compound-input button:hover {
   background: #f2f6fd;
+}
+
+.button.primary:hover {
+  border-color: #1e40af;
+  background: #1e40af;
+  color: #ffffff;
 }
 
 .inline-actions button:disabled,

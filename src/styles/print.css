@@ -1,9 +1,13 @@
-@media print {
-  @page {
-    size: A4 portrait;
-    margin: 10mm;
-  }
+.league-matrix-print-document {
+  display: none;
+}
 
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+@media print {
   body {
     background: #ffffff;
   }
@@ -107,5 +111,151 @@
   .bracket-grid {
     transform-origin: top left;
     break-inside: avoid;
+  }
+
+  body.league-matrix-print-mode * {
+    visibility: hidden;
+  }
+
+  body.league-matrix-print-mode .league-dashboard-page > :not(.league-matrix-print-document),
+  body.league-matrix-print-mode .pwa-status {
+    display: none !important;
+  }
+
+  body.league-matrix-print-mode .league-matrix-print-document,
+  body.league-matrix-print-mode .league-matrix-print-document * {
+    visibility: visible;
+  }
+
+  body.league-matrix-print-mode .league-matrix-print-document {
+    position: static;
+    display: block !important;
+    width: 100%;
+    background: #ffffff;
+  }
+
+  body.league-matrix-print-mode .league-dashboard-page {
+    display: block;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .league-matrix-print-page {
+    box-sizing: border-box;
+    min-height: 277mm;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .league-matrix-print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .league-matrix-print-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8mm;
+    min-height: 14mm;
+    padding-bottom: 3mm;
+  }
+
+  .league-matrix-print-heading h1 {
+    margin: 0;
+    color: #172033;
+    font-size: 15pt;
+  }
+
+  .league-matrix-print-heading p {
+    margin: 1mm 0 0;
+    color: #475569;
+    font-size: 8pt;
+  }
+
+  .league-matrix-print-page-meta {
+    display: grid;
+    justify-items: end;
+    gap: 1mm;
+    color: #172033;
+    font-size: 10pt;
+    white-space: nowrap;
+  }
+
+  .league-matrix-print-page-meta span {
+    color: #475569;
+    font-size: 8pt;
+  }
+
+  .league-matrix-print-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .league-matrix-print-row-column {
+    width: 34mm;
+  }
+
+  .league-matrix-print-result-column {
+    width: auto;
+  }
+
+  .league-matrix-print-page.has-split-columns .league-matrix-print-row-column {
+    width: 34mm;
+  }
+
+  .league-matrix-print-page.has-split-columns .league-matrix-print-result-column {
+    width: 19.5mm;
+  }
+
+  .league-matrix-print-table th,
+  .league-matrix-print-table td {
+    border: 0.6mm solid #334155;
+  }
+
+  .league-matrix-print-table thead th {
+    height: 14mm;
+    padding: 1mm;
+    color: #172033;
+    font-size: 8pt;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    vertical-align: middle;
+  }
+
+  .league-matrix-print-table tbody th {
+    padding: 1mm 2mm;
+    color: #172033;
+    font-size: 8pt;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  .league-matrix-print-table tbody td {
+    position: relative;
+    height: 14mm;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .league-matrix-print-diagonal {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .league-matrix-print-diagonal line {
+    stroke: #334155;
+    stroke-width: 1.6;
+    vector-effect: non-scaling-stroke;
   }
 }

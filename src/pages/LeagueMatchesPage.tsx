@@ -59,7 +59,7 @@ export function LeagueMatchesPage() {
           <div className="inline-actions no-print">
             <button type="button" className="button secondary" disabled={completed || confirmed} onClick={generate}>対戦カードを再生成</button>
             {confirmed
-              ? <button type="button" className="button secondary" title="対戦カードの確定を解除" disabled={completed} onClick={requestUnconfirm}>確定解除</button>
+              ? <button type="button" className="button primary" title="対戦カードの確定を解除" disabled={completed} onClick={requestUnconfirm}>確定解除</button>
               : <button type="button" className="button primary" title="対戦カードを確定してリーグ表へ進める" disabled={completed || !canConfirm} onClick={confirm}>対戦カードを確定</button>}
           </div>
         </div>

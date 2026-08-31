@@ -135,6 +135,7 @@ describe("LeagueMatchesPage", () => {
     expect(screen.getByRole("checkbox")).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "対戦カードを再生成" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "確定解除" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "確定解除" }).className).toContain("button primary");
     expect(screen.getByRole("button", { name: "次へ" })).toHaveProperty("disabled", false);
     expect(screen.getByText("確定").className).toContain("status-badge league-match-status-confirmed");
     expect(screen.getByRole("button", { name: "次へ" }).getAttribute("title")).toBe("リーグ表へ進む");
