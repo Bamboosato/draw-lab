@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useLeague, useLeagues } from "../app/LeagueProvider";
-import { markMatchSelectionConfirmed, prepareLeagueMatches, updateMatchValidity } from "../app/leagueModel";
-import { countValidMatchesByParticipant, hasLeagueResults, validatePartialMatchSelection } from "../domain/leagueLogic";
+import { markMatchSelectionConfirmed, prepareLeagueMatches, unconfirmMatchSelection, updateMatchValidity } from "../app/leagueModel";
+import { countValidMatchesByParticipant, hasLeagueResults } from "../domain/leagueLogic";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { LeagueNotFound, LeaguePageHeading, LeagueStorageMessage, ParticipantLabel } from "../components/LeaguePageParts";
-import { LeagueValidationBanner } from "../components/LeagueValidationBanner";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 
 export function LeagueMatchesPage() {
@@ -13,37 +12,84 @@ export function LeagueMatchesPage() {
   const league = useLeague(id);
   const { updateLeague, storageError, storageStatus } = useLeagues();
   const navigate = useViewTransitionNavigate();
-  const [pendingToggle, setPendingToggle] = useState<{ matchId: string; isValid: boolean }>();
+  const [unconfirmOpen, setUnconfirmOpen] = useState(false);
 
   if (!league) return <LeagueNotFound />;
-  const partialValidation = league.matchPolicy.mode === "partialRoundRobin" ? validatePartialMatchSelection(league) : { errors: [], warnings: [] };
-  const canConfirm = league.matches.length > 0 && partialValidation.errors.length === 0;
+  const canConfirm = league.matches.length > 0;
   const confirmed = league.matchSelectionStatus === "confirmed";
   const hasResults = hasLeagueResults(league);
-  const canContinue = confirmed ? league.matches.length > 0 : canConfirm;
+  const canContinue = confirmed && league.matches.length > 0;
+  const completed = league.status === "completed";
 
-  const generate = () => { if (!hasResults) updateLeague(prepareLeagueMatches(league)); };
+  const generate = () => { if (!confirmed && !completed) updateLeague(prepareLeagueMatches(league)); };
   const applyToggle = (matchId: string, isValid: boolean) => updateLeague(updateMatchValidity(league, matchId, isValid));
-  const requestToggle = (matchId: string, isValid: boolean) => {
-    const match = league.matches.find((item) => item.id === matchId);
-    if (!match || match.result === "unplayed") {
-      applyToggle(matchId, isValid);
+  const confirm = () => { if (canConfirm && !confirmed && !completed) updateLeague(markMatchSelectionConfirmed(league)); };
+  const requestUnconfirm = () => {
+    if (!confirmed || completed) return;
+    if (hasResults) {
+      setUnconfirmOpen(true);
       return;
     }
-    setPendingToggle({ matchId, isValid });
+    updateLeague(unconfirmMatchSelection(league));
   };
-  const confirm = () => { if (canConfirm && !confirmed) updateLeague(markMatchSelectionConfirmed(league)); };
+  const unconfirm = () => {
+    updateLeague(unconfirmMatchSelection(league));
+    setUnconfirmOpen(false);
+  };
 
   return (
     <div className="page-stack league-page">
-      <LeaguePageHeading description="対戦カードを作成し、部分当たりでは実施するカードを選択します。試合順は生成順で固定です。" />
-      <LeagueStorageMessage status={storageStatus} error={storageError} />
-      <LeagueValidationBanner errors={partialValidation.errors} warnings={partialValidation.warnings} />
-      {hasResults ? <section className="flow-notice" role="status">結果入力後のため、候補カードの再生成はできません。有効／無効の変更は集計への影響を確認して行います。</section> : null}
-      <section className="section-card"><div className="section-card-heading"><div><h2>候補カード</h2><p>{league.matchPolicy.mode === "roundRobin" ? "総当たりの全カード" : "総当たり相当の全候補カード。初期状態はすべて有効"}</p></div><button type="button" className="button secondary no-print" disabled={league.status === "completed" || hasResults} onClick={generate}>候補カードを再生成</button></div>{league.matches.length === 0 ? <p className="empty-inline">候補カードを生成してください。</p> : <div className="table-panel"><table className="data-table league-matches-table"><thead><tr><th>試合順</th><th>グループ</th><th>対戦カード</th><th>有効状態</th><th>有効試合数</th></tr></thead><tbody>{league.matches.map((match) => { const group = league.groups.find((item) => item.id === match.groupId); const counts = group ? countValidMatchesByParticipant(league.matches.filter((item) => item.groupId === group.id), group.participantIds) : new Map<string, number>(); return <tr className={match.isValid ? "" : "is-invalid"} key={match.id}><td>{match.order}</td><td>{group?.name ?? "-"}</td><td>{ParticipantLabel(league.participants.find((item) => item.id === match.participantAId))} <span className="match-vs">vs</span> {ParticipantLabel(league.participants.find((item) => item.id === match.participantBId))}</td><td><label className="validity-control"><input type="checkbox" checked={match.isValid} disabled={league.status === "completed" || league.matchPolicy.mode === "roundRobin"} onChange={(event) => requestToggle(match.id, event.target.checked)} /><span>{match.isValid ? "有効" : "無効"}</span></label></td><td className="match-count-cell">{league.matchPolicy.mode === "partialRoundRobin" ? `${counts.get(match.participantAId) ?? 0} / ${counts.get(match.participantBId) ?? 0}` : "-"}</td></tr>; })}</tbody></table></div>}</section>
-      <section className="compact-summary-section"><dl className="compact-summary" aria-label="カード概要"><div className="summary-metric"><dt>候補カード</dt><dd>{league.matches.length}</dd></div><div className="summary-metric"><dt>有効カード</dt><dd>{league.matches.filter((match) => match.isValid).length}</dd></div><div className="summary-metric"><dt>無効カード</dt><dd>{league.matches.filter((match) => !match.isValid).length}</dd></div><div className={`summary-metric${confirmed ? " success" : ""}`}><dt>確定状態</dt><dd>{confirmed ? "確定" : "未確定"}</dd></div></dl></section>
-      <div className="bottom-actions no-print"><button type="button" className="button secondary" onClick={() => navigate(`/leagues/${league.id}/edit/groups`)}>戻る</button><button type="button" className="button primary" disabled={!canContinue} onClick={() => { confirm(); navigate(`/leagues/${league.id}/dashboard`); }}>{confirmed ? "リーグ表を表示" : "有効カードを確定"}</button></div>
-      <ConfirmDialog open={pendingToggle !== undefined} title="入力済みカードの有効状態を変更します" message="このカードには入力済みの結果があります。有効状態を変更すると、順位表・星取表の集計対象が変わります。変更しますか？" confirmLabel="変更する" cancelLabel="キャンセル" onCancel={() => setPendingToggle(undefined)} onConfirm={() => { if (pendingToggle) applyToggle(pendingToggle.matchId, pendingToggle.isValid); setPendingToggle(undefined); }} />
+      <LeaguePageHeading description="グループ内の全組み合わせを対戦カードとして作成し、必要なカードだけを無効にします。試合順は生成順で固定です。" />
+      <LeagueStorageMessage status={storageStatus} error={storageError} showSaving={false} />
+      {confirmed && !completed ? <section className="flow-notice" role="status">対戦カード確定後は、対戦カードの再生成と有効／無効の変更はできません。変更する場合は、確定を解除してください。</section> : null}
+      <section className="compact-summary-section">
+        <dl className="compact-summary" aria-label="カード概要">
+          <div className="summary-metric"><dt>対戦カード</dt><dd>{league.matches.length}</dd></div>
+          <div className="summary-metric"><dt>有効カード</dt><dd>{league.matches.filter((match) => match.isValid).length}</dd></div>
+          <div className="summary-metric"><dt>無効カード</dt><dd>{league.matches.filter((match) => !match.isValid).length}</dd></div>
+          <div className="summary-metric"><dt>確定状態</dt><dd><span className={`status-badge ${confirmed ? "league-match-status-confirmed" : "league-match-status-pending"}`}>{confirmed ? "確定" : "未確定"}</span></dd></div>
+        </dl>
+      </section>
+      <section className="section-card">
+        <div className="section-card-heading">
+          <div>
+            <h2>対戦カード</h2>
+            <p>グループ内の全組み合わせを対戦カードとして作成します。初期状態はすべて有効です。</p>
+          </div>
+          <div className="inline-actions no-print">
+            <button type="button" className="button secondary" disabled={completed || confirmed} onClick={generate}>対戦カードを再生成</button>
+            {confirmed
+              ? <button type="button" className="button secondary" title="対戦カードの確定を解除" disabled={completed} onClick={requestUnconfirm}>確定解除</button>
+              : <button type="button" className="button primary" title="対戦カードを確定してリーグ表へ進める" disabled={completed || !canConfirm} onClick={confirm}>対戦カードを確定</button>}
+          </div>
+        </div>
+        {league.matches.length === 0 ? <p className="empty-inline">対戦カードを生成してください。</p> : (
+          <div className="table-panel">
+            <table className="data-table league-matches-table">
+              <thead><tr><th>試合順</th><th>グループ</th><th>対戦カード</th><th>有効状態</th><th>有効試合数</th></tr></thead>
+              <tbody>
+                {league.matches.map((match) => {
+                  const group = league.groups.find((item) => item.id === match.groupId);
+                  const counts = group
+                    ? countValidMatchesByParticipant(league.matches.filter((item) => item.groupId === group.id), group.participantIds)
+                    : new Map<string, number>();
+                  return (
+                    <tr className={match.isValid ? "" : "is-invalid"} key={match.id}>
+                      <td>{match.order}</td>
+                      <td>{group?.name ?? "-"}</td>
+                      <td><span className="match-pair"><span>{ParticipantLabel(league.participants.find((item) => item.id === match.participantAId))}</span><span className="match-vs">vs</span><span>{ParticipantLabel(league.participants.find((item) => item.id === match.participantBId))}</span></span></td>
+                      <td><label className="validity-control"><input type="checkbox" checked={match.isValid} disabled={completed || confirmed} onChange={(event) => applyToggle(match.id, event.target.checked)} /><span>{match.isValid ? "有効" : "無効"}</span></label></td>
+                      <td className="match-count-cell">{counts.get(match.participantAId) ?? 0} / {counts.get(match.participantBId) ?? 0}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      <div className="bottom-actions no-print"><button type="button" className="button secondary" title="グループ設定へ戻る" onClick={() => navigate(`/leagues/${league.id}/edit/groups`)}>戻る</button><button type="button" className="button primary" title={confirmed ? "リーグ表へ進む" : "対戦カードを確定するとリーグ表へ進めます"} disabled={!canContinue} onClick={() => navigate(`/leagues/${league.id}/dashboard`)}>次へ</button></div>
+      <ConfirmDialog open={unconfirmOpen} title="対戦カードの確定を解除します" message="対戦カードの確定を解除すると、入力済みのすべての対戦結果がリセットされます。解除してもよろしいですか？" confirmLabel="解除して結果をリセット" cancelLabel="キャンセル" onCancel={() => setUnconfirmOpen(false)} onConfirm={unconfirm} />
     </div>
   );
 }

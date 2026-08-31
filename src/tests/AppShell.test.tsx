@@ -64,6 +64,18 @@ describe("AppShell league stepper", () => {
     expect(stepper?.classList.contains("stepper-league")).toBe(true);
     expect(screen.getAllByRole("listitem")).toHaveLength(5);
   });
+
+  it("labels the group step as グループ設定", () => {
+    render(
+      <MemoryRouter initialEntries={["/leagues/league-1/edit/groups"]}>
+        <AppShell>
+          <div>本文</div>
+        </AppShell>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("listitem", { name: "3. グループ設定（現在）" })).toBeTruthy();
+  });
 });
 
 function renderAppShell() {

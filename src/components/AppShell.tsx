@@ -162,7 +162,7 @@ function getScreenName(pathname: string): string {
 
   if (pathname.includes("/leagues/")) {
     if (pathname.includes("/participants") || pathname.includes("/selection")) return "名簿入力・選出";
-    if (pathname.includes("/groups")) return "グループ・対戦設定";
+    if (pathname.includes("/groups")) return "グループ設定";
     if (pathname.includes("/matches")) return "対戦カード";
     if (pathname.includes("/dashboard")) return "リーグ表";
     return "リーグ基本情報";

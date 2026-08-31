@@ -9,7 +9,10 @@ import {
   selectParticipantIds,
   updateGroups,
   updateMatch,
+  updateMatchValidity,
   updateParticipants,
+  updateScoringPolicy,
+  unconfirmMatchSelection,
 } from "../app/leagueModel";
 import { isLeagueParticipantEmpty } from "../domain/leagueLogic";
 import type { League, LeagueGroup, LeagueMatch } from "../domain/leagueTypes";
@@ -23,6 +26,16 @@ describe("league model state transitions", () => {
 
       const reset = updateMatch(started, "m1", { result: "unplayed" });
       expect(reset.status).toBe("scheduled");
+    });
+
+    it("勝点設定の変更で入力済み結果の順位集計を再計算する", () => {
+      const played = updateMatch(makeLeague({ status: "scheduled" }), "m1", { result: "participantAWin" });
+      const updated = updateScoringPolicy(played, { winPoints: 5, drawPoints: 2, lossPoints: 0 });
+
+      expect(played.standings.find((standing) => standing.participantId === "p1")?.points).toBe(3);
+      expect(updated.standings.find((standing) => standing.participantId === "p1")?.points).toBe(5);
+      expect(updated.standings.find((standing) => standing.participantId === "p2")?.points).toBe(0);
+      expect(played.scoringPolicy).toEqual({ winPoints: 3, drawPoints: 1, lossPoints: 0 });
     });
 
     it("順位未入力では完了せず、全順位入力後だけcompletedになる", () => {
@@ -44,17 +57,48 @@ describe("league model state transitions", () => {
     });
   });
 
-  describe("整合性観点: 結果入力後の構造変更", () => {
-    it("結果入力後の参加単位・グループ変更を受け付けず、既存データを保持する", () => {
-      const league = updateMatch(makeLeague({ status: "scheduled" }), "m1", { result: "participantAWin" });
+  describe("整合性観点: 対戦カード確定後の構造変更", () => {
+    it("確定後の参加単位・グループ変更を受け付けず、既存データを保持する", () => {
+      const league = makeLeague({ status: "scheduled", matchSelectionStatus: "confirmed" });
       const participants = [...league.participants, { ...league.participants[0]!, id: "p3", displayName: "C", memberNames: ["C"] }];
       const nextGroup: LeagueGroup = { id: "g2", name: "B", participantIds: ["p1", "p2"] };
       expect(updateParticipants(league, participants)).toBe(league);
       expect(updateGroups(league, [nextGroup])).toBe(league);
     });
 
+    it("確定後のカード有効状態変更を受け付けず、既存データを保持する", () => {
+      const league = makeLeague({ status: "scheduled", matchSelectionStatus: "confirmed" });
+
+      expect(updateMatchValidity(league, "m1", false)).toBe(league);
+      expect(league.matches[0]?.isValid).toBe(true);
+    });
+
+    it("未確定なら結果入力済みでもカード有効状態を変更できる", () => {
+      const league = makeLeague({ status: "inProgress", matchSelectionStatus: "pending", matches: [{ ...makeLeague().matches[0]!, result: "participantAWin" }] });
+
+      const next = updateMatchValidity(league, "m1", false);
+
+      expect(next).not.toBe(league);
+      expect(next.matches[0]?.isValid).toBe(false);
+    });
+
+    it("確定解除で全結果を未実施に戻し、未確定へ戻す", () => {
+      const league = makeLeague({
+        status: "inProgress",
+        matchSelectionStatus: "confirmed",
+        matches: [{ ...makeLeague().matches[0]!, result: "participantAWin", note: "メモ" }],
+      });
+
+      const next = unconfirmMatchSelection(league);
+
+      expect(next.matchSelectionStatus).toBe("pending");
+      expect(next.status).toBe("draft");
+      expect(next.matches[0]?.result).toBe("unplayed");
+      expect(next.matches[0]?.note).toBe("メモ");
+    });
+
     it("結果入力前の参加単位追加ではグループとカードをクリアする", () => {
-      const league = makeLeague({ status: "scheduled" });
+      const league = makeLeague({ status: "draft", matchSelectionStatus: "pending" });
       const participants = [...league.participants, { ...league.participants[0]!, id: "p3", displayName: "C", memberNames: ["C"] }];
       const next = updateParticipants(league, participants);
       expect(next.groups).toEqual([]);
@@ -63,7 +107,7 @@ describe("league model state transitions", () => {
     });
 
     it("結果入力前の参加単位更新でもグループとカードをクリアする", () => {
-      const league = makeLeague({ status: "scheduled" });
+      const league = makeLeague({ status: "draft", matchSelectionStatus: "pending" });
       const participants = league.participants.map((participant) => participant.id === "p1"
         ? { ...participant, displayName: "A（更新）" }
         : participant);
@@ -73,7 +117,6 @@ describe("league model state transitions", () => {
       expect(next.standings).toEqual([]);
       expect(next.matchSelectionStatus).toBe("pending");
       expect(next.status).toBe("draft");
-      expect(next.matchPolicy).toEqual(league.matchPolicy);
       expect(next.scoringPolicy).toEqual(league.scoringPolicy);
     });
   });
@@ -148,7 +191,6 @@ function makeLeague(overrides: Partial<League> = {}): League {
     ],
     selection: { mode: "all", selectedParticipantIds: ["p1", "p2"], reserveParticipantIds: [] },
     groups: [group],
-    matchPolicy: { mode: "roundRobin" },
     scoringPolicy: { winPoints: 3, drawPoints: 1, lossPoints: 0 },
     matches: [match],
     standings: [

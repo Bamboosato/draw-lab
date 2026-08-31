@@ -7,6 +7,7 @@ import { validateParticipants } from "../app/leagueFlow";
 import { CompactSummary } from "../components/CompactSummary";
 import { LeagueNotFound, LeaguePageHeading, LeagueStorageMessage } from "../components/LeaguePageParts";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { OverflowMenu } from "../components/OverflowMenu";
 import { hasLeagueResults, isLeagueParticipantEmpty } from "../domain/leagueLogic";
 import type { League, LeagueParticipant } from "../domain/leagueTypes";
 
@@ -39,7 +40,7 @@ export function LeagueParticipantsPage() {
 
   const errors = useMemo(() => league ? validateParticipants(league) : [], [league]);
   if (!league) return <LeagueNotFound />;
-  const locked = hasLeagueResults(league);
+  const locked = league.status === "completed" || league.matchSelectionStatus === "confirmed";
   const participantName = participantNameLabel(league.participantType);
   const participantCount = league.participants.filter((participant) => !isLeagueParticipantEmpty(participant)).length;
   const completeParticipantCount = league.participants.filter(isCompleteParticipant).length;
@@ -148,15 +149,26 @@ export function LeagueParticipantsPage() {
         actions={(
           <>
             <button type="button" className="button secondary" title="定員分の参加者をランダムに選出" onClick={autoSelect} disabled={locked}>自動選出</button>
-            <button type="button" className="button secondary" title="名簿の入力行を追加" onClick={addParticipant} disabled={locked}>行追加</button>
-            <button type="button" className="button secondary" title="空の名簿行を削除" onClick={removeEmptyParticipants} disabled={locked}>空行削除</button>
-            <button type="button" className="button secondary" title="名簿の入力内容をチェック" onClick={() => setChecked(true)} disabled={locked}>入力チェック</button>
+            <OverflowMenu
+              triggerLabel="名簿のその他の操作"
+              triggerTitle="名簿のその他の操作"
+              disabled={locked}
+              menuWidth={208}
+              sections={[{
+                label: "名簿操作",
+                items: [
+                  { label: "行追加", title: "名簿の入力行を追加", icon: "entrants", onSelect: addParticipant },
+                  { label: "空行削除", title: "空の名簿行を削除", icon: "delete", danger: true, onSelect: removeEmptyParticipants },
+                  { label: "入力チェック", title: "名簿の入力内容をチェック", icon: "options", onSelect: () => setChecked(true) },
+                ],
+              }]}
+            />
           </>
         )}
       />
       <LeagueStorageMessage status={storageStatus} error={storageError} />
-      {structureResetNotice ? <section className="flow-notice" role="status">参加者を変更したため、グループと対戦カード設定をリセットしました。対戦方式と勝点設定は保持しています。</section> : null}
-      {locked ? <section className="flow-notice" role="status">結果入力後のため、参加者の追加・削除・種別変更はできません。表示名の編集はリーグ表から行えます。</section> : null}
+      {structureResetNotice ? <section className="flow-notice" role="status">参加者を変更したため、グループと対戦カード設定をリセットしました。勝点設定は保持しています。</section> : null}
+      {locked ? <section className="flow-notice" role="status">対戦カード確定後のため、参加者の追加・削除・種別変更はできません。</section> : null}
       <CompactSummary
         ariaLabel="参加者入力概要"
         items={[
@@ -166,7 +178,6 @@ export function LeagueParticipantsPage() {
         ]}
         statusMessages={checked ? [...errors.map((error) => error.message), ...selectionErrors] : []}
       />
-      <p className="field-help league-selection-summary">選出者 {selectedCount} / 定員 {league.capacity}。チェックなしの参加者は補欠です。</p>
       {league.participants.length === 0 ? <p className="empty-inline">参加者を追加してください。</p> : (
         <div className={`table-panel roster-panel${showRosterDetails ? " roster-details-open" : " roster-details-collapsed"}`}>
             <table id="league-participant-details-columns" className="data-table roster-table league-participant-table">
@@ -211,9 +222,9 @@ export function LeagueParticipantsPage() {
       <div className="bottom-actions no-print">
         <button type="button" className="button secondary" title="リーグ一覧へ戻る" onClick={() => navigate("/leagues")}>一覧</button>
         <button type="button" className="button secondary" title="基本情報へ戻る" onClick={() => navigate(`/leagues/${league.id}/edit/basic`)}>戻る</button>
-        <button type="button" className="button primary" title="グループ・対戦設定へ進む" disabled={shouldBlockNext} onClick={goNext}>{shouldBlockNext ? "エラー修正後に次へ" : "次へ"}</button>
+        <button type="button" className="button primary" title="グループ設定へ進む" disabled={shouldBlockNext} onClick={goNext}>{shouldBlockNext ? "エラー修正後に次へ" : "次へ"}</button>
       </div>
-      <ConfirmDialog open={pendingParticipants !== undefined} title="参加者の変更を反映します" message="参加者を変更すると、既存のグループ分けと対戦カード設定がリセットされます。対戦方式と勝点設定は保持されます。変更してよろしいですか？" confirmLabel="リセットして反映" cancelLabel="キャンセル" onCancel={() => { setPendingParticipants(undefined); setDraftResetKey((current) => current + 1); }} onConfirm={() => { if (pendingParticipants) applyParticipantUpdate(pendingParticipants.participants, pendingParticipants.clearPaste); setPendingParticipants(undefined); }} />
+      <ConfirmDialog open={pendingParticipants !== undefined} title="参加者の変更を反映します" message="参加者を変更すると、既存のグループ分けと対戦カード設定がリセットされます。勝点設定は保持されます。変更してよろしいですか？" confirmLabel="リセットして反映" cancelLabel="キャンセル" onCancel={() => { setPendingParticipants(undefined); setDraftResetKey((current) => current + 1); }} onConfirm={() => { if (pendingParticipants) applyParticipantUpdate(pendingParticipants.participants, pendingParticipants.clearPaste); setPendingParticipants(undefined); }} />
       <ConfirmDialog open={pendingSelection !== undefined} title="選出内容を変更します" message="選出者を変更すると、既存のグループと対戦カード設定がリセットされます。変更してよろしいですか？" confirmLabel="リセットして反映" cancelLabel="キャンセル" onCancel={() => setPendingSelection(undefined)} onConfirm={() => { if (pendingSelection) updateLeague(pendingSelection.league); setPendingSelection(undefined); }} />
     </div>
   );
@@ -243,7 +254,7 @@ function ParticipantRow({ participant, index, locked, draftResetKey, onChange, o
       <td className="league-participant-team-column"><input aria-label={`${index + 1} 所属`} value={draft.team ?? ""} disabled={locked} onChange={(event) => set({ team: event.target.value })} onBlur={commit} /></td>
       <td className="roster-detail-column league-participant-region-column"><input aria-label={`${index + 1} 地区`} value={draft.region ?? ""} disabled={locked} onChange={(event) => set({ region: event.target.value })} onBlur={commit} /></td>
       <td className="roster-detail-column league-participant-note-column"><input aria-label={`${index + 1} 備考`} value={draft.note ?? ""} disabled={locked} onChange={(event) => set({ note: event.target.value })} onBlur={commit} /></td>
-      {!locked ? <td><button type="button" className="button danger" title="この参加者を削除" onClick={onRemove}>削除</button></td> : null}
+      {!locked ? <td><button type="button" className="danger-link" title="この参加者を削除" onClick={onRemove}>削除</button></td> : null}
     </tr>
   );
 }

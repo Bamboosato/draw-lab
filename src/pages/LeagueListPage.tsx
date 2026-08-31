@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
+import { getLeagueEditSteps, getLeagueStepPath, type LeagueEditStep } from "../app/leagueFlow";
 import {
   DEFAULT_LEAGUE_SORT,
   getNextLeagueSort,
@@ -10,9 +11,12 @@ import { useLeagues } from "../app/LeagueProvider";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { CompactSummary } from "../components/CompactSummary";
 import { LeaguePageHeading, LeagueStorageMessage, participantTypeLabel } from "../components/LeaguePageParts";
-import { OverflowMenu } from "../components/OverflowMenu";
+import { LeagueScoringDialog } from "../components/LeagueScoringDialog";
+import { OverflowMenu, type OverflowMenuItem } from "../components/OverflowMenu";
 import { SortableHeader } from "../components/SortableHeader";
 import { downloadAllLeagues, downloadLeague } from "../storage/leagueJson";
+import { updateScoringPolicy } from "../app/leagueModel";
+import { DEFAULT_LEAGUE_SCORING_POLICY } from "../domain/leagueLogic";
 import type { League } from "../domain/leagueTypes";
 
 export function LeagueListPage() {
@@ -22,12 +26,15 @@ export function LeagueListPage() {
     createLeague,
     deleteLeague,
     duplicateLeague,
+    updateLeague,
     storageError,
     storageStatus,
   } = useLeagues();
   const [deleteTargetId, setDeleteTargetId] = useState<string>();
+  const [scoringTargetId, setScoringTargetId] = useState<string>();
   const [sort, setSort] = useState<LeagueSort>(DEFAULT_LEAGUE_SORT);
   const deleteTarget = leagues.find((league) => league.id === deleteTargetId);
+  const scoringTarget = leagues.find((league) => league.id === scoringTargetId);
   const sortedLeagues = useMemo(() => sortLeagues(leagues, sort), [leagues, sort]);
   const storageReady = storageStatus === "ready";
   const completedCount = leagues.filter((league) => league.status === "completed").length;
@@ -154,9 +161,7 @@ export function LeagueListPage() {
                     <td>{formatDateTime(league.updatedAt)}</td>
                     <td>
                       <div className="inline-actions">
-                        <button type="button" title="基本情報を編集" onClick={() => navigate(`/leagues/${league.id}/edit/basic`)}>
-                          編集
-                        </button>
+                        <LeagueEditAction league={league} onSelect={(step) => navigate(getLeagueStepPath(league.id, step))} />
                         <button
                           type="button"
                           title={dashboardReady ? "リーグ表を表示" : "対戦カードが未確定のためリーグ表を表示できません"}
@@ -176,6 +181,7 @@ export function LeagueListPage() {
                           }}
                           onExport={() => downloadLeague(league)}
                           onDelete={() => setDeleteTargetId(league.id)}
+                          onScoring={() => setScoringTargetId(league.id)}
                         />
                       </div>
                     </td>
@@ -202,6 +208,16 @@ export function LeagueListPage() {
           setDeleteTargetId(undefined);
         }}
       />
+      <LeagueScoringDialog
+        open={Boolean(scoringTarget)}
+        scoringPolicy={scoringTarget?.scoringPolicy ?? DEFAULT_LEAGUE_SCORING_POLICY}
+        readOnly={scoringTarget?.status === "completed"}
+        onCancel={() => setScoringTargetId(undefined)}
+        onSave={(scoringPolicy) => {
+          if (scoringTarget) updateLeague(updateScoringPolicy(scoringTarget, scoringPolicy));
+          setScoringTargetId(undefined);
+        }}
+      />
     </div>
   );
 }
@@ -211,17 +227,24 @@ function LeagueActionMenu({
   onDuplicate,
   onExport,
   onDelete,
+  onScoring,
 }: {
   league: League;
   onDuplicate: () => void;
   onExport: () => void;
   onDelete: () => void;
+  onScoring: () => void;
 }) {
   return (
     <OverflowMenu
       triggerLabel={`${league.title || "リーグ"}のその他の操作`}
       menuWidth={160}
       sections={[{
+        label: "リーグ設定",
+        items: [
+          { label: "勝点設定", title: "勝点設定を編集", icon: "options", onSelect: onScoring },
+        ],
+      }, {
         label: "リーグ情報",
         items: [
           { label: "複製", title: "リーグ情報(個別)を複製", icon: "duplicate", onSelect: onDuplicate },
@@ -231,6 +254,47 @@ function LeagueActionMenu({
       }]}
     />
   );
+}
+
+function LeagueEditAction({ league, onSelect }: { league: League; onSelect: (step: LeagueEditStep | "dashboard") => void }) {
+  if (league.status === "completed") {
+    return <button type="button" title="完了済みリーグを表示し、必要に応じて編集を再開" onClick={() => onSelect("dashboard")}>編集</button>;
+  }
+
+  const editSteps = getLeagueEditSteps(league);
+  if (editSteps.length === 1) {
+    const presentation = getLeagueEditStepMenuPresentation(editSteps[0]);
+    return <button type="button" title={presentation.title} onClick={() => onSelect(editSteps[0])}>編集</button>;
+  }
+
+  return (
+    <OverflowMenu
+      triggerLabel={`${league.title || "リーグ"}の編集画面を選択`}
+      triggerTitle="編集画面を選択"
+      triggerText="編集"
+      menuWidth={200}
+      sections={[{
+        label: "編集画面",
+        items: editSteps.map((step) => ({
+          ...getLeagueEditStepMenuPresentation(step),
+          onSelect: () => onSelect(step),
+        })),
+      }]}
+    />
+  );
+}
+
+function getLeagueEditStepMenuPresentation(step: LeagueEditStep): Pick<OverflowMenuItem, "label" | "title" | "icon"> {
+  switch (step) {
+    case "basic":
+      return { label: "基本情報", title: "基本情報を編集", icon: "basic" };
+    case "participants":
+      return { label: "名簿入力・選出", title: "名簿入力・選出を編集", icon: "entrants" };
+    case "groups":
+      return { label: "グループ設定", title: "グループ設定を編集", icon: "options" };
+    case "matches":
+      return { label: "対戦カード", title: "対戦カードを編集", icon: "options" };
+  }
 }
 
 function getLeagueStatus(league: League): { label: string; className: "generated" | "draft" } {

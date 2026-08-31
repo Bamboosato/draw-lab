@@ -31,23 +31,63 @@ export function createCandidateMatches(groups: readonly LeagueGroup[], createId:
   const matches: LeagueMatch[] = [];
 
   for (const group of groups) {
-    for (let leftIndex = 0; leftIndex < group.participantIds.length; leftIndex += 1) {
-      for (let rightIndex = leftIndex + 1; rightIndex < group.participantIds.length; rightIndex += 1) {
-        matches.push({
-          id: createId(),
-          groupId: group.id,
-          order,
-          participantAId: group.participantIds[leftIndex]!,
-          participantBId: group.participantIds[rightIndex]!,
-          isValid: true,
-          result: "unplayed",
-        });
-        order += 1;
-      }
+    for (const [leftIndex, rightIndex] of createMatchPairings(group.participantIds.length)) {
+      matches.push({
+        id: createId(),
+        groupId: group.id,
+        order,
+        participantAId: group.participantIds[leftIndex]!,
+        participantBId: group.participantIds[rightIndex]!,
+        isValid: true,
+        result: "unplayed",
+      });
+      order += 1;
     }
   }
 
   return matches;
+}
+
+type MatchPairing = readonly [leftIndex: number, rightIndex: number];
+
+function createMatchPairings(participantCount: number): MatchPairing[] {
+  if (participantCount < 2) return [];
+
+  // A five-participant group is the small complete graph for which this
+  // explicit path avoids a repeated participant between every adjacent card.
+  if (participantCount === 5) {
+    return [[0, 1], [2, 3], [0, 4], [1, 2], [3, 4], [0, 2], [1, 3], [2, 4], [0, 3], [1, 4]];
+  }
+
+  const slotCount = participantCount % 2 === 0 ? participantCount : participantCount + 1;
+  const fixedIndex = 0;
+  let rotatingIndexes: Array<number | undefined> = Array.from(
+    { length: slotCount - 1 },
+    (_, index) => index + 1 < participantCount ? index + 1 : undefined,
+  );
+  const pairings: MatchPairing[] = [];
+
+  // The circle method creates one round per rotation, with each participant
+  // appearing at most once in a round. Flattening the rounds gives a stable
+  // order with no adjacent repeat for groups of six or more.
+  for (let round = 0; round < slotCount - 1; round += 1) {
+    const positions: Array<number | undefined> = [fixedIndex, ...rotatingIndexes];
+    for (let leftIndex = 0; leftIndex < slotCount / 2; leftIndex += 1) {
+      const rightIndex = slotCount - 1 - leftIndex;
+      const left = positions[leftIndex];
+      const right = positions[rightIndex];
+      if (left !== undefined && right !== undefined) {
+        pairings.push([Math.min(left, right), Math.max(left, right)]);
+      }
+    }
+    rotatingIndexes = [rotatingIndexes[rotatingIndexes.length - 1], ...rotatingIndexes.slice(0, -1)];
+  }
+
+  // Keep the first generated card stable as the first two名簿上の参加単位.
+  const firstPairingIndex = pairings.findIndex(([left, right]) => left === 0 && right === 1);
+  return firstPairingIndex <= 0
+    ? pairings
+    : [...pairings.slice(firstPairingIndex), ...pairings.slice(0, firstPairingIndex)];
 }
 
 export function countValidMatchesByParticipant(
@@ -116,53 +156,12 @@ export function validateLeague(league: League, requireCompleteRanks = false): Le
     }
   }
 
-  if (league.matchPolicy.mode === "partialRoundRobin" && league.matchSelectionStatus === "confirmed") {
-    const partial = validatePartialMatchSelection(league);
-    errors.push(...partial.errors);
-    warnings.push(...partial.warnings);
-  }
-
   if (requireCompleteRanks) {
     errors.push(...validateManualRanks(league).errors);
   }
 
   if (enteredParticipants.some((participant) => participant.displayName.trim() && duplicateNameCount(enteredParticipants, participant.displayName) > 1)) {
     warnings.push({ code: "DUPLICATE_PARTICIPANT_NAME", message: "参加者名が重複しています。IDで区別して管理します。" });
-  }
-
-  return { errors, warnings };
-}
-
-export function validatePartialMatchSelection(league: League): LeagueValidationResult {
-  const errors: LeagueValidationIssue[] = [];
-  const warnings: LeagueValidationIssue[] = [];
-  const k = league.matchPolicy.matchesPerParticipant;
-
-  if (!Number.isInteger(k) || k === undefined || k < 1) {
-    errors.push({ code: "PARTIAL_MATCH_COUNT_INVALID", message: "1対戦参加単位あたりの試合数は1以上の整数で指定してください。" });
-    return { errors, warnings };
-  }
-
-  for (const group of league.groups) {
-    const n = group.participantIds.length;
-    if (n < 2) {
-      errors.push({ code: "GROUP_TOO_SMALL", message: "対戦には1グループ2参加単位以上が必要です。", groupId: group.id });
-      continue;
-    }
-    if (k > n - 1) {
-      errors.push({ code: "PARTIAL_MATCH_COUNT_EXCEEDED", message: `グループ${group.name}では指定試合数${k}が対戦可能数${n - 1}を超えています。`, groupId: group.id });
-    }
-    if ((n * k) % 2 !== 0) {
-      errors.push({ code: "PARTIAL_MATCH_PARITY", message: `グループ${group.name}では参加単位数${n}×指定試合数${k}が奇数のため、均等化できません。`, groupId: group.id });
-    }
-
-    const counts = countValidMatchesByParticipant(league.matches.filter((match) => match.groupId === group.id), group.participantIds);
-    for (const participantId of group.participantIds) {
-      const actual = counts.get(participantId) ?? 0;
-      if (actual !== k) {
-        errors.push({ code: "PARTIAL_MATCH_COUNT_MISMATCH", message: `グループ${group.name}の有効試合数を指定値${k}に合わせてください（現在${actual}）。`, participantId, groupId: group.id });
-      }
-    }
   }
 
   return { errors, warnings };

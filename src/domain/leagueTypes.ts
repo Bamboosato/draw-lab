@@ -2,7 +2,6 @@ export type LeagueParticipantType = "individual" | "doubles" | "team";
 export type LeagueStatus = "draft" | "scheduled" | "inProgress" | "completed";
 export type MatchSelectionStatus = "pending" | "confirmed";
 export type LeagueSelectionMode = "all" | "random" | "manual";
-export type LeagueMatchMode = "roundRobin" | "partialRoundRobin";
 export type LeagueMatchResult =
   | "unplayed"
   | "participantAWin"
@@ -31,11 +30,6 @@ export type LeagueGroup = {
   id: string;
   name: string;
   participantIds: string[];
-};
-
-export type LeagueMatchPolicy = {
-  mode: LeagueMatchMode;
-  matchesPerParticipant?: number;
 };
 
 export type LeagueScoringPolicy = {
@@ -78,7 +72,6 @@ export type League = {
   participants: LeagueParticipant[];
   selection: LeagueSelection;
   groups: LeagueGroup[];
-  matchPolicy: LeagueMatchPolicy;
   scoringPolicy: LeagueScoringPolicy;
   matches: LeagueMatch[];
   standings: LeagueStanding[];

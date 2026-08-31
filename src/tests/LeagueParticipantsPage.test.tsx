@@ -57,7 +57,7 @@ describe("LeagueParticipantsPage", () => {
     fireEvent.blur(input);
 
     expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByText(/対戦方式と勝点設定は保持されます。/))
+    expect(screen.getByText(/勝点設定は保持されます。/))
       .toBeTruthy();
     expect(updateLeagueMock).not.toHaveBeenCalled();
   });
@@ -83,7 +83,7 @@ describe("LeagueParticipantsPage", () => {
     expect(updateLeagueMock).not.toHaveBeenCalled();
   });
 
-  it("確認すると参加単位の変更と構造リセットを反映し、方式と勝点設定を保持する", () => {
+  it("確認すると参加単位の変更と構造リセットを反映し、勝点設定を保持する", () => {
     const league = makeLeague();
     render(<LeagueParticipantsPage />);
     const input = screen.getByRole("textbox", { name: "1 選手名" }) as HTMLInputElement;
@@ -100,7 +100,6 @@ describe("LeagueParticipantsPage", () => {
       standings: [],
       matchSelectionStatus: "pending",
       status: "draft",
-      matchPolicy: league.matchPolicy,
       scoringPolicy: league.scoringPolicy,
     }));
   });
@@ -123,10 +122,12 @@ describe("LeagueParticipantsPage", () => {
   it("トーナメント名簿画面に合わせた操作項目と詳細列開閉を表示する", () => {
     render(<LeagueParticipantsPage />);
 
-    expect(screen.getByRole("button", { name: "行追加" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "自動選出" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "空行削除" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "入力チェック" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "名簿のその他の操作" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "名簿のその他の操作" }));
+    expect(screen.getByRole("menuitem", { name: "名簿の入力行を追加" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "空の名簿行を削除" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "名簿の入力内容をチェック" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "参加者一覧" })).toBeNull();
     expect(screen.getByRole("textbox", { name: "TSV/CSV貼り付け" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "貼り付けを取り込み" })).toBeTruthy();
@@ -135,6 +136,8 @@ describe("LeagueParticipantsPage", () => {
 
     const summary = document.querySelector('[aria-label="参加者入力概要"]') as HTMLElement;
     expect(Array.from(summary.querySelectorAll("dt"), (node) => node.textContent)).toEqual(["参加者数", "選択済み", "定員"]);
+    expect(screen.queryByText("チェックなしの参加者は補欠です。")).toBeNull();
+    expect(screen.queryByText(/選出者 \d+ \/ 定員 \d+。/)).toBeNull();
     expect(screen.getByRole("textbox", { name: "TSV/CSV貼り付け" }).getAttribute("placeholder")).toBe(
       "選手A\t所属A\t地区A\t備考A\n選手B\t所属B\t地区B\t備考B\n選手C\t所属C\t地区C\t備考C",
     );
@@ -260,15 +263,18 @@ describe("LeagueParticipantsPage", () => {
     }));
   });
 
-  it("結果入力後は選出チェックと自動選出を操作できない", () => {
+  it("対戦カード確定後は選出チェックと自動選出を操作できない", () => {
     const league = makeLeague({
-      matches: [{ id: "m1", groupId: "g1", order: 1, participantAId: "p1", participantBId: "p2", isValid: true, result: "participantAWin" as const }],
+      matches: [{ id: "m1", groupId: "g1", order: 1, participantAId: "p1", participantBId: "p2", isValid: true, result: "unplayed" as const }],
+      matchSelectionStatus: "confirmed",
     });
     useLeagueMock.mockReturnValue(league);
     render(<LeagueParticipantsPage />);
 
     expect((screen.getByRole("button", { name: "自動選出" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getAllByRole("checkbox").every((input) => (input as HTMLInputElement).disabled)).toBe(true);
+    expect(screen.getByText("対戦カード確定後のため、参加者の追加・削除・種別変更はできません。")).toBeTruthy();
+    expect(screen.queryByText(/表示名の編集はリーグ表から行えます/)).toBeNull();
   });
 
   it("名簿入力の次へは選出画面を経由せずグループ設定へ進む", () => {
@@ -294,7 +300,8 @@ describe("LeagueParticipantsPage", () => {
 
     expect(screen.queryByRole("alert")).toBeNull();
     expect(document.querySelector('[aria-label="参加者入力概要"] .summary-alert')).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "入力チェック" }));
+    fireEvent.click(screen.getByRole("button", { name: "名簿のその他の操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "名簿の入力内容をチェック" }));
     expect(screen.queryByRole("alert")).toBeNull();
     expect(document.querySelector('[aria-label="参加者入力概要"] .summary-alert')).toBeTruthy();
   });
@@ -343,7 +350,7 @@ function makeLeague(overrides: Partial<ReturnType<typeof createDefaultLeague>> =
       { groupId: "g1", participantId: "p2", played: 0, wins: 0, draws: 0, losses: 0, points: 0, rankStatus: "unconfirmed" as const },
     ],
     status: "scheduled" as const,
-    matchSelectionStatus: "confirmed" as const,
+    matchSelectionStatus: "pending" as const,
     ...overrides,
   };
 }
