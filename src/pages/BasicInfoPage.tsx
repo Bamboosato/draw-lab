@@ -68,6 +68,7 @@ export function BasicInfoPage() {
           >
             <option value="singles">シングルス</option>
             <option value="doubles">ダブルス</option>
+            <option value="team">チーム</option>
           </select>
         </label>
         <label className="field">

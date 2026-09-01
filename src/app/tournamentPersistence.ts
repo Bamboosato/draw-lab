@@ -263,7 +263,7 @@ function validateStoredTournamentShape(value: unknown): asserts value is Record<
     || !value.id
     || !Array.isArray(value.entrants)
     || !isRecord(value.options)
-    || (value.matchType !== "singles" && value.matchType !== "doubles")
+    || (value.matchType !== "singles" && value.matchType !== "doubles" && value.matchType !== "team")
     || !VALID_DRAW_SIZES.includes(value.drawSize as DrawSize)
     || typeof value.seedCount !== "number"
     || !Number.isFinite(value.seedCount)
@@ -278,7 +278,11 @@ function validateStoredTournamentShape(value: unknown): asserts value is Record<
       !isRecord(entrant)
       || typeof entrant.id !== "string"
       || !entrant.id
-      || typeof entrant.player1Name !== "string"
+      || (value.matchType === "team"
+        ? typeof entrant.teamName !== "string"
+          || !Array.isArray(entrant.memberNames)
+          || entrant.memberNames.some((memberName) => typeof memberName !== "string")
+        : typeof entrant.player1Name !== "string")
     ) {
       throw new ImportDataError("IMPORT_INVALID_TOURNAMENT", "バックアップ内の参加者IDが不正です。");
     }
@@ -369,7 +373,7 @@ function coerceTournament(value: unknown): Tournament {
     date: coerceString(value.date) ?? "",
     venue: coerceString(value.venue) ?? "",
     eventName: coerceString(value.eventName) ?? "",
-    matchType: value.matchType === "doubles" ? "doubles" : "singles",
+    matchType: value.matchType === "doubles" ? "doubles" : value.matchType === "team" ? "team" : "singles",
     drawSize,
     seedCount: coerceNumber(value.seedCount, fallback.seedCount),
     entrants: Array.isArray(value.entrants) ? value.entrants.map((entrant, index) => coerceEntrant(entrant, index)) : [],
@@ -410,6 +414,10 @@ function coerceEntrant(value: unknown, index: number): Entrant {
     seedNo: coerceNumberOrString(value.seedNo),
     player1Name: coerceString(value.player1Name) ?? "",
     player2Name: coerceString(value.player2Name),
+    teamName: coerceString(value.teamName),
+    memberNames: Array.isArray(value.memberNames)
+      ? value.memberNames.filter((memberName): memberName is string => typeof memberName === "string")
+      : undefined,
     team1: coerceString(value.team1),
     team2: coerceString(value.team2),
     sameTeam: coerceBoolean(value.sameTeam, false),
@@ -531,7 +539,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isTournamentLike(value: unknown): value is Record<string, unknown> {
   return isRecord(value)
-    && (value.matchType === "singles" || value.matchType === "doubles")
+    && (value.matchType === "singles" || value.matchType === "doubles" || value.matchType === "team")
     && "drawSize" in value
     && Array.isArray(value.entrants)
     && isRecord(value.options);

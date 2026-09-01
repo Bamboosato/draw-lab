@@ -37,6 +37,15 @@ describe("tournamentModel", () => {
     expect(tournament.entrants).toHaveLength(16);
   });
 
+  it("creates a team roster row with a team name and variable member list", () => {
+    expect(createEmptyEntrant(1, "team")).toMatchObject({
+      teamName: "",
+      memberNames: [""],
+      team1: "",
+      player1Name: "",
+    });
+  });
+
   it("pads entrant rows up to the draw size without removing existing rows", () => {
     const existingEntrants = createEmptyEntrants(8, "singles");
     const rows = ensureEntrantRows(existingEntrants, 16, "singles");
@@ -213,6 +222,44 @@ describe("tournamentModel", () => {
     );
 
     expect(rows[0].sameTeamGroup).toBe("G1");
+  });
+
+  it("parses team names, slash-separated members, and affiliations from team roster text", () => {
+    const rows = parseEntrantsFromText(
+      [
+        "No,シード,チーム名,メンバー（/区切り）,所属チーム,地区,ランキング",
+        "1,1,Team A,Member A / Member B,Affiliation A,East,10",
+      ].join("\n"),
+      "team",
+    );
+
+    expect(rows[0]).toMatchObject({
+      teamName: "Team A",
+      memberNames: ["Member A", "Member B"],
+      team1: "Affiliation A",
+      region: "East",
+      ranking: 10,
+    });
+    expect(rows[0].id).not.toBe(rows[0].teamName);
+  });
+
+  it("parses team roster columns without a seed column", () => {
+    const rows = parseEntrantsFromText(
+      [
+        "1,Team A,Member A/Member B,Affiliation A,East,10",
+        "2,Team B,Member C,Affiliation B,West,20",
+      ].join("\n"),
+      "team",
+    );
+
+    expect(rows[0]).toMatchObject({
+      teamName: "Team A",
+      memberNames: ["Member A", "Member B"],
+      team1: "Affiliation A",
+      region: "East",
+      ranking: 10,
+    });
+    expect(rows[0].seedNo).toBeUndefined();
   });
 
   it("ignores a leading No column when singles roster text has no seed column", () => {

@@ -198,6 +198,35 @@ describe("validateTournament", () => {
     expect(result.errors.map((issue) => issue.code)).toContain("DOUBLES_PLAYER_MISSING");
   });
 
+  it("accepts a team with one or more members and keeps duplicate team names valid", () => {
+    const result = validateTournament(
+      makeTournament({
+        matchType: "team",
+        entrants: [
+          makeEntrant(1, { player1Name: "", teamName: "Same Team Name", memberNames: ["Member A"] }),
+          makeEntrant(2, { player1Name: "", teamName: "Same Team Name", memberNames: ["Member A", "Member B"] }),
+        ],
+      }),
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("requires a team name and at least one non-empty member", () => {
+    const result = validateTournament(
+      makeTournament({
+        matchType: "team",
+        entrants: [makeEntrant(1, { player1Name: "", teamName: "", memberNames: [] })],
+      }),
+    );
+
+    expect(result.errors.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      "TEAM_NAME_REQUIRED",
+      "TEAM_MEMBER_MISSING",
+    ]));
+  });
+
   it("returns an error when a doubles row has affiliation but no player names", () => {
     const result = validateTournament(
       makeTournament({

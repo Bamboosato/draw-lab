@@ -2,13 +2,15 @@ export const VALID_DRAW_SIZES = [4, 8, 16, 32, 64, 128] as const;
 export const VALID_SEED_COUNTS = [0, 2, 4, 8, 16, 32, 64] as const;
 
 export type DrawSize = (typeof VALID_DRAW_SIZES)[number];
-export type MatchType = "singles" | "doubles";
+export type MatchType = "singles" | "doubles" | "team";
 
 export type Entrant = {
   id: string;
   seedNo?: number | string;
   player1Name: string;
   player2Name?: string;
+  teamName?: string;
+  memberNames?: string[];
   team1?: string;
   team2?: string;
   sameTeam?: boolean;

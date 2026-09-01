@@ -41,6 +41,8 @@ export function EntrantsPage() {
   }
 
   const rows = tournament.entrants;
+  const isDoubles = tournament.matchType === "doubles";
+  const isTeam = tournament.matchType === "team";
   const defaultVisibleRowCount = getVisibleEntrantRowCount(rows, tournament.drawSize);
   const visibleRowCount = Math.max(defaultVisibleRowCount, manualVisibleRowCount);
   const visibleRows = rows.slice(0, visibleRowCount);
@@ -152,15 +154,15 @@ export function EntrantsPage() {
             <tr>
               <th>No.</th>
               <th>シード</th>
-              <th>{renderRequiredHeader(tournament.matchType === "doubles" ? "選手名1" : "選手名")}</th>
-              {tournament.matchType === "doubles" ? <th>{renderRequiredHeader("選手名2")}</th> : null}
+              <th>{renderRequiredHeader(isTeam ? "チーム名" : isDoubles ? "選手名1" : "選手名")}</th>
+              {isTeam ? <th>メンバー（/区切り）</th> : isDoubles ? <th>{renderRequiredHeader("選手名2")}</th> : null}
               <th className="roster-team-boundary-column">
                 <span className="roster-team-heading">
-                  {tournament.matchType === "doubles" ? "所属チーム1" : "所属チーム"}
-                  {tournament.matchType === "singles" ? rosterDetailsToggle : null}
+                  {isDoubles ? "所属チーム1" : "所属チーム"}
+                  {!isDoubles ? rosterDetailsToggle : null}
                 </span>
               </th>
-              {tournament.matchType === "doubles" ? (
+              {isDoubles ? (
                 <th className="roster-team-boundary-column">
                   <span className="roster-team-heading">
                     所属チーム2
@@ -168,7 +170,7 @@ export function EntrantsPage() {
                   </span>
                 </th>
               ) : null}
-              {tournament.matchType === "doubles" ? <th className="roster-detail-column same-team-group-column">同チーム扱い</th> : null}
+              {isDoubles ? <th className="roster-detail-column same-team-group-column">同チーム扱い</th> : null}
               <th className="roster-detail-column">地区</th>
               <th className="roster-detail-column ranking-column">ランキング</th>
               <th>操作</th>
@@ -187,11 +189,24 @@ export function EntrantsPage() {
                 </td>
                 <td>
                   <input
-                    value={entrant.player1Name}
-                    onChange={(event) => updateEntrant(entrant.id, { player1Name: event.target.value })}
+                    aria-label={`${index + 1} ${isTeam ? "チーム名" : isDoubles ? "選手名1" : "選手名"}`}
+                    value={isTeam ? entrant.teamName ?? "" : entrant.player1Name}
+                    onChange={(event) => updateEntrant(entrant.id, isTeam
+                      ? { teamName: event.target.value }
+                      : { player1Name: event.target.value })}
                   />
                 </td>
-                {tournament.matchType === "doubles" ? (
+                {isTeam ? (
+                  <td>
+                    <input
+                      aria-label={`${index + 1} メンバー`}
+                      value={(entrant.memberNames ?? []).join("/")}
+                      onChange={(event) => updateEntrant(entrant.id, {
+                        memberNames: event.target.value.split("/").map((memberName) => memberName.trim()).filter(Boolean),
+                      })}
+                    />
+                  </td>
+                ) : isDoubles ? (
                   <td>
                     <input
                       value={entrant.player2Name ?? ""}
@@ -202,12 +217,12 @@ export function EntrantsPage() {
                 <td>
                   <input value={entrant.team1 ?? ""} onChange={(event) => updateEntrant(entrant.id, { team1: event.target.value })} />
                 </td>
-                {tournament.matchType === "doubles" ? (
+                {isDoubles ? (
                   <td>
                     <input value={entrant.team2 ?? ""} onChange={(event) => updateEntrant(entrant.id, { team2: event.target.value })} />
                   </td>
                 ) : null}
-                {tournament.matchType === "doubles" ? (
+                {isDoubles ? (
                   <td className="roster-detail-column same-team-group-column">
                     <input
                       maxLength={5}
@@ -243,7 +258,9 @@ export function EntrantsPage() {
           <textarea
             value={pasteText}
             onChange={(event) => setPasteText(event.target.value)}
-            placeholder={tournament.matchType === "doubles"
+            placeholder={isTeam
+              ? "No, シード, チーム名, メンバー（/区切り）, 所属チーム, 地区, ランキング"
+              : isDoubles
               ? "No, シード, 選手名1, 選手名2, 所属チーム1, 所属チーム2, 同チーム扱い, 地区, ランキング"
               : "No, シード, 選手名, 所属チーム, 地区, ランキング"}
           />

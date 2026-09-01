@@ -46,6 +46,8 @@ export function normalizeEntrants(entrants: Entrant[], matchType: MatchType): En
     seedNo: normalizeSeedNo(entrant.seedNo),
     player1Name: normalizeRequiredString(entrant.player1Name),
     player2Name: normalizeOptionalString(entrant.player2Name),
+    teamName: normalizeOptionalString(entrant.teamName),
+    memberNames: normalizeMemberNames(entrant.memberNames),
     team1: normalizeOptionalString(entrant.team1),
     team2: matchType === "doubles" ? normalizeOptionalString(entrant.team2) : undefined,
     sameTeam: entrant.sameTeam ?? false,
@@ -59,12 +61,25 @@ export function isEntrantCompletelyEmpty(entrant: Entrant): boolean {
     entrant.seedNo,
     entrant.player1Name,
     entrant.player2Name,
+    entrant.teamName,
+    ...(entrant.memberNames ?? []),
     entrant.team1,
     entrant.team2,
     entrant.sameTeamGroup,
     entrant.region,
     entrant.ranking,
   ].every((value) => value === undefined || String(value).trim() === "") && entrant.sameTeam !== true;
+}
+
+export function isEntrantEmptyForMatchType(entrant: Entrant, matchType: MatchType): boolean {
+  const values = matchType === "team"
+    ? [entrant.seedNo, entrant.teamName, ...(entrant.memberNames ?? []), entrant.team1, entrant.region, entrant.ranking]
+    : matchType === "doubles"
+      ? [entrant.seedNo, entrant.player1Name, entrant.player2Name, entrant.team1, entrant.team2, entrant.sameTeamGroup, entrant.region, entrant.ranking]
+      : [entrant.seedNo, entrant.player1Name, entrant.team1, entrant.region, entrant.ranking];
+
+  const hasSameTeamFlag = matchType === "doubles" && entrant.sameTeam === true;
+  return values.every((value) => value === undefined || String(value).trim() === "") && !hasSameTeamFlag;
 }
 
 export function validateTournament(tournament: Tournament): ValidationResult {
@@ -121,7 +136,7 @@ export function validateTournament(tournament: Tournament): ValidationResult {
   }
 
   const matchType = isMatchType(normalized.matchType) ? normalized.matchType : "singles";
-  const entrantsToValidate = normalized.entrants.filter((entrant) => !isEntrantCompletelyEmpty(entrant));
+  const entrantsToValidate = normalized.entrants.filter((entrant) => !isEntrantEmptyForMatchType(entrant, matchType));
   const validEntrants = getValidEntrants(entrantsToValidate, matchType);
 
   for (const entrant of entrantsToValidate) {
@@ -194,6 +209,26 @@ export function validateTournament(tournament: Tournament): ValidationResult {
         });
       }
     }
+
+    if (matchType === "team") {
+      if (!entrant.teamName) {
+        errors.push({
+          code: "TEAM_NAME_REQUIRED",
+          message: "チーム名を入力してください",
+          entrantId: entrant.id,
+          field: "teamName",
+        });
+      }
+
+      if ((entrant.memberNames ?? []).filter(Boolean).length < 1) {
+        errors.push({
+          code: "TEAM_MEMBER_MISSING",
+          message: "チームのメンバーを1名以上入力してください",
+          entrantId: entrant.id,
+          field: "memberNames",
+        });
+      }
+    }
   }
 
   if (validEntrants.length === 0) {
@@ -213,7 +248,7 @@ export function validateTournament(tournament: Tournament): ValidationResult {
   }
 
   errors.push(...findSeedErrors(validEntrants, seedCount));
-  warnings.push(...findDuplicatePlayerWarnings(entrantsToValidate));
+  warnings.push(...findDuplicatePlayerWarnings(entrantsToValidate, matchType));
   warnings.push(...findSeedWarnings(validEntrants));
 
   return { errors, warnings };
@@ -221,6 +256,10 @@ export function validateTournament(tournament: Tournament): ValidationResult {
 
 export function getValidEntrants(entrants: readonly Entrant[], matchType: MatchType): Entrant[] {
   return entrants.filter((entrant) => {
+    if (matchType === "team") {
+      return Boolean(entrant.teamName?.trim());
+    }
+
     if (matchType === "doubles") {
       return Boolean(entrant.player1Name || entrant.player2Name);
     }
@@ -278,7 +317,11 @@ export function isSupportedSeedCount(seedCount: number): boolean {
   return VALID_SEED_COUNTS.includes(seedCount as (typeof VALID_SEED_COUNTS)[number]);
 }
 
-function findDuplicatePlayerWarnings(entrants: readonly Entrant[]): ValidationIssue[] {
+function findDuplicatePlayerWarnings(entrants: readonly Entrant[], matchType: MatchType): ValidationIssue[] {
+  if (matchType === "team") {
+    return [];
+  }
+
   const names = new Map<string, { entrantId: string; field: string }[]>();
 
   for (const entrant of entrants) {
@@ -421,7 +464,7 @@ function hasRankingValue(entrant: Entrant): boolean {
 }
 
 function isMatchType(value: unknown): value is MatchType {
-  return value === "singles" || value === "doubles";
+  return value === "singles" || value === "doubles" || value === "team";
 }
 
 function normalizeSeedPositionMode(value: DrawOptions["seedPositionMode"]): DrawOptions["seedPositionMode"] {
@@ -479,4 +522,8 @@ function normalizeRequiredString(value: string | undefined): string {
 function normalizeOptionalString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function normalizeMemberNames(value: string[] | undefined): string[] {
+  return (value ?? []).map((memberName) => memberName.trim()).filter(Boolean);
 }

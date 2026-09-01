@@ -118,6 +118,40 @@ describe("tournament JSON backup", () => {
       code: "IMPORT_KIND_UNKNOWN",
     });
   });
+
+  it("round-trips team names, members, and affiliations", () => {
+    const source = {
+      ...createTournament("team-source"),
+      matchType: "team" as const,
+      entrants: [{
+        id: "team-source-entrant",
+        player1Name: "",
+        teamName: "Team A",
+        memberNames: ["Member A", "Member B"],
+        team1: "Affiliation A",
+        region: "East",
+        ranking: 1,
+      }],
+      generatedDraw: {
+        ...createTournament("team-source").generatedDraw!,
+        slots: [{ position: 1, entrantId: "team-source-entrant", isBye: false }],
+      },
+    };
+    const result = parseJsonImport(serializeTournament(source));
+
+    expect(result).toMatchObject({ state: "success", kind: "tournament" });
+    if (result.state !== "success" || result.kind !== "tournament") {
+      return;
+    }
+
+    expect(result.tournament.matchType).toBe("team");
+    expect(result.tournament.entrants[0]).toMatchObject({
+      teamName: "Team A",
+      memberNames: ["Member A", "Member B"],
+      team1: "Affiliation A",
+    });
+    expect(isTournamentDrawCurrent(result.tournament)).toBe(true);
+  });
 });
 
 function createTournament(id: string): Tournament {
