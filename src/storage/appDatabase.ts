@@ -1,8 +1,9 @@
 export const DATABASE_NAME = "draw-lab";
-export const DATABASE_VERSION = 2;
+export const DATABASE_VERSION = 3;
 export const TOURNAMENT_STORE_NAME = "tournaments";
 export const LEAGUE_STORE_NAME = "leagues";
 export const METADATA_STORE_NAME = "metadata";
+export const TOURNAMENT_INTEGRATION_STORE_NAME = "tournamentIntegrations";
 
 export function openAppDatabase(indexedDb: IDBFactory = indexedDB): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -24,6 +25,11 @@ export function openAppDatabase(indexedDb: IDBFactory = indexedDB): Promise<IDBD
 
       if (!database.objectStoreNames.contains(METADATA_STORE_NAME)) {
         database.createObjectStore(METADATA_STORE_NAME, { keyPath: "key" });
+      }
+
+      if (!database.objectStoreNames.contains(TOURNAMENT_INTEGRATION_STORE_NAME)) {
+        const integrationStore = database.createObjectStore(TOURNAMENT_INTEGRATION_STORE_NAME, { keyPath: "tournamentId" });
+        integrationStore.createIndex("updatedAt", "updatedAt");
       }
     };
 

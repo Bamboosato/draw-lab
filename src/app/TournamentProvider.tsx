@@ -9,8 +9,11 @@ import {
   useState,
 } from "react";
 import type { Tournament } from "../domain/types";
+import type { TournamentIntegrationRecord } from "../domain/leagueTournamentTypes";
 import { initializeAppTournamentStorage } from "../storage/localStorageMigration";
 import { getTournamentRepository } from "../storage/tournamentRepository";
+import { getTournamentIntegrationRepository } from "../storage/tournamentIntegrationRepository";
+import { cloneTournamentIntegration } from "./leagueTournamentAdapter";
 import {
   createDefaultTournament,
   hasTournamentContentChanged,
@@ -27,15 +30,24 @@ type TournamentContextValue = {
   updateTournament: (tournament: Tournament) => void;
   deleteTournament: (id: string) => void;
   duplicateTournament: (id: string) => Promise<Tournament | undefined>;
-  importTournament: (tournament: Tournament) => void;
-  replaceAllTournaments: (tournaments: readonly Tournament[]) => Promise<void>;
+  importTournament: (tournament: Tournament, integration?: TournamentIntegrationRecord) => void;
+  replaceAllTournaments: (
+    tournaments: readonly Tournament[],
+    integrations?: readonly TournamentIntegrationRecord[],
+  ) => Promise<void>;
+  integrations: TournamentIntegrationRecord[];
+  getTournamentIntegration: (tournamentId: string) => TournamentIntegrationRecord | undefined;
+  updateTournamentWithIntegration: (tournament: Tournament, integration?: TournamentIntegrationRecord) => void;
+  updateTournamentIntegration: (integration: TournamentIntegrationRecord | undefined) => void;
 };
 
 const TournamentContext = createContext<TournamentContextValue | undefined>(undefined);
 
 export function TournamentProvider({ children }: { children: ReactNode }) {
   const repository = useMemo(() => getTournamentRepository(), []);
+  const integrationRepository = useMemo(() => getTournamentIntegrationRepository(), []);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [integrations, setIntegrations] = useState<TournamentIntegrationRecord[]>([]);
   const [storageStatus, setStorageStatus] = useState<StorageStatus>("loading");
   const [storageError, setStorageError] = useState<string>();
   const queueRef = useRef<Promise<void>>(Promise.resolve());
@@ -45,12 +57,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    void initializeAppTournamentStorage()
-      .then((loaded) => {
+    void Promise.all([initializeAppTournamentStorage(), integrationRepository.list()])
+      .then(([loaded, loadedIntegrations]) => {
         if (!active) {
           return;
         }
         setTournaments(loaded);
+        setIntegrations(loadedIntegrations);
         setStorageStatus("ready");
         setStorageError(undefined);
       })
@@ -65,7 +78,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [integrationRepository]);
 
   const enqueuePersistence = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
     if (pendingOperationsRef.current === 0) {
@@ -121,29 +134,95 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const deleteTournament = useCallback((id: string) => {
     setTournaments((current) => current.filter((item) => item.id !== id));
-    void enqueuePersistence(() => repository.delete(id));
-  }, [enqueuePersistence, repository]);
+    setIntegrations((current) => current.filter((item) => item.tournamentId !== id));
+    void enqueuePersistence(() => integrationRepository.deleteWithTournament(id));
+  }, [enqueuePersistence, integrationRepository, repository]);
 
   const duplicateTournament = useCallback(async (id: string) => {
     try {
-      const duplicated = await enqueuePersistence(() => repository.duplicate(id));
+      const source = tournaments.find((item) => item.id === id);
+      const sourceIntegration = integrations.find((item) => item.tournamentId === id);
+      const duplicated = await enqueuePersistence(async () => {
+        const next = await repository.duplicate(id);
+        if (source && sourceIntegration) {
+          const entrantIdMap = new Map(source.entrants.map((entrant, index) => [
+            entrant.id,
+            next.entrants[index]?.id ?? entrant.id,
+          ]));
+          await integrationRepository.save(cloneTournamentIntegration(sourceIntegration, next.id, entrantIdMap));
+        }
+        return next;
+      });
       setTournaments((current) => [duplicated, ...current]);
+      if (sourceIntegration && source) {
+        const entrantIdMap = new Map(source.entrants.map((entrant, index) => [
+          entrant.id,
+          duplicated.entrants[index]?.id ?? entrant.id,
+        ]));
+        setIntegrations((current) => [
+          cloneTournamentIntegration(sourceIntegration, duplicated.id, entrantIdMap),
+          ...current,
+        ]);
+      }
       return duplicated;
     } catch {
       return undefined;
     }
-  }, [enqueuePersistence, repository]);
+  }, [enqueuePersistence, integrationRepository, integrations, repository, tournaments]);
 
-  const importTournament = useCallback((tournament: Tournament) => {
+  const importTournament = useCallback((tournament: Tournament, integration?: TournamentIntegrationRecord) => {
     setTournaments((current) => [tournament, ...current]);
-    void enqueuePersistence(() => repository.save(tournament));
-  }, [enqueuePersistence, repository]);
+    if (integration) {
+      setIntegrations((current) => [integration, ...current]);
+    }
+    void enqueuePersistence(async () => {
+      await integrationRepository.saveWithTournament(tournament, integration);
+    });
+  }, [enqueuePersistence, integrationRepository, repository]);
 
-  const replaceAllTournaments = useCallback(async (replacement: readonly Tournament[]) => {
+  const replaceAllTournaments = useCallback(async (
+    replacement: readonly Tournament[],
+    replacementIntegrations: readonly TournamentIntegrationRecord[] = [],
+  ) => {
     const next = [...replacement];
-    await enqueuePersistence(() => repository.replaceAll(next));
+    await enqueuePersistence(() => integrationRepository.replaceAllWithTournaments(next, replacementIntegrations));
     setTournaments(next);
-  }, [enqueuePersistence, repository]);
+    setIntegrations([...replacementIntegrations]);
+  }, [enqueuePersistence, integrationRepository, repository]);
+
+  const updateTournamentWithIntegration = useCallback((tournament: Tournament, integration?: TournamentIntegrationRecord) => {
+    const next = touchTournament(tournament);
+    setTournaments((current) => current.some((item) => item.id === next.id)
+      ? current.map((item) => item.id === next.id ? next : item)
+      : [next, ...current]);
+    setIntegrations((current) => integration
+      ? [integration, ...current.filter((item) => item.tournamentId !== integration.tournamentId)]
+      : current.filter((item) => item.tournamentId !== next.id));
+    void enqueuePersistence(async () => {
+      await integrationRepository.saveWithTournament(next, integration);
+    });
+  }, [enqueuePersistence, integrationRepository, repository]);
+
+  const updateTournamentIntegration = useCallback((integration: TournamentIntegrationRecord | undefined) => {
+    if (!integration) {
+      return;
+    }
+    const currentTournament = tournaments.find((item) => item.id === integration.tournamentId);
+    const nextTournament = currentTournament?.generatedDraw
+      ? touchTournament({ ...currentTournament, generatedDraw: undefined })
+      : currentTournament;
+    if (nextTournament && nextTournament !== currentTournament) {
+      setTournaments((current) => current.map((item) => item.id === nextTournament.id ? nextTournament : item));
+    }
+    setIntegrations((current) => [integration, ...current.filter((item) => item.tournamentId !== integration.tournamentId)]);
+    void enqueuePersistence(async () => {
+      if (nextTournament && nextTournament !== currentTournament) {
+        await integrationRepository.saveWithTournament(nextTournament, integration);
+        return;
+      }
+      await integrationRepository.save(integration);
+    });
+  }, [enqueuePersistence, integrationRepository, repository, tournaments]);
 
   const value = useMemo<TournamentContextValue>(
     () => ({
@@ -156,17 +235,24 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       duplicateTournament,
       importTournament,
       replaceAllTournaments,
+      integrations,
+      getTournamentIntegration: (tournamentId: string) => integrations.find((item) => item.tournamentId === tournamentId),
+      updateTournamentWithIntegration,
+      updateTournamentIntegration,
     }),
     [
       createTournament,
       deleteTournament,
       duplicateTournament,
       importTournament,
+      integrations,
       replaceAllTournaments,
       storageError,
       storageStatus,
       tournaments,
       updateTournament,
+      updateTournamentIntegration,
+      updateTournamentWithIntegration,
     ],
   );
 

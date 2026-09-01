@@ -21,9 +21,13 @@ export function OptionsPage() {
   const navigate = useViewTransitionNavigate();
   const { id } = useParams();
   const tournament = useTournament(id);
-  const { updateTournament } = useTournaments();
+  const { updateTournament, getTournamentIntegration } = useTournaments();
+  const integration = tournament ? getTournamentIntegration(tournament.id) : undefined;
 
-  const validation = useMemo(() => tournament ? validateTournamentForUi(tournament) : { errors: [], warnings: [] }, [tournament]);
+  const validation = useMemo(
+    () => tournament ? validateTournamentForUi(tournament, integration) : { errors: [], warnings: [] },
+    [integration, tournament],
+  );
   if (!tournament) {
     return <section className="empty-state"><h2>トーナメントが見つかりません。</h2></section>;
   }
@@ -31,7 +35,7 @@ export function OptionsPage() {
   const hasValidationErrors = validation.errors.length > 0;
 
   const updateOptions = (patch: Partial<DrawOptions>): void => {
-    updateTournament(applyOptionsPatch(tournament, patch));
+    updateTournament(applyOptionsPatch(tournament, patch, integration));
   };
 
   const outputOptions = getDrawOutputOptions(tournament.outputOptions);
@@ -43,12 +47,12 @@ export function OptionsPage() {
   );
 
   const updateOutputOptions = (patch: Partial<DrawOutputOptions>): void => {
-    updateTournament(applyOutputOptionsPatch(tournament, patch));
+    updateTournament(applyOutputOptionsPatch(tournament, patch, integration));
   };
 
   const proceedGenerate = (): void => {
     const seed = createRandomSeed();
-    const result = generateTournamentDraw(tournament, seed);
+    const result = generateTournamentDraw(tournament, seed, integration);
 
     if (result.validation.errors.length > 0) {
       return;
@@ -72,8 +76,8 @@ export function OptionsPage() {
         <p className="page-description">シード位置、BYE位置、選手配置順序、出力形式を設定します。</p>
       </section>
 
-      {hasValidationErrors ? (
-        <ValidationBanner errors={validation.errors} warnings={[]} entrants={tournament.entrants} />
+      {validation.errors.length > 0 || validation.warnings.length > 0 ? (
+        <ValidationBanner errors={validation.errors} warnings={validation.warnings} entrants={tournament.entrants} />
       ) : null}
 
       <section className="option-layout">

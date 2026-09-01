@@ -1,4 +1,5 @@
 import type { Tournament } from "../domain/types";
+import type { TournamentIntegrationRecord } from "../domain/leagueTournamentTypes";
 import { isTournamentDrawCurrent, validateTournamentForUi } from "./tournamentModel";
 
 export const TOURNAMENT_STEPS = [
@@ -62,19 +63,27 @@ export function getBasicInfoErrors(tournament: Tournament): string[] {
   return errors;
 }
 
-export function isTournamentStepComplete(tournament: Tournament, step: TournamentStep): boolean {
+export function isTournamentStepComplete(
+  tournament: Tournament,
+  step: TournamentStep,
+  integration?: TournamentIntegrationRecord,
+): boolean {
   switch (step) {
     case "basic":
       return isBasicInfoComplete(tournament);
     case "entrants":
-      return isRosterComplete(tournament);
+      return isRosterComplete(tournament, integration);
     case "options":
     case "preview":
-      return isTournamentDrawCurrent(tournament);
+      return isTournamentDrawCurrent(tournament, integration);
   }
 }
 
-export function getTournamentStepAccess(tournament: Tournament, step: TournamentStep): StepAccess {
+export function getTournamentStepAccess(
+  tournament: Tournament,
+  step: TournamentStep,
+  integration?: TournamentIntegrationRecord,
+): StepAccess {
   if (step === "basic") {
     return { canEnter: true };
   }
@@ -91,7 +100,7 @@ export function getTournamentStepAccess(tournament: Tournament, step: Tournament
     return { canEnter: true };
   }
 
-  if (!isRosterComplete(tournament)) {
+  if (!isRosterComplete(tournament, integration)) {
     return {
       canEnter: false,
       reason: "名簿入力を完了してからオプション設定へ進んでください。",
@@ -103,7 +112,7 @@ export function getTournamentStepAccess(tournament: Tournament, step: Tournament
     return { canEnter: true };
   }
 
-  if (!isTournamentDrawCurrent(tournament)) {
+  if (!isTournamentDrawCurrent(tournament, integration)) {
     return {
       canEnter: false,
       reason: tournament.generatedDraw
@@ -120,6 +129,6 @@ function isBasicInfoComplete(tournament: Tournament): boolean {
   return getBasicInfoErrors(tournament).length === 0;
 }
 
-function isRosterComplete(tournament: Tournament): boolean {
-  return validateTournamentForUi(tournament).errors.length === 0;
+function isRosterComplete(tournament: Tournament, integration?: TournamentIntegrationRecord): boolean {
+  return validateTournamentForUi(tournament, integration).errors.length === 0;
 }

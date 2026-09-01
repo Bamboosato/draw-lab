@@ -1,3 +1,5 @@
+import type { TournamentPlacementContext } from "./leagueTournamentTypes";
+
 export const VALID_DRAW_SIZES = [4, 8, 16, 32, 64, 128] as const;
 export const VALID_SEED_COUNTS = [0, 2, 4, 8, 16, 32, 64] as const;
 
@@ -95,6 +97,7 @@ export type GenerateDrawInput = {
   tournament: Tournament;
   randomSeed?: string;
   now: string;
+  placementContext?: TournamentPlacementContext;
 };
 
 export type GenerateDrawResult = {
@@ -128,6 +131,7 @@ export type PlaceUnseededEntrantsParams = {
   drawSize: DrawSize;
   options: DrawOptions;
   random: () => number;
+  placementContext?: TournamentPlacementContext;
 };
 
 export type PlacementPenaltyParams = {
@@ -137,6 +141,7 @@ export type PlacementPenaltyParams = {
   entrantsById: Map<string, Entrant>;
   drawSize: DrawSize;
   options: DrawOptions;
+  placementContext?: TournamentPlacementContext;
 };
 
 export type CreateGeneratedDrawParams = {

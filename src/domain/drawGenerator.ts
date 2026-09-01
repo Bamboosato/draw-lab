@@ -59,6 +59,7 @@ export function generateDraw(input: GenerateDrawInput): GenerateDrawResult {
     drawSize: normalizedTournament.drawSize,
     options: normalizedTournament.options,
     random,
+    placementContext: input.placementContext,
   });
 
   const draw = createGeneratedDraw({
@@ -92,6 +93,7 @@ export function placeUnseededEntrants(params: PlaceUnseededEntrantsParams): Draw
         entrantsById,
         drawSize: params.drawSize,
         options: params.options,
+        placementContext: params.placementContext,
       }),
     }));
     const minScore = Math.min(...scoredCandidates.map((candidate) => candidate.score));

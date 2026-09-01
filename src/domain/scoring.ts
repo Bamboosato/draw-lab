@@ -10,6 +10,10 @@ import type { DrawSlot, Entrant, PlacementPenaltyParams } from "./types";
 export const PLACEMENT_PENALTY = {
   sameTeamFirstRound: 1000,
   sameRegionFirstRound: 500,
+  sameLeagueGroupAndRankFirstRound: 1600,
+  sameLeagueGroupFirstRound: 700,
+  sameLeagueRankFirstRound: 600,
+  closeLeagueRankFirstRound: 500,
   sameTeamQuarter: 120,
   sameRegionQuarter: 80,
   sameTeamHalf: 40,
@@ -32,6 +36,8 @@ export function calculatePlacementPenalty(params: PlacementPenaltyParams): numbe
     if (params.options.avoidSameRegion && isSameRegion(params.entrant, opponent)) {
       penalty += PLACEMENT_PENALTY.sameRegionFirstRound;
     }
+
+    penalty += getLeaguePlacementPenalty(params.entrant.id, opponent.id, params.placementContext);
   }
 
   const candidateQuarter = getQuarterIndex(params.candidatePosition, params.drawSize);
@@ -70,6 +76,41 @@ export function calculatePlacementPenalty(params: PlacementPenaltyParams): numbe
   }
 
   return penalty;
+}
+
+function getLeaguePlacementPenalty(
+  entrantId: string,
+  opponentId: string,
+  placementContext: PlacementPenaltyParams["placementContext"],
+): number {
+  if (!placementContext || placementContext.groupCount === 0) {
+    return 0;
+  }
+
+  const entrant = placementContext.participants.get(entrantId);
+  const opponent = placementContext.participants.get(opponentId);
+
+  if (!entrant || !opponent) {
+    return 0;
+  }
+
+  const entrantGroup = entrant.groupKey ?? entrant.sourceGroupId;
+  const opponentGroup = opponent.groupKey ?? opponent.sourceGroupId;
+  const sameGroup = Boolean(entrantGroup && entrantGroup === opponentGroup);
+  const sameRank = entrant.rank !== undefined && entrant.rank === opponent.rank;
+
+  if (placementContext.groupCount > 1) {
+    return (sameGroup && sameRank ? PLACEMENT_PENALTY.sameLeagueGroupAndRankFirstRound : 0)
+      + (sameGroup ? PLACEMENT_PENALTY.sameLeagueGroupFirstRound : 0)
+      + (sameRank ? PLACEMENT_PENALTY.sameLeagueRankFirstRound : 0);
+  }
+
+  if (entrant.rank === undefined || opponent.rank === undefined) {
+    return 0;
+  }
+
+  const distance = Math.abs(entrant.rank - opponent.rank);
+  return distance <= 1 ? PLACEMENT_PENALTY.closeLeagueRankFirstRound : 0;
 }
 
 export function isSameRegion(a: Entrant, b: Entrant): boolean {

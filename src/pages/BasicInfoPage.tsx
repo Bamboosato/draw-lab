@@ -1,24 +1,163 @@
-import { useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
+import { calculateLeagueDrawSize, createLeagueToTournament, formatLeagueTournamentTitle, getLeagueRankUpperBound, resolveLeagueDrawSize } from "../app/leagueTournamentAdapter";
+import { getRankRangeValidationMessage, isValidRankRange } from "../app/leagueTournamentPlacement";
 import { getBasicInfoErrors } from "../app/tournamentFlow";
 import { applyBasicInfoPatch, applyEntrantsUpdate, DRAW_SIZES, ensureEntrantRows, SEED_COUNTS } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
+import { useLeagues } from "../app/LeagueProvider";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
+import { CompactSummary } from "../components/CompactSummary";
 import type { DrawSize, MatchType, Tournament } from "../domain/types";
 
 export function BasicInfoPage() {
   const navigate = useViewTransitionNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const tournament = useTournament(id);
-  const { updateTournament } = useTournaments();
-  const basicErrors = useMemo(() => tournament ? getBasicInfoErrors(tournament) : [], [tournament]);
+  const {
+    updateTournament,
+    updateTournamentWithIntegration,
+    getTournamentIntegration,
+  } = useTournaments();
+  const { leagues } = useLeagues();
+  const integration = tournament ? getTournamentIntegration(tournament.id) : undefined;
+  const fromLeagueMode = searchParams.get("mode") === "from-league" || Boolean(integration);
+  const [sourceLeagueId, setSourceLeagueId] = useState("");
+  const [minRank, setMinRank] = useState("1");
+  const [maxRank, setMaxRank] = useState("2");
+
+  useEffect(() => {
+    setSourceLeagueId(integration?.source.leagueId ?? "");
+    setMinRank(String(integration?.rankRange.min ?? 1));
+    setMaxRank(String(integration?.rankRange.max ?? 2));
+  }, [integration?.rankRange.max, integration?.rankRange.min, integration?.source.leagueId, tournament?.id]);
+
+  const selectedLeague = leagues.find((league) => league.id === (integration?.source.leagueId ?? sourceLeagueId));
+  const rankUpperBound = selectedLeague ? getLeagueRankUpperBound(selectedLeague) : undefined;
+  useEffect(() => {
+    if (!tournament || !integration || integration.drawSizeMode !== undefined || !selectedLeague) return;
+    if (!isValidRankRange(integration.rankRange, rankUpperBound)) return;
+
+    const expectedDrawSize = resolveLeagueDrawSize(selectedLeague.groups.length, integration.rankRange);
+    const autoTitle = formatLeagueTournamentTitle(selectedLeague.title, integration.rankRange);
+    if (expectedDrawSize === undefined || tournament.drawSize === expectedDrawSize || tournament.title !== autoTitle) return;
+
+    updateTournamentWithIntegration(
+      { ...tournament, drawSize: expectedDrawSize, generatedDraw: undefined },
+      { ...integration, drawSizeMode: "auto", updatedAt: new Date().toISOString() },
+    );
+  }, [integration, rankUpperBound, selectedLeague, tournament, updateTournamentWithIntegration]);
+
+  const rankRange = { min: Number(minRank), max: Number(maxRank) };
+  const basicErrors = useMemo(() => {
+    if (!tournament) return [];
+    const errors = [...getBasicInfoErrors(tournament)];
+    if (fromLeagueMode) {
+      if (!selectedLeague) {
+        errors.push("引継ぎ元のリーグ表を選択してください。");
+      }
+      if (!isValidRankRange(rankRange, rankUpperBound)) {
+        errors.push(`${getRankRangeValidationMessage(rankUpperBound)}。`);
+      }
+    }
+    return errors;
+  }, [fromLeagueMode, rankRange.max, rankRange.min, rankUpperBound, selectedLeague, tournament]);
 
   if (!tournament) {
     return <NotFoundPanel />;
   }
 
+  const rankRangeValid = isValidRankRange(rankRange, rankUpperBound);
+  const calculatedLeagueDrawSize = selectedLeague
+    ? calculateLeagueDrawSize(selectedLeague.groups.length, rankRange)
+    : undefined;
+  const resolvedLeagueDrawSize = selectedLeague
+    ? resolveLeagueDrawSize(selectedLeague.groups.length, rankRange)
+    : undefined;
+  const leagueFeedbackMessage = selectedLeague && !rankRangeValid
+    ? `${getRankRangeValidationMessage(rankUpperBound)}。`
+    : selectedLeague && rankRangeValid && resolvedLeagueDrawSize === undefined
+      ? `グループ数×順位数（${calculatedLeagueDrawSize ?? "-"}）は対応しているドローサイズではありません。`
+      : selectedLeague
+        ? `現在のドローサイズ: ${tournament.drawSize}`
+        : "";
+  const leagueFeedbackIsError = Boolean(selectedLeague && !rankRangeValid)
+    || Boolean(selectedLeague && rankRangeValid && resolvedLeagueDrawSize === undefined);
+
   const update = (patch: Partial<Tournament>): void => {
-    updateTournament(applyBasicInfoPatch(tournament, patch));
+    const nextTournament = applyBasicInfoPatch(tournament, patch, integration);
+    if (integration && patch.drawSize !== undefined) {
+      updateTournamentWithIntegration(nextTournament, {
+        ...integration,
+        drawSizeMode: "manual",
+        updatedAt: new Date().toISOString(),
+      });
+      return;
+    }
+    updateTournament(nextTournament);
+  };
+
+  const selectSourceLeague = (leagueId: string): void => {
+    setSourceLeagueId(leagueId);
+    const league = leagues.find((item) => item.id === leagueId);
+    if (!league) return;
+    const result = createLeagueToTournament(tournament, league, rankRange);
+    updateTournamentWithIntegration({
+      ...result.tournament,
+      title: tournament.title,
+      date: tournament.date,
+      venue: tournament.venue,
+      eventName: tournament.eventName,
+      drawSize: tournament.drawSize,
+      options: tournament.options,
+    }, {
+      ...result.integration,
+      drawSizeMode: integration ? "manual" : result.integration.drawSizeMode,
+    });
+  };
+
+  const updateRankRange = (field: "min" | "max", value: string): void => {
+    if (field === "min") setMinRank(value);
+    else setMaxRank(value);
+    if (!integration) return;
+    const nextRankRange = {
+      min: field === "min" ? Number(value) : Number(minRank),
+      max: field === "max" ? Number(value) : Number(maxRank),
+    };
+    if (!isValidRankRange(nextRankRange, rankUpperBound)) return;
+    const currentAutoTitle = selectedLeague
+      ? formatLeagueTournamentTitle(selectedLeague.title, integration.rankRange)
+      : undefined;
+    const nextTitle = currentAutoTitle && tournament.title === currentAutoTitle && selectedLeague
+      ? formatLeagueTournamentTitle(selectedLeague.title, nextRankRange)
+      : tournament.title;
+    const sourceGroupCount = selectedLeague?.groups.length ?? integration.sourceGroupCount;
+    const currentAutoDrawSize = resolveLeagueDrawSize(
+      sourceGroupCount,
+      integration.rankRange,
+    );
+    const nextAutoDrawSize = resolveLeagueDrawSize(
+      sourceGroupCount,
+      nextRankRange,
+    );
+    const legacyAutoDrawSize = integration.drawSizeMode === undefined
+      && currentAutoTitle !== undefined
+      && tournament.title === currentAutoTitle;
+    const drawSizeIsAuto = integration.drawSizeMode !== "manual"
+      && (integration.drawSizeMode === "auto"
+        || (currentAutoDrawSize !== undefined && tournament.drawSize === currentAutoDrawSize)
+        || legacyAutoDrawSize);
+    const nextDrawSize = drawSizeIsAuto
+      && nextAutoDrawSize !== undefined
+      ? nextAutoDrawSize
+      : tournament.drawSize;
+    updateTournamentWithIntegration({ ...tournament, title: nextTitle, drawSize: nextDrawSize, generatedDraw: undefined }, {
+      ...integration,
+      rankRange: nextRankRange,
+      drawSizeMode: integration.drawSizeMode ?? (drawSizeIsAuto ? "auto" : "manual"),
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   const goNext = (): void => {
@@ -93,6 +232,59 @@ export function BasicInfoPage() {
         </label>
       </section>
 
+      {fromLeagueMode ? (
+        <section className="settings-panel league-source-panel">
+          <p className="field-hint">引継ぎ元のリーグ表と、このトーナメントで扱う順位区分を指定してください。</p>
+          <label className="field">
+            {renderRequiredLabel("引継ぎ元のリーグ表")}
+            <select value={integration?.source.leagueId ?? sourceLeagueId} onChange={(event) => selectSourceLeague(event.target.value)}>
+              <option value="">リーグ表を選択してください</option>
+              {leagues.filter((league) => league.matchSelectionStatus === "confirmed").map((league) => (
+                <option key={league.id} value={league.id}>{league.title || "無題のリーグ"}</option>
+              ))}
+            </select>
+          </label>
+
+          <CompactSummary
+            ariaLabel="引継ぎ元リーグ表の概要"
+            items={[
+              { label: "リーグ表の状態", value: selectedLeague ? getLeagueStatusLabel(selectedLeague.status) : "" },
+              { label: "定員", value: selectedLeague ? `${selectedLeague.capacity}名` : "" },
+              { label: "グループ数", value: selectedLeague ? String(selectedLeague.groups.length) : "" },
+              { label: "選択済み参加者数", value: selectedLeague ? `${selectedLeague.selection.selectedParticipantIds.length}名` : "" },
+            ]}
+          />
+
+          <div className="form-grid league-create-rank-fields">
+            <label className="field">
+              {renderRequiredLabel("順位区分（開始）")}
+              <input type="number" min={1} max={rankUpperBound} value={minRank} onChange={(event) => updateRankRange("min", event.target.value)} />
+            </label>
+            <label className="field">
+              {renderRequiredLabel("順位区分（終了）")}
+              <input type="number" min={1} max={rankUpperBound} value={maxRank} onChange={(event) => updateRankRange("max", event.target.value)} />
+            </label>
+          </div>
+
+          <p className="field-hint league-create-rank-limit-hint">
+            {selectedLeague && rankUpperBound !== undefined
+              ? <>終了順位は、最も人数の少ないグループの人数（{rankUpperBound}位）まで指定できます。</>
+              : <span aria-hidden="true">&nbsp;</span>}
+          </p>
+
+          <p
+            className={`field-hint league-create-feedback-hint${leagueFeedbackIsError ? " error-text" : " league-create-draw-size-hint"}`}
+            role={leagueFeedbackIsError ? "alert" : undefined}
+          >
+            {leagueFeedbackMessage || <span aria-hidden="true">&nbsp;</span>}
+          </p>
+
+          {integration && selectedLeague?.updatedAt !== integration.source.leagueUpdatedAt ? (
+            <p className="field-hint" role="status">引継ぎ元のリーグ表が更新されています。必要に応じて、リーグ表から作成し直してください。</p>
+          ) : null}
+        </section>
+      ) : null}
+
       <div className="bottom-actions no-print">
         <button type="button" className="button secondary" title="トーナメント一覧へ戻る" onClick={() => navigate("/")}>一覧</button>
         <button
@@ -124,4 +316,13 @@ function NotFoundPanel() {
       <h2>トーナメントが見つかりません。</h2>
     </section>
   );
+}
+
+function getLeagueStatusLabel(status: "draft" | "scheduled" | "inProgress" | "completed"): string {
+  switch (status) {
+    case "scheduled": return "対戦前";
+    case "inProgress": return "進行中";
+    case "completed": return "完了";
+    case "draft": return "下書き";
+  }
 }

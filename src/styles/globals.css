@@ -1678,6 +1678,44 @@ a {
   padding: 8px;
 }
 
+.roster-table .league-result-heading {
+  text-align: center;
+}
+
+.roster-table .league-group-column {
+  width: 72px;
+  min-width: 72px;
+  white-space: nowrap;
+}
+
+.roster-table .league-rank-column {
+  width: 72px;
+  min-width: 72px;
+  white-space: nowrap;
+}
+
+.roster-table .roster-doubles-player-column {
+  width: 120px;
+  min-width: 120px;
+  white-space: nowrap;
+}
+
+.roster-table .roster-doubles-team-column {
+  width: 150px;
+  min-width: 150px;
+}
+
+.roster-table .roster-region-column {
+  width: 72px;
+  min-width: 72px;
+  white-space: nowrap;
+}
+
+.roster-table {
+  width: max-content;
+  min-width: 0;
+}
+
 .roster-table .roster-detail-column {
   display: none;
 }
@@ -1815,7 +1853,8 @@ a {
 }
 
 .roster-team-heading {
-  display: block;
+  display: flex;
+  align-items: center;
   min-height: 24px;
   white-space: nowrap;
 }
@@ -1983,6 +2022,57 @@ a {
 
 .confirm-dialog.danger {
   border-color: #fecdd3;
+}
+
+.league-create-dialog {
+  width: min(100%, 640px);
+}
+
+.league-source-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.league-source-panel .field-hint {
+  color: #526176;
+  line-height: 1.5;
+}
+
+.league-create-dialog .compact-summary,
+.league-source-panel .compact-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.league-create-dialog .summary-metric,
+.league-source-panel .summary-metric {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+}
+
+.league-create-dialog .summary-metric dt,
+.league-source-panel .summary-metric dt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.league-create-dialog .summary-metric dd,
+.league-source-panel .summary-metric dd {
+  min-height: 16px;
+  font-size: 16px;
+}
+
+.league-create-feedback-hint {
+  min-height: 1.5em;
+  margin: -6px 0 0;
+}
+
+.league-create-draw-size-hint {
+  text-align: right;
+}
+
+.league-create-rank-limit-hint {
+  min-height: 1.5em;
 }
 
 .dialog-actions {
@@ -2720,6 +2810,11 @@ a {
 }
 
 @media (max-width: 640px) {
+  .league-create-dialog .compact-summary,
+  .league-source-panel .compact-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tournament-list-page .compact-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
