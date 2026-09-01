@@ -1,4 +1,5 @@
 import type { DrawOptions, DrawSize, DrawSlot, Entrant, GeneratedDraw, Tournament } from "../domain/types";
+import type { TournamentIntegrationRecord, TournamentIntegrationParticipant } from "../domain/leagueTournamentTypes";
 import { normalizeDrawOutputOptions } from "../domain/outputOptions";
 import { VALID_DRAW_SIZES } from "../domain/types";
 import {
@@ -16,12 +17,14 @@ export type TournamentExport = {
   schemaVersion: 1;
   exportedAt: string;
   tournament: Tournament;
+  integration?: TournamentIntegrationRecord;
 };
 
 export type TournamentBackup = {
   schemaVersion: 1;
   exportedAt: string;
   tournaments: Tournament[];
+  integrations?: TournamentIntegrationRecord[];
 };
 
 export type ImportParseResult =
@@ -32,7 +35,7 @@ export type ImportParseResult =
 export type JsonImportParseResult =
   | { state: "empty"; message: string }
   | { state: "error"; code: string; message: string }
-  | { state: "success"; kind: "tournament"; tournament: Tournament; message: string }
+  | { state: "success"; kind: "tournament"; tournament: Tournament; integration?: TournamentIntegrationRecord; message: string }
   | { state: "success"; kind: "backup"; backup: TournamentBackup; message: string };
 
 export function parseJsonImport(text: string, now = new Date().toISOString()): JsonImportParseResult {
@@ -82,12 +85,17 @@ export function parseJsonImport(text: string, now = new Date().toISOString()): J
     if (!isTournamentLike(candidate)) {
       throw new ImportDataError("IMPORT_KIND_UNKNOWN", "対応していない大会情報ファイルです。");
     }
-    const tournament = cloneImportedTournament(candidate, now);
+    const imported = cloneImportedTournamentWithIntegration(
+      candidate,
+      isRecord(parsed) && isRecord(parsed.integration) ? parsed.integration : undefined,
+      now,
+    );
     return {
       state: "success",
       kind: "tournament",
-      tournament,
-      message: `個別大会データです。参加者${tournament.entrants.length}件を検出しました。`,
+      tournament: imported.tournament,
+      integration: imported.integration,
+      message: `個別大会データです。参加者${imported.tournament.entrants.length}件を検出しました。`,
     };
   } catch (error) {
     return {
@@ -117,11 +125,13 @@ export function parseTournamentImport(text: string): ImportParseResult {
 export function serializeTournament(
   tournament: Tournament,
   exportedAt = new Date().toISOString(),
+  integration?: TournamentIntegrationRecord,
 ): string {
   const data: TournamentExport = {
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt,
     tournament,
+    ...(integration ? { integration } : {}),
   };
   return JSON.stringify(data, null, 2);
 }
@@ -129,23 +139,28 @@ export function serializeTournament(
 export function serializeAllTournaments(
   tournaments: readonly Tournament[],
   exportedAt = new Date().toISOString(),
+  integrations: readonly TournamentIntegrationRecord[] = [],
 ): string {
   const data: TournamentBackup = {
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt,
     tournaments: [...tournaments],
+    ...(integrations.length > 0 ? { integrations: [...integrations] } : {}),
   };
   return JSON.stringify(data, null, 2);
 }
 
-export function downloadTournament(tournament: Tournament): void {
+export function downloadTournament(tournament: Tournament, integration?: TournamentIntegrationRecord): void {
   const fileNameBase = sanitizeFileName(tournament.title || tournament.id);
-  downloadJson(serializeTournament(tournament), `drawlab_${fileNameBase}.json`);
+  downloadJson(serializeTournament(tournament, new Date().toISOString(), integration), `drawlab_${fileNameBase}.json`);
 }
 
-export function downloadAllTournaments(tournaments: readonly Tournament[]): void {
+export function downloadAllTournaments(
+  tournaments: readonly Tournament[],
+  integrations: readonly TournamentIntegrationRecord[] = [],
+): void {
   const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-  downloadJson(serializeAllTournaments(tournaments), `drawlab_backup_${timestamp}.json`);
+  downloadJson(serializeAllTournaments(tournaments, new Date().toISOString(), integrations), `drawlab_backup_${timestamp}.json`);
 }
 
 export function createSampleJson(): string {
@@ -183,9 +198,19 @@ export function coerceStoredTournament(value: unknown): Tournament {
 }
 
 export function cloneImportedTournament(value: unknown, now = new Date().toISOString()): Tournament {
+  return cloneImportedTournamentWithIntegration(value, undefined, now).tournament;
+}
+
+export function cloneImportedTournamentWithIntegration(
+  value: unknown,
+  integrationValue: unknown,
+  now = new Date().toISOString(),
+): { tournament: Tournament; integration?: TournamentIntegrationRecord } {
   const source = coerceTournament(value);
+  const sourceIntegration = integrationValue === undefined ? undefined : coerceIntegration(integrationValue);
   validateTournamentReferences(source, new Set<string>());
-  const sourceDrawIsCurrent = isTournamentDrawCurrent(source);
+  validateIntegrationReferences(source, sourceIntegration);
+  const sourceDrawIsCurrent = isTournamentDrawCurrent(source, sourceIntegration);
   const tournamentId = createId("tournament");
   const entrantIdMap = new Map<string, string>();
   const entrants = source.entrants.map((entrant, index) => {
@@ -222,16 +247,22 @@ export function cloneImportedTournament(value: unknown, now = new Date().toISOSt
     updatedAt: now,
   };
 
-  if (tournament.generatedDraw && sourceDrawIsCurrent) {
-    tournament.generatedDraw = {
-      ...tournament.generatedDraw,
-      generationInputSignature: createGenerationInputSignature(tournament),
-    };
-  } else if (tournament.generatedDraw) {
+  if (tournament.generatedDraw && !sourceDrawIsCurrent) {
     tournament.generatedDraw = undefined;
   }
 
-  return tournament;
+  const importedIntegration = sourceIntegration
+    ? remapImportedIntegration(sourceIntegration, tournamentId, entrantIdMap, now)
+    : undefined;
+
+  if (tournament.generatedDraw && sourceDrawIsCurrent) {
+    tournament.generatedDraw = {
+      ...tournament.generatedDraw,
+      generationInputSignature: createGenerationInputSignature(tournament, importedIntegration),
+    };
+  }
+
+  return { tournament, integration: importedIntegration };
 }
 
 function parseTournamentBackup(value: Record<string, unknown>): TournamentBackup {
@@ -253,7 +284,26 @@ function parseTournamentBackup(value: Record<string, unknown>): TournamentBackup
     return tournament;
   });
 
-  return { schemaVersion: BACKUP_SCHEMA_VERSION, exportedAt: value.exportedAt, tournaments };
+  const integrations = Array.isArray(value.integrations)
+    ? value.integrations.map((item) => coerceIntegration(item))
+    : undefined;
+  const tournamentIds = new Set(tournaments.map((tournament) => tournament.id));
+  const integrationIds = new Set<string>();
+  for (const integration of integrations ?? []) {
+    if (integrationIds.has(integration.tournamentId)) {
+      throw new ImportDataError("BACKUP_DUPLICATE_ID", `連携情報の大会ID「${integration.tournamentId}」が重複しています。`);
+    }
+    if (!tournamentIds.has(integration.tournamentId)) {
+      throw new ImportDataError("BACKUP_REFERENCE_INVALID", "連携情報が存在しない大会を参照しています。");
+    }
+    integrationIds.add(integration.tournamentId);
+    validateIntegrationReferences(
+      tournaments.find((tournament) => tournament.id === integration.tournamentId)!,
+      integration,
+    );
+  }
+
+  return { schemaVersion: BACKUP_SCHEMA_VERSION, exportedAt: value.exportedAt, tournaments, integrations };
 }
 
 function validateStoredTournamentShape(value: unknown): asserts value is Record<string, unknown> {
@@ -349,6 +399,48 @@ function validateTournamentReferences(tournament: Tournament, tournamentIds: Set
   }
 }
 
+function validateIntegrationReferences(
+  tournament: Tournament,
+  integration: TournamentIntegrationRecord | undefined,
+): void {
+  if (!integration) return;
+  if (integration.tournamentId !== tournament.id) {
+    throw new ImportDataError("BACKUP_REFERENCE_INVALID", "連携情報の大会ID参照が不正です。");
+  }
+  const entrantIds = new Set(tournament.entrants.map((entrant) => entrant.id));
+  const integrationEntrantIds = new Set<string>();
+  for (const participant of integration.participants) {
+    if (!entrantIds.has(participant.tournamentEntrantId) || integrationEntrantIds.has(participant.tournamentEntrantId)) {
+      throw new ImportDataError("BACKUP_REFERENCE_INVALID", "連携情報が不正な参加者を参照しています。");
+    }
+    integrationEntrantIds.add(participant.tournamentEntrantId);
+    if (participant.rank !== undefined && (!Number.isInteger(participant.rank) || participant.rank < 1)) {
+      throw new ImportDataError("IMPORT_INVALID_TOURNAMENT", "連携情報の順位が不正です。");
+    }
+  }
+}
+
+function remapImportedIntegration(
+  integration: TournamentIntegrationRecord,
+  tournamentId: string,
+  entrantIdMap: ReadonlyMap<string, string>,
+  now: string,
+): TournamentIntegrationRecord {
+  return {
+    ...integration,
+    tournamentId,
+    participants: integration.participants.map((participant) => {
+      const tournamentEntrantId = entrantIdMap.get(participant.tournamentEntrantId);
+      if (!tournamentEntrantId) {
+        throw new ImportDataError("IMPORT_REFERENCE_INVALID", "連携情報が存在しない参加者を参照しています。");
+      }
+      return { ...participant, tournamentEntrantId };
+    }),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function registerId(ids: Set<string>, id: string, label: string): void {
   if (!id || ids.has(id)) {
     throw new ImportDataError("BACKUP_DUPLICATE_ID", `${label}ID「${id}」が空、または重複しています。`);
@@ -402,6 +494,67 @@ function coerceTournament(value: unknown): Tournament {
     generatedDraw: coerceGeneratedDraw(value.generatedDraw, id),
     createdAt: coerceString(value.createdAt) ?? now,
     updatedAt: coerceString(value.updatedAt) ?? now,
+  };
+}
+
+function coerceIntegration(value: unknown): TournamentIntegrationRecord {
+  if (!isRecord(value)
+    || value.kind !== "league-to-tournament"
+    || value.schemaVersion !== 1
+    || !isRecord(value.source)
+    || typeof value.source.leagueId !== "string"
+    || typeof value.source.leagueUpdatedAt !== "string"
+    || (value.source.matchSelectionStatus !== "pending" && value.source.matchSelectionStatus !== "confirmed")
+    || (value.sourceParticipantType !== "individual" && value.sourceParticipantType !== "doubles" && value.sourceParticipantType !== "team")
+    || !isRecord(value.rankRange)
+    || typeof value.rankRange.min !== "number"
+    || typeof value.rankRange.max !== "number"
+    || !Number.isInteger(value.rankRange.min)
+    || !Number.isInteger(value.rankRange.max)
+    || !Array.isArray(value.participants)
+    || typeof value.createdAt !== "string"
+    || typeof value.updatedAt !== "string"
+    || typeof value.tournamentId !== "string") {
+    throw new ImportDataError("IMPORT_INVALID_TOURNAMENT", "リーグ連携情報の形式が不正です。");
+  }
+
+  return {
+    tournamentId: value.tournamentId,
+    kind: "league-to-tournament",
+    schemaVersion: 1,
+    source: {
+      leagueId: value.source.leagueId,
+      leagueUpdatedAt: value.source.leagueUpdatedAt,
+      matchSelectionStatus: value.source.matchSelectionStatus,
+    },
+    sourceParticipantType: value.sourceParticipantType,
+    sourceGroupCount: typeof value.sourceGroupCount === "number" ? value.sourceGroupCount : undefined,
+    sourceGroupSizes: Array.isArray(value.sourceGroupSizes)
+      && value.sourceGroupSizes.every((size): size is number => typeof size === "number" && Number.isInteger(size) && size >= 0)
+      ? [...value.sourceGroupSizes]
+      : undefined,
+    rankRange: { min: value.rankRange.min, max: value.rankRange.max },
+    drawSizeMode: value.drawSizeMode === "auto" || value.drawSizeMode === "manual" ? value.drawSizeMode : undefined,
+    participants: value.participants.map((participant, index) => coerceIntegrationParticipant(participant, index)),
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  };
+}
+
+function coerceIntegrationParticipant(value: unknown, index: number): TournamentIntegrationParticipant {
+  if (!isRecord(value) || typeof value.tournamentEntrantId !== "string" || !value.tournamentEntrantId) {
+    throw new ImportDataError("IMPORT_INVALID_TOURNAMENT", `リーグ連携情報の参加者${index + 1}が不正です。`);
+  }
+  return {
+    tournamentEntrantId: value.tournamentEntrantId,
+    sourceParticipantId: coerceString(value.sourceParticipantId),
+    sourceGroupId: coerceString(value.sourceGroupId),
+    sourceGroupName: coerceString(value.sourceGroupName),
+    sourceGroupOrder: typeof value.sourceGroupOrder === "number" ? value.sourceGroupOrder : undefined,
+    groupKey: coerceString(value.groupKey),
+    groupLabel: coerceString(value.groupLabel),
+    rank: typeof value.rank === "number" ? value.rank : undefined,
+    rankOrigin: value.rankOrigin === "league" || value.rankOrigin === "tournament-manual" ? value.rankOrigin : undefined,
   };
 }
 

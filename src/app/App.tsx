@@ -100,12 +100,13 @@ function GuardedTournamentStep({
   const { id } = useParams();
   const location = useLocation();
   const tournament = useTournament(id);
+  const { getTournamentIntegration } = useTournaments();
 
   if (!tournament) {
     return children;
   }
 
-  const access = getTournamentStepAccess(tournament, step);
+  const access = getTournamentStepAccess(tournament, step, getTournamentIntegration(tournament.id));
 
   if (!access.canEnter) {
     const redirectStep = access.redirectStep ?? "basic";

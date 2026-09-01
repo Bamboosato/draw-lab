@@ -23,13 +23,13 @@ export function JsonImportPage() {
   const processingRef = useRef(false);
   const validation = useMemo(
     () => parsed.state === "success" && parsed.kind === "tournament"
-      ? validateTournamentForUi(parsed.tournament)
+      ? validateTournamentForUi(parsed.tournament, parsed.integration)
       : { errors: [], warnings: [] },
     [parsed],
   );
   const stats = useMemo(
     () => parsed.state === "success" && parsed.kind === "tournament"
-      ? getEntrantStats(parsed.tournament)
+      ? getEntrantStats(parsed.tournament, parsed.integration)
       : undefined,
     [parsed],
   );
@@ -86,7 +86,7 @@ export function JsonImportPage() {
     setConfirmRestore(false);
     setRestoreError(undefined);
     try {
-      await replaceAllTournaments(backup.tournaments);
+      await replaceAllTournaments(backup.tournaments, backup.integrations);
       navigate("/");
     } catch (error) {
       setRestoreError(error instanceof Error ? error.message : "全大会の復元に失敗しました。");
@@ -172,7 +172,7 @@ export function JsonImportPage() {
             title="解析した個別大会を追加"
             disabled={interactionDisabled || validation.errors.length > 0}
             onClick={() => {
-              importTournament(parsed.tournament);
+              importTournament(parsed.tournament, parsed.integration);
               navigate("/");
             }}
           >

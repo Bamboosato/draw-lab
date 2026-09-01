@@ -7,7 +7,13 @@ import {
   transactionToPromise,
 } from "./appDatabase";
 
-export { DATABASE_NAME, DATABASE_VERSION, METADATA_STORE_NAME, TOURNAMENT_STORE_NAME } from "./appDatabase";
+export {
+  DATABASE_NAME,
+  DATABASE_VERSION,
+  METADATA_STORE_NAME,
+  TOURNAMENT_INTEGRATION_STORE_NAME,
+  TOURNAMENT_STORE_NAME,
+} from "./appDatabase";
 
 type MetadataRecord = {
   key: string;

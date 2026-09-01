@@ -17,19 +17,23 @@ export function PreviewPage() {
   const navigate = useViewTransitionNavigate();
   const { id } = useParams();
   const tournament = useTournament(id);
-  const { updateTournament } = useTournaments();
+  const { updateTournament, getTournamentIntegration } = useTournaments();
   const [showIssues, setShowIssues] = useState(false);
-  const validation = useMemo(() => tournament ? validateTournamentForUi(tournament) : { errors: [], warnings: [] }, [tournament]);
+  const integration = tournament ? getTournamentIntegration(tournament.id) : undefined;
+  const validation = useMemo(
+    () => tournament ? validateTournamentForUi(tournament, integration) : { errors: [], warnings: [] },
+    [integration, tournament],
+  );
 
   if (!tournament) {
     return <section className="empty-state"><h2>トーナメントが見つかりません。</h2></section>;
   }
 
-  const drawCurrent = isTournamentDrawCurrent(tournament);
+  const drawCurrent = isTournamentDrawCurrent(tournament, integration);
 
   const regenerate = (): void => {
     setShowIssues(true);
-    const result = generateTournamentDraw(tournament, createRandomSeed());
+    const result = generateTournamentDraw(tournament, createRandomSeed(), integration);
 
     if (result.validation.errors.length > 0) {
       return;

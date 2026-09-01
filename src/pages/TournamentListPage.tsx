@@ -12,13 +12,17 @@ import {
   type TournamentSort,
 } from "../app/tournamentListSort";
 import { downloadAllTournaments, downloadTournament } from "../app/tournamentPersistence";
+import { createLeagueToTournament } from "../app/leagueTournamentAdapter";
 import { isTournamentDrawCurrent } from "../app/tournamentModel";
 import { useTournaments } from "../app/TournamentProvider";
+import { useLeagues } from "../app/LeagueProvider";
 import { CompactSummary } from "../components/CompactSummary";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { LeagueTournamentCreateDialog } from "../components/LeagueTournamentCreateDialog";
 import { OverflowMenu, type OverflowMenuItem } from "../components/OverflowMenu";
 import { SortableHeader } from "../components/SortableHeader";
 import type { Tournament } from "../domain/types";
+import type { TournamentIntegrationRecord } from "../domain/leagueTournamentTypes";
 
 export function TournamentListPage() {
   const navigate = useViewTransitionNavigate();
@@ -26,11 +30,15 @@ export function TournamentListPage() {
     createTournament,
     deleteTournament,
     duplicateTournament,
+    updateTournamentWithIntegration,
     storageError,
     storageStatus,
     tournaments,
+    getTournamentIntegration,
   } = useTournaments();
+  const { leagues } = useLeagues();
   const [deleteTargetId, setDeleteTargetId] = useState<string | undefined>();
+  const [leagueCreateDialogOpen, setLeagueCreateDialogOpen] = useState(false);
   const [sort, setSort] = useState<TournamentSort>(DEFAULT_TOURNAMENT_SORT);
   const deleteTarget = tournaments.find((tournament) => tournament.id === deleteTargetId);
   const sortedTournaments = useMemo(() => sortTournaments(tournaments, sort), [sort, tournaments]);
@@ -57,7 +65,18 @@ export function TournamentListPage() {
             triggerLabel="トーナメント一覧のその他の操作"
             disabled={!storageReady}
             menuWidth={264}
-            sections={[
+              sections={[
+              {
+                label: "作成",
+                items: [
+                  {
+                    label: "リーグ表から作成",
+                    title: "リーグ表の参加者名簿からトーナメントを作成",
+                    icon: "basic",
+                    onSelect: () => setLeagueCreateDialogOpen(true),
+                  },
+                ],
+              },
               {
                 label: "バックアップ",
                 items: [
@@ -66,7 +85,7 @@ export function TournamentListPage() {
                     title: "全大会をファイルへバックアップ",
                     icon: "backup",
                     disabled: tournaments.length === 0,
-                    onSelect: () => downloadAllTournaments(tournaments),
+                    onSelect: () => downloadAllTournaments(tournaments, integrationsForExport(tournaments, getTournamentIntegration)),
                   },
                 ],
               },
@@ -90,8 +109,8 @@ export function TournamentListPage() {
         ariaLabel="トーナメント概要"
         items={[
           { label: "全トーナメント", value: String(tournaments.length) },
-          { label: "生成済み", value: String(tournaments.filter(isTournamentDrawCurrent).length) },
-          { label: "編集中", value: String(tournaments.filter((item) => !isTournamentDrawCurrent(item)).length) },
+          { label: "生成済み", value: String(tournaments.filter((item) => isTournamentDrawCurrent(item, getTournamentIntegration(item.id))).length) },
+          { label: "編集中", value: String(tournaments.filter((item) => !isTournamentDrawCurrent(item, getTournamentIntegration(item.id))).length) },
         ]}
       />
 
@@ -148,7 +167,9 @@ export function TournamentListPage() {
             </thead>
             <tbody>
               {sortedTournaments.map((tournament) => {
-                const drawCurrent = isTournamentDrawCurrent(tournament);
+                const integration = getTournamentIntegration(tournament.id);
+                const sourceLeague = integration ? leagues.find((league) => league.id === integration.source.leagueId) : undefined;
+                const drawCurrent = isTournamentDrawCurrent(tournament, integration);
                 const matchTypeLabel = tournament.matchType === "doubles"
                   ? "ダブルス"
                   : tournament.matchType === "team" ? "チーム" : "シングルス";
@@ -157,6 +178,7 @@ export function TournamentListPage() {
                   <td>
                     <strong title={tournament.title || "無題のトーナメント"}>{tournament.title || "無題のトーナメント"}</strong>
                     <span className="muted-line">{tournament.venue || "会場未設定"}</span>
+                    {integration ? <span className="muted-line">リーグ: {sourceLeague?.title || "不明"} / {integration.rankRange.min}-{integration.rankRange.max}位</span> : null}
                   </td>
                   <td
                     className="tournament-event-cell"
@@ -167,7 +189,7 @@ export function TournamentListPage() {
                   </td>
                   <td>{tournament.date || "-"}</td>
                   <td>{tournament.drawSize}</td>
-                  <td><StatusBadge tournament={tournament} /></td>
+                  <td><StatusBadge tournament={tournament} integration={integration} /></td>
                   <td>{formatDateTime(tournament.updatedAt)}</td>
                   <td>
                     <div className="inline-actions">
@@ -194,7 +216,7 @@ export function TournamentListPage() {
                             }
                           });
                         }}
-                        onExport={() => downloadTournament(tournament)}
+                        onExport={() => downloadTournament(tournament, integration)}
                         onDelete={() => setDeleteTargetId(tournament.id)}
                       />
                     </div>
@@ -218,6 +240,18 @@ export function TournamentListPage() {
             deleteTournament(deleteTarget.id);
           }
           setDeleteTargetId(undefined);
+        }}
+      />
+      <LeagueTournamentCreateDialog
+        open={leagueCreateDialogOpen}
+        leagues={leagues}
+        onCancel={() => setLeagueCreateDialogOpen(false)}
+        onConfirm={(league, rankRange) => {
+          const draft = createTournament();
+          const result = createLeagueToTournament(draft, league, rankRange);
+          updateTournamentWithIntegration(result.tournament, result.integration);
+          setLeagueCreateDialogOpen(false);
+          navigate(`/tournaments/${draft.id}/edit/basic`);
         }}
       />
     </div>
@@ -317,11 +351,20 @@ function getEditStepMenuPresentation(step: TournamentEditStep): Pick<OverflowMen
   }
 }
 
-function StatusBadge({ tournament }: { tournament: Tournament }) {
-  const drawCurrent = isTournamentDrawCurrent(tournament);
+function StatusBadge({ tournament, integration }: { tournament: Tournament; integration?: TournamentIntegrationRecord }) {
+  const drawCurrent = isTournamentDrawCurrent(tournament, integration);
   const label = drawCurrent ? "生成済" : "未生成";
 
   return <span className={`status-badge ${drawCurrent ? "generated" : "draft"}`}>{label}</span>;
+}
+
+function integrationsForExport(
+  tournaments: readonly Tournament[],
+  getIntegration: (tournamentId: string) => TournamentIntegrationRecord | undefined,
+): TournamentIntegrationRecord[] {
+  return tournaments
+    .map((tournament) => getIntegration(tournament.id))
+    .filter((integration): integration is TournamentIntegrationRecord => Boolean(integration));
 }
 
 function formatDateTime(value: string): string {

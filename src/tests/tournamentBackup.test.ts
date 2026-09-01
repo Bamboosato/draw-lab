@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Tournament } from "../domain/types";
 import { isTournamentDrawCurrent } from "../app/tournamentModel";
+import { createLeagueToTournament } from "../app/leagueTournamentAdapter";
+import { createDefaultLeague } from "../app/leagueModel";
 import {
   parseJsonImport,
   serializeAllTournaments,
@@ -151,6 +153,34 @@ describe("tournament JSON backup", () => {
       team1: "Affiliation A",
     });
     expect(isTournamentDrawCurrent(result.tournament)).toBe(true);
+  });
+
+  it("round-trips league source, rank range, and manual placement metadata with remapped IDs", () => {
+    const league = {
+      ...createDefaultLeague(),
+      id: "league-source",
+      participantType: "team" as const,
+      participants: [{
+        id: "league-participant",
+        displayName: "Team A",
+        participantType: "team" as const,
+        memberNames: ["A1"],
+        team: "Affiliation",
+        selectionStatus: "selected" as const,
+      }],
+      selection: { mode: "all" as const, selectedParticipantIds: ["league-participant"], reserveParticipantIds: [] },
+      matchSelectionStatus: "confirmed" as const,
+    };
+    const linked = createLeagueToTournament({ ...createTournament("linked-source"), matchType: "team", entrants: [] }, league, { min: 1, max: 1 });
+    const text = serializeTournament(linked.tournament, "2026-02-01T00:00:00.000Z", linked.integration);
+    const result = parseJsonImport(text, "2026-02-02T00:00:00.000Z");
+
+    expect(result.state).toBe("success");
+    if (result.state !== "success" || result.kind !== "tournament") return;
+    expect(result.integration?.source.leagueId).toBe("league-source");
+    expect(result.integration?.rankRange).toEqual({ min: 1, max: 1 });
+    expect(result.integration?.participants[0]?.tournamentEntrantId).toBe(result.tournament.entrants[0]?.id);
+    expect(result.integration?.participants[0]?.tournamentEntrantId).not.toBe(linked.integration.participants[0]?.tournamentEntrantId);
   });
 });
 

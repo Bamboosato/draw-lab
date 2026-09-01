@@ -10,6 +10,7 @@ import {
   parseEntrantsFromText,
   validateTournamentForUi,
 } from "../app/tournamentModel";
+import { syncTournamentIntegrationParticipants, updateTournamentIntegrationPlacement } from "../app/leagueTournamentAdapter";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { CompactSummary } from "../components/CompactSummary";
@@ -21,7 +22,12 @@ export function EntrantsPage() {
   const navigate = useViewTransitionNavigate();
   const { id } = useParams();
   const tournament = useTournament(id);
-  const { updateTournament } = useTournaments();
+  const {
+    updateTournament,
+    updateTournamentWithIntegration,
+    getTournamentIntegration,
+    updateTournamentIntegration,
+  } = useTournaments();
   const [pasteText, setPasteText] = useState("");
   const [checked, setChecked] = useState(false);
   const [warningConfirmOpen, setWarningConfirmOpen] = useState(false);
@@ -33,8 +39,12 @@ export function EntrantsPage() {
     setShowRosterDetails(false);
   }, [tournament?.id, tournament?.drawSize, tournament?.matchType]);
 
-  const validation = useMemo(() => tournament ? validateTournamentForUi(tournament) : { errors: [], warnings: [] }, [tournament]);
-  const stats = useMemo(() => tournament ? getEntrantStats(tournament) : undefined, [tournament]);
+  const integration = tournament ? getTournamentIntegration(tournament.id) : undefined;
+  const validation = useMemo(
+    () => tournament ? validateTournamentForUi(tournament, integration) : { errors: [], warnings: [] },
+    [integration, tournament],
+  );
+  const stats = useMemo(() => tournament ? getEntrantStats(tournament, integration) : undefined, [integration, tournament]);
 
   if (!tournament) {
     return <section className="empty-state"><h2>トーナメントが見つかりません。</h2></section>;
@@ -43,6 +53,18 @@ export function EntrantsPage() {
   const rows = tournament.entrants;
   const isDoubles = tournament.matchType === "doubles";
   const isTeam = tournament.matchType === "team";
+  const isLeagueLinked = Boolean(integration);
+  const pastePlaceholder = isLeagueLinked
+    ? isTeam
+      ? "No, シード, リーググループ, リーグ順位, チーム名, メンバー（/区切り）, 所属チーム, 地区, ランキング"
+      : isDoubles
+      ? "No, シード, リーググループ, リーグ順位, 選手名1, 選手名2, 所属チーム1, 所属チーム2, 同チーム扱い, 地区, ランキング"
+      : "No, シード, リーググループ, リーグ順位, 選手名, 所属チーム, 地区, ランキング"
+    : isTeam
+    ? "No, シード, チーム名, メンバー（/区切り）, 所属チーム, 地区, ランキング"
+    : isDoubles
+    ? "No, シード, 選手名1, 選手名2, 所属チーム1, 所属チーム2, 同チーム扱い, 地区, ランキング"
+    : "No, シード, 選手名, 所属チーム, 地区, ランキング";
   const defaultVisibleRowCount = getVisibleEntrantRowCount(rows, tournament.drawSize);
   const visibleRowCount = Math.max(defaultVisibleRowCount, manualVisibleRowCount);
   const visibleRows = rows.slice(0, visibleRowCount);
@@ -63,11 +85,21 @@ export function EntrantsPage() {
   );
 
   const updateEntrants = (entrants: Entrant[]): void => {
-    updateTournament(applyEntrantsUpdate(tournament, entrants));
+    const next = applyEntrantsUpdate(tournament, entrants, integration);
+    if (integration) {
+      updateTournamentWithIntegration(next, syncTournamentIntegrationParticipants(integration, entrants));
+      return;
+    }
+    updateTournament(next);
   };
 
   const updateEntrant = (entrantId: string, patch: Partial<Entrant>): void => {
     updateEntrants(rows.map((entrant) => entrant.id === entrantId ? { ...entrant, ...patch } : entrant));
+  };
+
+  const updatePlacement = (entrantId: string, patch: Parameters<typeof updateTournamentIntegrationPlacement>[2]): void => {
+    if (!integration) return;
+    updateTournamentIntegration(updateTournamentIntegrationPlacement(integration, entrantId, patch));
   };
 
   const addVisibleRow = (): void => {
@@ -105,7 +137,7 @@ export function EntrantsPage() {
         <p className="page-description">ExcelまたはスプレッドシートからのTSV/CSV貼り付けにも対応します。</p>
         <div className="button-row no-print">
           <button type="button" className="button secondary" title="名簿の入力行を追加" onClick={addVisibleRow}>行追加</button>
-          <button type="button" className="button secondary" title="空の名簿行を削除" onClick={() => updateTournament(applyEntrantsUpdate(tournament, compactTournament(tournament).entrants))}>空行削除</button>
+          <button type="button" className="button secondary" title="空の名簿行を削除" onClick={() => updateEntrants(compactTournament(tournament).entrants)}>空行削除</button>
           <button type="button" className="button secondary" title="名簿の入力内容をチェック" onClick={() => setChecked(true)}>入力チェック</button>
         </div>
       </section>
@@ -154,16 +186,17 @@ export function EntrantsPage() {
             <tr>
               <th>No.</th>
               <th>シード</th>
-              <th>{renderRequiredHeader(isTeam ? "チーム名" : isDoubles ? "選手名1" : "選手名")}</th>
-              {isTeam ? <th>メンバー（/区切り）</th> : isDoubles ? <th>{renderRequiredHeader("選手名2")}</th> : null}
-              <th className="roster-team-boundary-column">
+              {isLeagueLinked ? <th colSpan={2} className="league-result-heading">リーグ結果</th> : null}
+              <th className={isDoubles ? "roster-doubles-player-column" : undefined}>{renderRequiredHeader(isTeam ? "チーム名" : isDoubles ? "選手名1" : "選手名")}</th>
+              {isTeam ? <th>メンバー（/区切り）</th> : isDoubles ? <th className="roster-doubles-player-column">{renderRequiredHeader("選手名2")}</th> : null}
+              <th className={`roster-team-boundary-column${isDoubles ? " roster-doubles-team-column" : ""}`}>
                 <span className="roster-team-heading">
                   {isDoubles ? "所属チーム1" : "所属チーム"}
                   {!isDoubles ? rosterDetailsToggle : null}
                 </span>
               </th>
               {isDoubles ? (
-                <th className="roster-team-boundary-column">
+                <th className="roster-team-boundary-column roster-doubles-team-column">
                   <span className="roster-team-heading">
                     所属チーム2
                     {rosterDetailsToggle}
@@ -171,7 +204,7 @@ export function EntrantsPage() {
                 </th>
               ) : null}
               {isDoubles ? <th className="roster-detail-column same-team-group-column">同チーム扱い</th> : null}
-              <th className="roster-detail-column">地区</th>
+              <th className="roster-detail-column roster-region-column">地区</th>
               <th className="roster-detail-column ranking-column">ランキング</th>
               <th>操作</th>
             </tr>
@@ -187,7 +220,35 @@ export function EntrantsPage() {
                     onChange={(event) => updateEntrant(entrant.id, { seedNo: event.target.value })}
                   />
                 </td>
-                <td>
+                {isLeagueLinked ? (
+                  <>
+                    <td className="league-group-column">
+                      <input
+                        aria-label={`${index + 1} リーググループ`}
+                        value={integration?.participants.find((participant) => participant.tournamentEntrantId === entrant.id)?.groupLabel
+                          ?? integration?.participants.find((participant) => participant.tournamentEntrantId === entrant.id)?.groupKey
+                          ?? ""}
+                        onChange={(event) => updatePlacement(entrant.id, {
+                          groupKey: event.target.value.trim() || undefined,
+                          groupLabel: event.target.value.trim() || undefined,
+                        })}
+                      />
+                    </td>
+                    <td className="league-rank-column">
+                      <input
+                        aria-label={`${index + 1} リーグ順位`}
+                        inputMode="numeric"
+                        min={1}
+                        value={integration?.participants.find((participant) => participant.tournamentEntrantId === entrant.id)?.rank ?? ""}
+                        onChange={(event) => updatePlacement(entrant.id, {
+                          rank: normalizeRankInput(event.target.value),
+                          rankOrigin: "tournament-manual",
+                        })}
+                      />
+                    </td>
+                  </>
+                ) : null}
+                <td className={isDoubles ? "roster-doubles-player-column" : undefined}>
                   <input
                     aria-label={`${index + 1} ${isTeam ? "チーム名" : isDoubles ? "選手名1" : "選手名"}`}
                     value={isTeam ? entrant.teamName ?? "" : entrant.player1Name}
@@ -207,18 +268,18 @@ export function EntrantsPage() {
                     />
                   </td>
                 ) : isDoubles ? (
-                  <td>
+                  <td className="roster-doubles-player-column">
                     <input
                       value={entrant.player2Name ?? ""}
                       onChange={(event) => updateEntrant(entrant.id, { player2Name: event.target.value })}
                     />
                   </td>
                 ) : null}
-                <td>
+                <td className={isDoubles ? "roster-doubles-team-column" : undefined}>
                   <input value={entrant.team1 ?? ""} onChange={(event) => updateEntrant(entrant.id, { team1: event.target.value })} />
                 </td>
                 {isDoubles ? (
-                  <td>
+                  <td className="roster-doubles-team-column">
                     <input value={entrant.team2 ?? ""} onChange={(event) => updateEntrant(entrant.id, { team2: event.target.value })} />
                   </td>
                 ) : null}
@@ -231,7 +292,7 @@ export function EntrantsPage() {
                     />
                   </td>
                 ) : null}
-                <td className="roster-detail-column">
+                <td className="roster-detail-column roster-region-column">
                   <input value={entrant.region ?? ""} onChange={(event) => updateEntrant(entrant.id, { region: event.target.value })} />
                 </td>
                 <td className="roster-detail-column ranking-column">
@@ -258,11 +319,7 @@ export function EntrantsPage() {
           <textarea
             value={pasteText}
             onChange={(event) => setPasteText(event.target.value)}
-            placeholder={isTeam
-              ? "No, シード, チーム名, メンバー（/区切り）, 所属チーム, 地区, ランキング"
-              : isDoubles
-              ? "No, シード, 選手名1, 選手名2, 所属チーム1, 所属チーム2, 同チーム扱い, 地区, ランキング"
-              : "No, シード, 選手名, 所属チーム, 地区, ランキング"}
+            placeholder={pastePlaceholder}
           />
         </label>
         <div className="button-row">
@@ -323,4 +380,11 @@ function renderRequiredHeader(label: string) {
 
 function normalizeRankingInput(value: string): string {
   return value.replace(/\D/g, "").slice(0, 4);
+}
+
+function normalizeRankInput(value: string): number | undefined {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return undefined;
+  const rank = Number(digits);
+  return Number.isInteger(rank) && rank >= 1 ? rank : undefined;
 }

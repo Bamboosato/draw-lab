@@ -10,9 +10,11 @@ import type {
   Tournament,
   ValidationResult,
 } from "../domain/types";
+import type { TournamentIntegrationRecord } from "../domain/leagueTournamentTypes";
 import { VALID_DRAW_SIZES, VALID_SEED_COUNTS } from "../domain/types";
 import { DEFAULT_DRAW_OUTPUT_OPTIONS, getDrawOutputOptions } from "../domain/outputOptions";
 import { getValidEntrants, isEntrantCompletelyEmpty, validateTournament } from "../domain/validation";
+import { getLeagueTournamentScope, validateLeagueTournament } from "./leagueTournamentPlacement";
 
 export const DRAW_SIZES: DrawSize[] = [...VALID_DRAW_SIZES];
 export const SEED_COUNTS = [...VALID_SEED_COUNTS];
@@ -142,29 +144,42 @@ export function mergeEntrantsIntoEmptyRows(
   return [...merged, ...remaining];
 }
 
-export function applyBasicInfoPatch(tournament: Tournament, patch: Partial<Tournament>): Tournament {
-  const baseline = withGenerationInputSignature(tournament);
-  return refreshGeneratedDrawAfterChange(baseline, { ...baseline, ...patch });
+export function applyBasicInfoPatch(
+  tournament: Tournament,
+  patch: Partial<Tournament>,
+  integration?: TournamentIntegrationRecord,
+): Tournament {
+  const baseline = withGenerationInputSignature(tournament, integration);
+  return refreshGeneratedDrawAfterChange(baseline, { ...baseline, ...patch }, integration);
 }
 
-export function applyEntrantsUpdate(tournament: Tournament, entrants: Entrant[]): Tournament {
-  const baseline = withGenerationInputSignature(tournament);
-  return refreshGeneratedDrawAfterChange(baseline, { ...baseline, entrants });
+export function applyEntrantsUpdate(
+  tournament: Tournament,
+  entrants: Entrant[],
+  integration?: TournamentIntegrationRecord,
+): Tournament {
+  const baseline = withGenerationInputSignature(tournament, integration);
+  return refreshGeneratedDrawAfterChange(baseline, { ...baseline, entrants }, integration);
 }
 
-export function applyOptionsPatch(tournament: Tournament, patch: Partial<DrawOptions>): Tournament {
-  const baseline = withGenerationInputSignature(tournament);
+export function applyOptionsPatch(
+  tournament: Tournament,
+  patch: Partial<DrawOptions>,
+  integration?: TournamentIntegrationRecord,
+): Tournament {
+  const baseline = withGenerationInputSignature(tournament, integration);
   return refreshGeneratedDrawAfterChange(baseline, {
     ...baseline,
     options: { ...baseline.options, ...patch },
-  });
+  }, integration);
 }
 
 export function applyOutputOptionsPatch(
   tournament: Tournament,
   patch: Partial<DrawOutputOptions>,
+  integration?: TournamentIntegrationRecord,
 ): Tournament {
-  const baseline = withGenerationInputSignature(tournament);
+  const baseline = withGenerationInputSignature(tournament, integration);
 
   return {
     ...baseline,
@@ -172,7 +187,10 @@ export function applyOutputOptionsPatch(
   };
 }
 
-export function createGenerationInputSignature(tournament: Tournament): string {
+export function createGenerationInputSignature(
+  tournament: Tournament,
+  integration?: TournamentIntegrationRecord,
+): string {
   return JSON.stringify({
     version: 1,
     matchType: tournament.matchType,
@@ -180,10 +198,23 @@ export function createGenerationInputSignature(tournament: Tournament): string {
     seedCount: tournament.seedCount,
     entrants: toEntrantDrawSignature(tournament.entrants),
     options: toDrawOptionsSignature(tournament.options),
+    integration: integration ? {
+      source: integration.source,
+      sourceGroupCount: integration.sourceGroupCount,
+      sourceGroupSizes: integration.sourceGroupSizes,
+      rankRange: integration.rankRange,
+      participants: integration.participants.map((participant) => ({
+        tournamentEntrantId: participant.tournamentEntrantId,
+        groupKey: participant.groupKey,
+        groupLabel: participant.groupLabel,
+        rank: participant.rank,
+        rankOrigin: participant.rankOrigin,
+      })),
+    } : undefined,
   });
 }
 
-export function isTournamentDrawCurrent(tournament: Tournament): boolean {
+export function isTournamentDrawCurrent(tournament: Tournament, integration?: TournamentIntegrationRecord): boolean {
   const generatedDraw = tournament.generatedDraw;
 
   if (!generatedDraw) {
@@ -191,11 +222,14 @@ export function isTournamentDrawCurrent(tournament: Tournament): boolean {
   }
 
   return generatedDraw.generationInputSignature === undefined
-    || generatedDraw.generationInputSignature === createGenerationInputSignature(tournament);
+    || generatedDraw.generationInputSignature === createGenerationInputSignature(tournament, integration);
 }
 
-export function validateTournamentForUi(tournament: Tournament): ValidationResult {
-  const validation = validateTournament(tournament);
+export function validateTournamentForUi(
+  tournament: Tournament,
+  integration?: TournamentIntegrationRecord,
+): ValidationResult {
+  const validation = integration ? validateLeagueTournament(tournament, integration) : validateTournament(tournament);
 
   return {
     errors: validation.errors,
@@ -203,9 +237,13 @@ export function validateTournamentForUi(tournament: Tournament): ValidationResul
   };
 }
 
-export function generateTournamentDraw(tournament: Tournament, seedOverride?: string): GenerateTournamentResult {
+export function generateTournamentDraw(
+  tournament: Tournament,
+  seedOverride?: string,
+  integration?: TournamentIntegrationRecord,
+): GenerateTournamentResult {
   const now = new Date().toISOString();
-  const validation = validateTournament(tournament);
+  const validation = integration ? validateLeagueTournament(tournament, integration) : validateTournament(tournament);
 
   if (validation.errors.length > 0) {
     return {
@@ -215,10 +253,12 @@ export function generateTournamentDraw(tournament: Tournament, seedOverride?: st
   }
 
   const randomSeed = seedOverride ?? tournament.options.randomSeed ?? createRandomSeed();
+  const scope = integration ? getLeagueTournamentScope(tournament, integration) : undefined;
   const result = generateDraw({
-    tournament,
+    tournament: scope?.tournament ?? tournament,
     randomSeed,
     now,
+    placementContext: scope?.placementContext,
   });
 
   if (!result.draw) {
@@ -237,7 +277,7 @@ export function generateTournamentDraw(tournament: Tournament, seedOverride?: st
   };
   const generatedDraw = {
     ...result.draw,
-    generationInputSignature: createGenerationInputSignature(generatedTournament),
+    generationInputSignature: createGenerationInputSignature(generatedTournament, integration),
   };
 
   return {
@@ -251,7 +291,7 @@ export function generateTournamentDraw(tournament: Tournament, seedOverride?: st
   };
 }
 
-export function getEntrantStats(tournament: Tournament): {
+export function getEntrantStats(tournament: Tournament, integration?: TournamentIntegrationRecord): {
   activeEntrantCount: number;
   hasEntrantOverflow: boolean;
   byeCount: number | undefined;
@@ -259,9 +299,12 @@ export function getEntrantStats(tournament: Tournament): {
   seedAssignmentStatus: "matched" | "shortage" | "excess";
 } {
   const compact = compactTournament(tournament);
-  const activeEntrantCount = getValidEntrants(compact.entrants, compact.matchType).length;
+  const scopedEntrants = integration
+    ? getLeagueTournamentScope(compact, integration).eligibleEntrants
+    : getValidEntrants(compact.entrants, compact.matchType);
+  const activeEntrantCount = scopedEntrants.length;
   const hasEntrantOverflow = activeEntrantCount > compact.drawSize;
-  const seedAssignedCount = compact.entrants.filter(
+  const seedAssignedCount = scopedEntrants.filter(
     (entrant) => entrant.seedNo !== undefined && String(entrant.seedNo).trim() !== "",
   ).length;
   const seedAssignmentStatus = seedAssignedCount < compact.seedCount
@@ -283,7 +326,7 @@ export function isEntrantEmpty(entrant: Entrant): boolean {
   return isEntrantCompletelyEmpty(entrant);
 }
 
-function withGenerationInputSignature(tournament: Tournament): Tournament {
+function withGenerationInputSignature(tournament: Tournament, integration?: TournamentIntegrationRecord): Tournament {
   if (!tournament.generatedDraw) {
     return tournament;
   }
@@ -302,6 +345,7 @@ function withGenerationInputSignature(tournament: Tournament): Tournament {
   if (
     tournament.generatedDraw.generationInputSignature !== undefined
     && normalizedTournament === tournament
+    && tournament.generatedDraw.generationInputSignature === createGenerationInputSignature(normalizedTournament, integration)
   ) {
     return tournament;
   }
@@ -310,12 +354,16 @@ function withGenerationInputSignature(tournament: Tournament): Tournament {
     ...normalizedTournament,
     generatedDraw: {
       ...tournament.generatedDraw,
-      generationInputSignature: createGenerationInputSignature(normalizedTournament),
+      generationInputSignature: createGenerationInputSignature(normalizedTournament, integration),
     },
   };
 }
 
-function refreshGeneratedDrawAfterChange(previous: Tournament, next: Tournament): Tournament {
+function refreshGeneratedDrawAfterChange(
+  previous: Tournament,
+  next: Tournament,
+  integration?: TournamentIntegrationRecord,
+): Tournament {
   const generatedDraw = previous.generatedDraw;
   const seed = next.options.randomSeed?.trim()
     || generatedDraw?.randomSeed
@@ -335,11 +383,11 @@ function refreshGeneratedDrawAfterChange(previous: Tournament, next: Tournament)
         },
       };
 
-  if (generatedDraw?.generationInputSignature === createGenerationInputSignature(candidate)) {
+  if (generatedDraw?.generationInputSignature === createGenerationInputSignature(candidate, integration)) {
     return candidate;
   }
 
-  const result = generateTournamentDraw(candidate, seed);
+  const result = generateTournamentDraw(candidate, seed, integration);
 
   if (!result.draw) {
     return {
