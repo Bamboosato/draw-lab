@@ -14,9 +14,9 @@ export function buildBracketViewModel(tournament: Tournament, draw: GeneratedDra
 
       return {
         position: slot.position,
-        label: buildRowLabel(entrant, slot.isBye),
-        player1Label: entrant?.player1Name,
-        player2Label: entrant?.player2Name,
+        label: buildRowLabel(entrant, normalizedTournament.matchType, slot.isBye),
+        player1Label: normalizedTournament.matchType === "team" ? undefined : entrant?.player1Name,
+        player2Label: normalizedTournament.matchType === "team" ? undefined : entrant?.player2Name,
         seedNo: slot.seedNo,
         teamLabel: entrant ? buildTeamLabel(entrant, useTeamBrackets) : undefined,
         team1Label: teamLabels.team1Label,
@@ -37,13 +37,17 @@ export function buildBracketViewModel(tournament: Tournament, draw: GeneratedDra
   };
 }
 
-function buildRowLabel(entrant: Entrant | undefined, isBye: boolean): string {
+function buildRowLabel(entrant: Entrant | undefined, matchType: Tournament["matchType"], isBye: boolean): string {
   if (isBye) {
     return "BYE";
   }
 
   if (!entrant) {
     return "";
+  }
+
+  if (matchType === "team") {
+    return entrant.teamName ?? "";
   }
 
   return [entrant.player1Name, entrant.player2Name].filter(Boolean).join(" / ");

@@ -63,9 +63,9 @@ validation / seedPlacement / byePlacement / scoring / random
 
 | 用語 | 意味 |
 |---|---|
-| Entrant | トーナメントに参加する単位。シングルスでは1選手、ダブルスでは1ペア |
-| Player | 個々の選手。PoCではEntrant内のplayer1/player2として表現する |
-| DrawSlot | ドロー上の1枠。選手またはBYEが入る |
+| Entrant | トーナメントに参加する単位。シングルスでは1選手、ダブルスでは1ペア、チームでは1チーム |
+| Player | 個々の選手。シングルス・ダブルスではEntrant内のplayer1/player2、チームではmemberNamesとして表現する |
+| DrawSlot | ドロー上の1枠。EntrantまたはBYEが入る |
 | Position | ドロー上の枠番号。1始まりを推奨 |
 | Match | 初戦などの対戦単位。PoCでは主に初戦衝突判定に使う |
 | Block | 山、準決勝ブロック、準々決勝ブロックなどの範囲 |
@@ -86,7 +86,7 @@ type Tournament = {
   date?: string;
   venue?: string;
   eventName?: string;
-  matchType: "singles" | "doubles";
+  matchType: "singles" | "doubles" | "team";
   drawSize: DrawSize;
   seedCount: number;
   entrants: Entrant[];
@@ -111,6 +111,8 @@ type Entrant = {
   seedNo?: number;
   player1Name: string;
   player2Name?: string;
+  teamName?: string;
+  memberNames?: string[];
   team1?: string;
   team2?: string;
   sameTeam?: boolean;
@@ -227,7 +229,7 @@ type GenerateDrawResult = {
 
 ```ts
 function normalizeTournament(tournament: Tournament): Tournament;
-function normalizeEntrants(entrants: Entrant[], matchType: "singles" | "doubles"): Entrant[];
+function normalizeEntrants(entrants: Entrant[], matchType: "singles" | "doubles" | "team"): Entrant[];
 ```
 
 ## 6.3 正規化ルール
@@ -241,6 +243,8 @@ function normalizeEntrants(entrants: Entrant[], matchType: "singles" | "doubles"
 | region | trimする |
 | sameTeam | 旧データ互換用。未指定の場合はfalse扱い |
 | sameTeamGroup | trimする。空文字は未指定扱い。指定時は1〜5文字 |
+| teamName | trimする。チーム種目では必須。チーム名の重複は許可する |
+| memberNames | 前後空白をtrimし、空要素を除外する。チーム種目では1名以上、上限なし |
 | id | 未設定の場合は生成する |
 
 ## 6.4 注意点
@@ -271,6 +275,8 @@ function validateTournament(tournament: Tournament): ValidationResult;
 | `ENTRANTS_EXCEED_DRAW_SIZE` | 有効参加者数 > drawSize | 参加者数がドローサイズを超えています |
 | `PLAYER_NAME_REQUIRED` | 完全空行ではないシングルス行でplayer1Nameなし | 選手名を入力してください |
 | `DOUBLES_PLAYER_MISSING` | 完全空行ではないダブルス行でplayer1Nameまたはplayer2Nameなし | ダブルスの選手名1・選手名2を入力してください |
+| `TEAM_NAME_REQUIRED` | 完全空行ではないチーム行でteamNameなし | チーム名を入力してください |
+| `TEAM_MEMBER_MISSING` | 完全空行ではないチーム行でmemberNamesが1名未満 | チームのメンバーを1名以上入力してください |
 | `SEED_NO_INVALID` | seedNoが数値でない | シード番号は数値で入力してください |
 | `SEED_COUNT_MISMATCH` | seedCountと実際のseed指定数に差がある | シード数とシード指定人数が一致していません |
 | `RANKING_INVALID` | rankingが1〜9999の整数でない | ランキングは1〜9999の整数で入力してください |
@@ -288,12 +294,15 @@ function validateTournament(tournament: Tournament): ValidationResult;
 
 - シングルス: `player1Name` が存在する
 - ダブルス: `player1Name` または `player2Name` が存在する
+- チーム: `teamName` が存在する
 
 名簿の全入力項目が空の完全空行は、保存データである `Tournament.entrants` から削除しない。検証・生成時だけ除外し、有効参加者数、BYE数、シード指定人数の計算対象に含めない。
 
 名簿入力画面の初期表示行数は `max(drawSize, 最後の非完全空行のindex + 1)` とする。これを超える末尾の完全空行は非表示にするだけで、保存データから削除しない。
 
 選手名が空でも、シード番号、所属チーム、地区、ランキングなどに入力がある行は不完全行として検証対象に含める。シングルスでは `PLAYER_NAME_REQUIRED`、ダブルスで片方または両方の選手名が不足する場合は `DOUBLES_PLAYER_MISSING` エラーとする。
+
+チーム種目では、チーム名が空の行、またはメンバーが1名未満の行を検証対象とし、それぞれ `TEAM_NAME_REQUIRED`、`TEAM_MEMBER_MISSING` エラーとする。チーム名およびメンバー名の重複は検査しない。所属チーム（`team1`）は既存の同チーム対戦回避判定に使用するが、チーム名とは別の項目として扱う。
 
 完全空行はBYEの明示指定として扱わない。BYE数は `drawSize - 有効参加者数` により自動算出する。
 

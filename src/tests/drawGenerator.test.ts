@@ -11,6 +11,19 @@ describe("generateDraw", () => {
     expect(result.draw?.slots.every((slot) => slot.entrantId && !slot.isBye)).toBe(true);
   });
 
+  it("generates a team draw using each team as one draw unit", () => {
+    const entrants = Array.from({ length: 4 }, (_, index) => makeEntrant(index + 1, {
+      player1Name: "",
+      teamName: `Team ${index + 1}`,
+      memberNames: [`Member ${index + 1}`],
+      team1: `Affiliation ${index + 1}`,
+    }));
+    const result = generateDraw(makeInput(makeTournament({ matchType: "team", drawSize: 4, entrants })));
+
+    expect(result.validation.errors).toEqual([]);
+    expect(result.draw?.slots.filter((slot) => slot.entrantId)).toHaveLength(4);
+  });
+
   it("places three BYEs for 13 entrants in a 16 draw", () => {
     const result = generateDraw(makeInput(makeTournamentWithEntrantCount(13, 16)));
 

@@ -149,6 +149,9 @@ export function TournamentListPage() {
             <tbody>
               {sortedTournaments.map((tournament) => {
                 const drawCurrent = isTournamentDrawCurrent(tournament);
+                const matchTypeLabel = tournament.matchType === "doubles"
+                  ? "ダブルス"
+                  : tournament.matchType === "team" ? "チーム" : "シングルス";
 
                 return <tr key={tournament.id}>
                   <td>
@@ -157,10 +160,10 @@ export function TournamentListPage() {
                   </td>
                   <td
                     className="tournament-event-cell"
-                    title={`${tournament.eventName || "-"}（${tournament.matchType === "doubles" ? "ダブルス" : "シングルス"}）`}
+                    title={`${tournament.eventName || "-"}（${matchTypeLabel}）`}
                   >
                     {tournament.eventName || "-"}
-                    <span className="muted-line">（{tournament.matchType === "doubles" ? "ダブルス" : "シングルス"}）</span>
+                    <span className="muted-line">（{matchTypeLabel}）</span>
                   </td>
                   <td>{tournament.date || "-"}</td>
                   <td>{tournament.drawSize}</td>

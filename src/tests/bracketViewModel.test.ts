@@ -121,4 +121,30 @@ describe("buildBracketViewModel", () => {
     expect(row.team2Label).toBeUndefined();
     expect("region" in row).toBe(false);
   });
+
+  it("uses the team name as the bracket label and keeps affiliation separate", () => {
+    const tournament = makeTournament({
+      matchType: "team",
+      entrants: [makeEntrant(1, {
+        player1Name: "",
+        teamName: "Team A",
+        memberNames: ["Member A", "Member B"],
+        team1: "Affiliation A",
+      })],
+    });
+    const draw: GeneratedDraw = {
+      id: "draw-1",
+      tournamentId: tournament.id,
+      randomSeed: "view-seed",
+      generatedAt: "2026-07-02T00:00:00.000Z",
+      slots: [{ position: 1, entrantId: "entrant-1", isBye: false }],
+    };
+
+    const row = buildBracketViewModel(tournament, draw).rows[0];
+
+    expect(row.label).toBe("Team A");
+    expect(row.player1Label).toBeUndefined();
+    expect(row.player2Label).toBeUndefined();
+    expect(row.teamLabel).toBe("Affiliation A");
+  });
 });

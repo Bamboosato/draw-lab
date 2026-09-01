@@ -93,6 +93,8 @@ export function createEmptyEntrant(index: number, matchType: MatchType): Entrant
     id: createId(`entrant-${index}`),
     player1Name: "",
     player2Name: matchType === "doubles" ? "" : undefined,
+    teamName: matchType === "team" ? "" : undefined,
+    memberNames: matchType === "team" ? [""] : undefined,
     team1: "",
     team2: matchType === "doubles" ? "" : undefined,
     sameTeam: false,
@@ -357,6 +359,8 @@ function toEntrantDrawSignature(entrants: readonly Entrant[]) {
       seedNo: normalizeSignatureValue(entrant.seedNo),
       player1Name: normalizeSignatureValue(entrant.player1Name),
       player2Name: normalizeSignatureValue(entrant.player2Name),
+      teamName: normalizeSignatureValue(entrant.teamName),
+      memberNames: (entrant.memberNames ?? []).map((memberName) => memberName.trim()),
       team1: normalizeSignatureValue(entrant.team1),
       team2: normalizeSignatureValue(entrant.team2),
       sameTeam: entrant.sameTeam === true,
@@ -489,6 +493,14 @@ function getHeaderField(header: string): keyof Entrant | "no" | undefined {
     return "player2Name";
   }
 
+  if (["team name", "teamname", "チーム名"].includes(normalized)) {
+    return "teamName";
+  }
+
+  if (["members", "member names", "membernames", "メンバー", "メンバー（/区切り）"].includes(normalized)) {
+    return "memberNames";
+  }
+
   if (["affiliation", "team", "team1", "所属", "所属チーム", "所属チーム1"].includes(normalized)) {
     return "team1";
   }
@@ -528,6 +540,13 @@ function assignByVisibleColumnOrder(
     return;
   }
 
+  if (matchType === "team") {
+    const fields = inferTeamFields(values);
+
+    values.forEach((cell, index) => assignEntrantField(entrant, fields[index], cell));
+    return;
+  }
+
   const fields = inferSinglesFields(values);
 
   values.forEach((cell, index) => assignEntrantField(entrant, fields[index], cell));
@@ -559,6 +578,14 @@ function inferDoublesFields(values: string[]): (keyof Entrant)[] {
   }
 
   return ["player1Name", "player2Name", "team1", "team2", "region", "ranking"];
+}
+
+function inferTeamFields(values: string[]): (keyof Entrant)[] {
+  if (values.length >= 6 || hasSeedColumn(values)) {
+    return ["seedNo", "teamName", "memberNames", "team1", "region", "ranking"];
+  }
+
+  return ["teamName", "memberNames", "team1", "region", "ranking"];
 }
 
 function hasSeedColumn(values: readonly string[]): boolean {
@@ -612,6 +639,11 @@ function assignEntrantField(entrant: Entrant, field: keyof Entrant | "no" | unde
 
   if (field === "sameTeamGroup") {
     entrant.sameTeamGroup = value.trim();
+    return;
+  }
+
+  if (field === "memberNames") {
+    entrant.memberNames = value.split("/").map((memberName) => memberName.trim()).filter(Boolean);
     return;
   }
 

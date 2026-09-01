@@ -29,6 +29,15 @@ describe("placement scoring", () => {
     expect(score(candidate, [placed], slots, 1)).toBeGreaterThanOrEqual(PLACEMENT_PENALTY.sameTeamFirstRound);
   });
 
+  it("uses affiliation rather than the displayed team name for team-event avoidance", () => {
+    const placed = makeEntrant(1, { player1Name: "", teamName: "Same Name", team1: "Affiliation A", region: "R1" });
+    const candidate = makeEntrant(2, { player1Name: "", teamName: "Same Name", team1: "Affiliation B", region: "R2" });
+    const slots = createEmptySlots(16);
+    slots[1].entrantId = placed.id;
+
+    expect(score(candidate, [placed], slots, 1)).toBe(0);
+  });
+
   it("adds same-team penalties when the same-team group matches", () => {
     const placed = makeEntrant(1, { team1: "A", team2: "B", sameTeamGroup: "G1", region: "R1" });
     const candidate = makeEntrant(2, { team1: "C", team2: "D", sameTeamGroup: "G1", region: "R2" });

@@ -35,6 +35,12 @@ beforeEach(() => {
 });
 
 describe("BasicInfoPage", () => {
+  it("種目区分にチームを表示する", () => {
+    const { container } = render(<BasicInfoPage />);
+
+    expect(Array.from(container.querySelectorAll("select option"), (option) => option.textContent)).toContain("チーム");
+  });
+
   it("仕様上の必須項目だけに名簿入力と同じ必須印を表示する", () => {
     const { container } = render(<BasicInfoPage />);
     const fields = Array.from(container.querySelectorAll<HTMLLabelElement>("label.field"));
