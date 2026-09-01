@@ -956,13 +956,13 @@ a {
   margin-top: -8px;
 }
 
-.tournament-restore-page > .page-heading {
+.restore-page > .page-heading {
   align-items: center;
   min-height: 0;
   padding-block: 10px;
 }
 
-.tournament-restore-page > .page-heading p {
+.restore-page > .page-heading p {
   margin: 0;
 }
 
@@ -2635,7 +2635,7 @@ a {
     margin-top: 0;
   }
 
-  .tournament-restore-page > .page-heading {
+  .restore-page > .page-heading {
     padding-block: 0;
   }
 

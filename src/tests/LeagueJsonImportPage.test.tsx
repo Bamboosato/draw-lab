@@ -39,13 +39,17 @@ beforeEach(() => {
 });
 
 describe("LeagueJsonImportPage", () => {
-  it("個別リーグを既存データへ上書きせず追加する", () => {
+  it("個別リーグを既存データへ上書きせず追加する", async () => {
     const source = { ...createDefaultLeague(), id: "imported-league", title: "取込リーグ" };
-    render(<LeagueJsonImportPage />);
+    const view = render(<LeagueJsonImportPage />);
+    const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([serializeLeague(source)], "league.json", { type: "application/json" });
 
-    fireEvent.change(screen.getByRole("textbox", { name: "JSON本文" }), {
-      target: { value: serializeLeague(source) },
-    });
+    expect(screen.getByRole("button", { name: "リーグ情報ファイルを選択" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "読込結果" })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "JSON本文" })).toBeNull();
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect((screen.getByRole("button", { name: "個別リーグを追加" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "個別リーグを追加" }));
 
     expect(importLeagueMock).toHaveBeenCalledTimes(1);
@@ -55,11 +59,12 @@ describe("LeagueJsonImportPage", () => {
 
   it("全リーグバックアップは確認後に全置換する", async () => {
     const source = { ...createDefaultLeague(), id: "backup-league", title: "復元リーグ" };
-    render(<LeagueJsonImportPage />);
+    const view = render(<LeagueJsonImportPage />);
+    const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([serializeAllLeagues([source])], "backup.json", { type: "application/json" });
 
-    fireEvent.change(screen.getByRole("textbox", { name: "JSON本文" }), {
-      target: { value: serializeAllLeagues([source]) },
-    });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect((screen.getByRole("button", { name: "全リーグを復元" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "全リーグを復元" }));
 
     expect(screen.getByRole("heading", { name: "現在の全リーグを置き換えます" })).toBeTruthy();
