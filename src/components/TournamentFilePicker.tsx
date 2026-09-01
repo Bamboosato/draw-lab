@@ -7,7 +7,12 @@ type TournamentFilePickerProps = {
   fileName?: string;
   status: FileProcessStatus;
   onFileSelected: (file: File) => void;
-  onSampleSelected: () => void;
+  onSampleSelected?: () => void;
+  title?: string;
+  ariaLabel?: string;
+  formatLabel?: string;
+  sampleButtonLabel?: string;
+  sampleButtonTitle?: string;
 };
 
 const STATUS_LABELS: Record<Exclude<FileProcessStatus, "idle">, string> = {
@@ -23,6 +28,11 @@ export function TournamentFilePicker({
   status,
   onFileSelected,
   onSampleSelected,
+  title = "大会情報ファイル",
+  ariaLabel = "大会情報ファイルを選択",
+  formatLabel = "対応形式：DrawLab大会情報ファイル（.json）",
+  sampleButtonLabel = "サンプルデータを使用",
+  sampleButtonTitle = "サンプルの大会情報を読み込む",
 }: TournamentFilePickerProps) {
   const inputId = useId();
   const hintId = useId();
@@ -89,7 +99,7 @@ export function TournamentFilePicker({
 
   return (
     <section className="file-picker-panel" aria-labelledby={`${inputId}-title`}>
-      <h2 className="file-picker-title" id={`${inputId}-title`}>大会情報ファイル</h2>
+      <h2 className="file-picker-title" id={`${inputId}-title`}>{title}</h2>
       <input
         ref={inputRef}
         id={inputId}
@@ -112,7 +122,7 @@ export function TournamentFilePicker({
         htmlFor={inputId}
         role="button"
         tabIndex={disabled ? -1 : 0}
-        aria-label="大会情報ファイルを選択"
+        aria-label={ariaLabel}
         aria-describedby={hintId}
         aria-disabled={disabled}
         onClick={(event) => {
@@ -130,7 +140,7 @@ export function TournamentFilePicker({
         <span className="file-drop-primary">ファイルをドラッグ＆ドロップ</span>
         <span className="file-drop-or">または</span>
         <span className="button secondary file-drop-button" aria-hidden="true">ファイルを選択</span>
-        <span className="file-picker-format">対応形式：DrawLab大会情報ファイル（.json）</span>
+        <span className="file-picker-format">{formatLabel}</span>
       </label>
       <p className="file-picker-auto-hint" id={hintId}>ファイルを選択すると、自動的に処理を開始します。</p>
 
@@ -154,17 +164,19 @@ export function TournamentFilePicker({
         </div>
       ) : null}
 
-      <div className="sample-data-action">
-        <button
-          type="button"
-          className="button secondary"
-          title="サンプルの大会情報を読み込む"
-          disabled={disabled}
-          onClick={onSampleSelected}
-        >
-          サンプルデータを使用
-        </button>
-      </div>
+      {onSampleSelected ? (
+        <div className="sample-data-action">
+          <button
+            type="button"
+            className="button secondary"
+            title={sampleButtonTitle}
+            disabled={disabled}
+            onClick={onSampleSelected}
+          >
+            {sampleButtonLabel}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

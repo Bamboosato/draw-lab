@@ -45,7 +45,7 @@ export function serializeAllLeagues(leagues: readonly League[], exportedAt = new
 
 export function parseLeagueJson(text: string, now = new Date().toISOString()): LeagueJsonParseResult {
   if (!text.trim()) {
-    return { state: "empty", message: "リーグJSONを読み込むと読込結果が表示されます。" };
+    return { state: "empty", message: "リーグ情報を読み込むと読込結果が表示されます。未選択時はエラーを表示しません。" };
   }
 
   try {

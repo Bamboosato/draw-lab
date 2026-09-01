@@ -94,7 +94,7 @@ export function JsonImportPage() {
   };
 
   return (
-    <div className="page-stack tournament-restore-page">
+    <div className="page-stack restore-page tournament-restore-page">
       <section className="page-heading">
         <div>
           <p>DrawLabから出力した大会情報ファイルを選択してください。ファイルの内容は表示されません。</p>
