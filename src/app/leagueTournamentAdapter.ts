@@ -74,7 +74,7 @@ export function createLeagueToTournament(
   now = new Date().toISOString(),
 ): LeagueTournamentBuildResult {
   if (!canCreateTournamentFromLeague(league)) {
-    throw new Error("対戦カードが確定しているリーグ表だけを引き継げます。");
+    throw new Error("対戦カードが確定しているリーグだけを引き継げます。");
   }
   const selectedParticipants = getSelectedLeagueParticipants(league);
   const groupByParticipantId = getGroupByParticipantId(league.groups);
@@ -132,7 +132,7 @@ export function createLeagueToTournamentSetup(
   rankRange: RankRange = { min: 1, max: 2 },
 ): LeagueToTournamentSetup {
   if (!canCreateTournamentFromLeague(league)) {
-    throw new Error("対戦カードが確定しているリーグ表だけを引き継げます。");
+    throw new Error("対戦カードが確定しているリーグだけを引き継げます。");
   }
   const groupByParticipantId = getGroupByParticipantId(league.groups);
   const calculatedStandings = calculateStandings(league.groups, league.matches, league.scoringPolicy, league.standings);

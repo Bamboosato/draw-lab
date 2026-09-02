@@ -67,7 +67,7 @@ describe("BasicInfoPage", () => {
     expect(Array.from(container.querySelectorAll("select option"), (option) => option.textContent)).toContain("チーム");
   });
 
-  it("意図: リーグ表から作成の入力順と4項目サマリーをダイアログと同じ構成で表示する", () => {
+  it("意図: リーグから作成の入力順と4項目サマリーをダイアログと同じ構成で表示する", () => {
     const sourceLeague = makeLeagueWithGroups("league-source", "元リーグ", 4);
     const linked = createLeagueToTournament(makeTournament(), sourceLeague, { min: 1, max: 2 });
     getTournamentIntegrationMock.mockReturnValue(linked.integration);
@@ -79,7 +79,7 @@ describe("BasicInfoPage", () => {
 
     expect(panel?.querySelector("select")?.value).toBe(sourceLeague.id);
     expect(panel?.querySelector("h2")).toBeNull();
-    expect(panel?.textContent).toContain("引継ぎ元のリーグ表と、このトーナメントで扱う順位区分を指定してください。");
+    expect(panel?.textContent).toContain("引継ぎ元のリーグと、このトーナメントで扱う順位区分を指定してください。");
     expect(panel?.querySelector(".compact-summary")).not.toBeNull();
     expect(panel?.querySelectorAll(".summary-metric")).toHaveLength(4);
     expect(panel?.querySelector(".summary-list")).toBeNull();
@@ -121,7 +121,7 @@ describe("BasicInfoPage", () => {
     useTournamentMock.mockReturnValue(manuallyEditedTournament);
 
     const { container } = render(<BasicInfoPage />);
-    const sourceField = getField(Array.from(container.querySelectorAll<HTMLLabelElement>("label.field")), "引継ぎ元のリーグ表");
+    const sourceField = getField(Array.from(container.querySelectorAll<HTMLLabelElement>("label.field")), "引継ぎ元のリーグ");
     fireEvent.change(sourceField.querySelector("select")!, { target: { value: replacementLeague.id } });
 
     expect(updateTournamentWithIntegrationMock).toHaveBeenCalledTimes(1);
