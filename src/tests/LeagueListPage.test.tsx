@@ -65,6 +65,7 @@ describe("LeagueListPage", () => {
     expect(screen.getAllByText("運用中")).toHaveLength(2);
     expect(screen.getByText("春季リーグ")).toBeTruthy();
     expect(screen.getByText("男子ダブルス")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "リーグ表" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "JSON出力" })).toBeNull();
   });
 

@@ -66,6 +66,10 @@ describe("LeagueDashboardPage", () => {
     const resultsPanel = document.querySelector(".league-results-stack") as HTMLElement;
     expect(screen.getByRole("tab", { name: "対戦結果" }).getAttribute("aria-selected")).toBe("true");
     expect(Array.from(resultsPanel.querySelectorAll("h2"), (heading) => heading.textContent)).toEqual(["星取表", "順位表"]);
+    expect(resultsPanel.querySelector(".league-matrix thead .league-participant-column")).toBeTruthy();
+    expect(resultsPanel.querySelector(".league-matrix tbody .league-participant-column")).toBeTruthy();
+    expect(resultsPanel.querySelector(".league-standings-table thead .league-participant-column")).toBeTruthy();
+    expect(resultsPanel.querySelector(".league-standings-table tbody .league-participant-column")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "対戦カード" }));
     expect(screen.getByRole("heading", { name: "対戦カード" })).toBeTruthy();
@@ -166,7 +170,7 @@ describe("LeagueDashboardPage", () => {
     expect(screen.getByRole("button", { name: "訂正" })).toHaveProperty("disabled", true);
   });
 
-  it("星取表では無効の対戦を無と表示する", () => {
+  it("星取表では無効の対戦をハイフンで表示し、対角セルを斜線で表示する", () => {
     const league = makeLeague();
     useLeagueMock.mockReturnValue({
       ...league,
@@ -176,8 +180,39 @@ describe("LeagueDashboardPage", () => {
     render(<LeagueDashboardPage />);
     fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
 
-    expect(screen.getAllByText("無")).toHaveLength(2);
-    expect(screen.queryByText("-")).toBeNull();
+    expect(screen.getAllByText("-")).toHaveLength(2);
+    expect(screen.queryByText("無")).toBeNull();
+    expect(document.querySelectorAll(".league-matrix-diagonal-cell")).toHaveLength(2);
+    expect(document.querySelector(".league-matrix-diagonal-line line")?.getAttribute("x1")).toBe("0");
+    expect(document.querySelector(".league-matrix-diagonal-line line")?.getAttribute("y1")).toBe("0");
+    expect(document.querySelector(".league-matrix-diagonal-line line")?.getAttribute("x2")).toBe("100");
+    expect(document.querySelector(".league-matrix-diagonal-line line")?.getAttribute("y2")).toBe("100");
+    expect(screen.queryByText("—")).toBeNull();
+  });
+
+  it("星取表では勝敗を白丸・黒丸・三角で表示する", () => {
+    const league = makeLeague();
+    useLeagueMock.mockReturnValue({
+      ...league,
+      matches: [{ ...league.matches[0], result: "participantAWin" }],
+    });
+
+    render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+
+    expect(screen.getAllByText("○")).toHaveLength(1);
+    expect(screen.getAllByText("●")).toHaveLength(1);
+
+    cleanup();
+    useLeagueMock.mockReturnValue({
+      ...league,
+      matches: [{ ...league.matches[0], result: "draw" }],
+    });
+
+    render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+
+    expect(screen.getAllByText("△")).toHaveLength(2);
   });
 
   it("フッターの戻るで対戦カード画面へ、一覧でリーグ一覧へ戻る", () => {

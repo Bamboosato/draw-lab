@@ -84,11 +84,11 @@ export function LeagueTournamentCreateDialog({
           }
         }}
       >
-        <h2 id={titleId}>リーグ表から作成</h2>
-        <p>引継ぎ元のリーグ表と、このトーナメントで扱う順位区分を指定してください。</p>
+        <h2 id={titleId}>リーグから作成</h2>
+        <p>引継ぎ元のリーグと、このトーナメントで扱う順位区分を指定してください。</p>
 
         <label className="field">
-          <span>引継ぎ元のリーグ表</span>
+          <span>引継ぎ元のリーグ</span>
           <select
             value={leagueId}
             onChange={(event) => {
@@ -104,7 +104,7 @@ export function LeagueTournamentCreateDialog({
               setMaxRank(String(nextRankRange.max));
             }}
           >
-            <option value="">リーグ表を選択してください</option>
+            <option value="">リーグを選択してください</option>
             {confirmedLeagues.map((league) => (
               <option key={league.id} value={league.id}>{league.title || "無題のリーグ"}</option>
             ))}
@@ -112,9 +112,9 @@ export function LeagueTournamentCreateDialog({
         </label>
 
         <CompactSummary
-          ariaLabel="引継ぎ元リーグ表の概要"
+          ariaLabel="引継ぎ元リーグの概要"
           items={[
-            { label: "リーグ表の状態", value: selectedLeague ? getLeagueStatusLabel(selectedLeague.status) : "" },
+            { label: "リーグの状態", value: selectedLeague ? getLeagueStatusLabel(selectedLeague.status) : "" },
             { label: "定員", value: selectedLeague ? `${selectedLeague.capacity}名` : "" },
             { label: "グループ数", value: selectedLeague ? String(selectedLeague.groups.length) : "" },
             { label: "選択済み参加者数", value: selectedLeague ? `${selectedLeague.selection.selectedParticipantIds.length}名` : "" },
@@ -147,7 +147,7 @@ export function LeagueTournamentCreateDialog({
         <p className="field-hint league-create-rank-limit-hint" aria-hidden="true">&nbsp;</p>
 
         {confirmedLeagues.length === 0 ? (
-          <p className="field-hint" role="status">対戦カード確定済みのリーグ表がありません。</p>
+          <p className="field-hint" role="status">対戦カード確定済みのリーグがありません。</p>
         ) : null}
 
         <p

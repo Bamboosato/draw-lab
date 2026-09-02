@@ -79,11 +79,11 @@ beforeEach(() => {
 });
 
 describe("TournamentListPage", () => {
-  it("意図: リーグ表から作成はダイアログで確認後にトーナメントを作成する", () => {
+  it("意図: リーグから作成はダイアログで確認後にトーナメントを作成する", () => {
     render(<TournamentListPage />);
 
     fireEvent.click(screen.getByRole("button", { name: "トーナメント一覧のその他の操作" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "予選のリーグ表からトーナメントを作成" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "予選のリーグからトーナメントを作成" }));
 
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(createTournamentMock).not.toHaveBeenCalled();
@@ -164,13 +164,13 @@ describe("TournamentListPage", () => {
     const ordinaryRow = screen.getByText(ordinaryTournament.title).closest("tr");
     expect(linkedRow).not.toBeNull();
     expect(ordinaryRow).not.toBeNull();
-    expect(within(linkedRow!).getByRole("link", { name: "引継ぎ元のリーグ表を表示" }).getAttribute("href")).toBe(
+    expect(within(linkedRow!).getByRole("link", { name: "引継ぎ元のリーグを表示" }).getAttribute("href")).toBe(
       "/leagues/league-source/dashboard",
     );
     expect(linkedRow!.querySelector("td:nth-child(2)")?.textContent).toBe("");
     expect(within(linkedRow!).queryByText(/リーグ:/)).toBeNull();
     expect(ordinaryRow!.querySelector("td:nth-child(2)")?.textContent).toBe("");
-    expect(within(ordinaryRow!).queryByRole("link", { name: "引継ぎ元のリーグ表を表示" })).toBeNull();
+    expect(within(ordinaryRow!).queryByRole("link", { name: "引継ぎ元のリーグを表示" })).toBeNull();
   });
 
   it("意図: 引継ぎ元リーグを参照できない場合は予選表示とリンクを空白にする", () => {
@@ -213,6 +213,6 @@ describe("TournamentListPage", () => {
     const row = screen.getByText(tournament.title).closest("tr");
     expect(row).not.toBeNull();
     expect(row!.querySelector("td:nth-child(2)")?.textContent).toBe("");
-    expect(within(row!).queryByRole("link", { name: "引継ぎ元のリーグ表を表示" })).toBeNull();
+    expect(within(row!).queryByRole("link", { name: "引継ぎ元のリーグを表示" })).toBeNull();
   });
 });

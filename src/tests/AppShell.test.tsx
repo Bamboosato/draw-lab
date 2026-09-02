@@ -31,6 +31,19 @@ describe("AppShell related app link", () => {
     expect(screen.getByText("対戦表作成・参加者管理")).toBeTruthy();
   });
 
+  it("リーグ一覧はリーグと表示し、リーグ表は実際の表示画面名として残す", () => {
+    render(
+      <MemoryRouter initialEntries={["/leagues"]}>
+        <AppShell>
+          <div>本文</div>
+        </AppShell>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "リーグ" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "リーグ" })).toBeTruthy();
+  });
+
   it("hides the related app section when the sidebar is collapsed", () => {
     renderAppShell();
 

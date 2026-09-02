@@ -30,7 +30,7 @@ function makeLeague(overrides: Partial<League> = {}): League {
 }
 
 describe("LeagueTournamentCreateDialog", () => {
-  it("意図: リーグ表の4項目をコンパクトサマリーで表示する", () => {
+  it("意図: 引継ぎ元リーグの4項目をコンパクトサマリーで表示する", () => {
     render(
       <LeagueTournamentCreateDialog
         open
@@ -41,7 +41,7 @@ describe("LeagueTournamentCreateDialog", () => {
     );
 
     expect((screen.getAllByRole("combobox")[0] as HTMLSelectElement).value).toBe("");
-    expect(screen.queryByText("対戦カード確定済みのリーグ表がありません。")).toBeNull();
+    expect(screen.queryByText("対戦カード確定済みのリーグがありません。")).toBeNull();
     const summary = document.querySelector(".league-create-dialog .compact-summary");
     expect(summary).not.toBeNull();
     expect(summary?.querySelectorAll(".summary-metric")).toHaveLength(4);
@@ -50,7 +50,7 @@ describe("LeagueTournamentCreateDialog", () => {
 
     fireEvent.change(screen.getAllByRole("combobox")[0]!, { target: { value: "league-source" } });
 
-    expect(screen.getByText("リーグ表の状態")).toBeTruthy();
+    expect(screen.getByText("リーグの状態")).toBeTruthy();
     expect(screen.getByText("対戦前")).toBeTruthy();
     expect(screen.getByText("4名")).toBeTruthy();
     expect(Array.from(summary?.querySelectorAll("dd") ?? [], (element) => element.textContent)).toContain("2");
@@ -144,7 +144,7 @@ describe("LeagueTournamentCreateDialog", () => {
       />,
     );
 
-    expect(screen.getByText("対戦カード確定済みのリーグ表がありません。")).toBeTruthy();
+    expect(screen.getByText("対戦カード確定済みのリーグがありません。")).toBeTruthy();
     expect((screen.getByRole("button", { name: "基本情報へ進む" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

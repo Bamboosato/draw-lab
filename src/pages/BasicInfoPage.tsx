@@ -58,7 +58,7 @@ export function BasicInfoPage() {
     const errors = [...getBasicInfoErrors(tournament)];
     if (fromLeagueMode) {
       if (!selectedLeague) {
-        errors.push("引継ぎ元のリーグ表を選択してください。");
+        errors.push("引継ぎ元のリーグを選択してください。");
       }
       if (!isValidRankRange(rankRange, rankUpperBound)) {
         errors.push(`${getRankRangeValidationMessage(rankRange, rankUpperBound)}。`);
@@ -244,11 +244,11 @@ export function BasicInfoPage() {
 
       {fromLeagueMode ? (
         <section className="settings-panel league-source-panel">
-          <p className="field-hint">引継ぎ元のリーグ表と、このトーナメントで扱う順位区分を指定してください。</p>
+          <p className="field-hint">引継ぎ元のリーグと、このトーナメントで扱う順位区分を指定してください。</p>
           <label className="field">
-            {renderRequiredLabel("引継ぎ元のリーグ表")}
+            {renderRequiredLabel("引継ぎ元のリーグ")}
             <select value={integration?.source.leagueId ?? sourceLeagueId} onChange={(event) => selectSourceLeague(event.target.value)}>
-              <option value="">リーグ表を選択してください</option>
+              <option value="">リーグを選択してください</option>
               {leagues.filter((league) => league.matchSelectionStatus === "confirmed").map((league) => (
                 <option key={league.id} value={league.id}>{league.title || "無題のリーグ"}</option>
               ))}
@@ -256,9 +256,9 @@ export function BasicInfoPage() {
           </label>
 
           <CompactSummary
-            ariaLabel="引継ぎ元リーグ表の概要"
+            ariaLabel="引継ぎ元リーグの概要"
             items={[
-              { label: "リーグ表の状態", value: selectedLeague ? getLeagueStatusLabel(selectedLeague.status) : "" },
+              { label: "リーグの状態", value: selectedLeague ? getLeagueStatusLabel(selectedLeague.status) : "" },
               { label: "定員", value: selectedLeague ? `${selectedLeague.capacity}名` : "" },
               { label: "グループ数", value: selectedLeague ? String(selectedLeague.groups.length) : "" },
               { label: "選択済み参加者数", value: selectedLeague ? `${selectedLeague.selection.selectedParticipantIds.length}名` : "" },
@@ -290,7 +290,7 @@ export function BasicInfoPage() {
           </p>
 
           {integration && selectedLeague?.updatedAt !== integration.source.leagueUpdatedAt ? (
-            <p className="field-hint" role="status">引継ぎ元のリーグ表が更新されています。必要に応じて、リーグ表から作成し直してください。</p>
+            <p className="field-hint" role="status">引継ぎ元のリーグが更新されています。必要に応じて、リーグから作成し直してください。</p>
           ) : null}
         </section>
       ) : null}

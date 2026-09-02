@@ -71,8 +71,8 @@ export function TournamentListPage() {
                 label: "作成",
                 items: [
                   {
-                    label: "リーグ表から作成",
-                    title: "予選のリーグ表からトーナメントを作成",
+                    label: "リーグから作成",
+                    title: "予選のリーグからトーナメントを作成",
                     icon: "basic",
                     onSelect: () => setLeagueCreateDialogOpen(true),
                   },
@@ -186,8 +186,8 @@ export function TournamentListPage() {
                       <a
                         className="tournament-source-link"
                         href={getLeagueStepPath(sourceLeague.id, "dashboard")}
-                        aria-label="引継ぎ元のリーグ表を表示"
-                        title={`引継ぎ元のリーグ表「${sourceLeague.title || "無題のリーグ"}」を表示`}
+                        aria-label="引継ぎ元のリーグを表示"
+                        title={`引継ぎ元のリーグ「${sourceLeague.title || "無題のリーグ"}」を表示`}
                       >
                         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
                           <path d="M8 12l4-4" />

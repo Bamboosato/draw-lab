@@ -634,10 +634,17 @@ a {
   text-align: center;
 }
 
-.league-matrix th:first-child,
-.league-matrix td:first-child {
-  min-width: 150px;
+.league-matrix .league-participant-column,
+.league-standings-table .league-participant-column {
+  width: 250px;
+  min-width: 250px;
+  background: #f8fafc;
   text-align: left;
+}
+
+.data-table.league-matrix th:not(.league-participant-column),
+.data-table.league-matrix td {
+  text-align: center;
 }
 
 .league-standings-table input {
@@ -645,33 +652,34 @@ a {
   min-width: 0;
 }
 
+.league-matrix,
 .league-standings-table {
   table-layout: fixed;
 }
 
-.league-standings-table th:first-child,
-.league-standings-table td:first-child {
-  width: 250px;
+.league-matrix .league-matrix-diagonal-cell {
+  position: relative;
+  padding: 0;
 }
 
-.league-standings-table th:nth-child(2),
-.league-standings-table td:nth-child(2) {
-  width: 64px;
+.league-matrix-diagonal-line {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
-.league-standings-table th:nth-child(3),
-.league-standings-table td:nth-child(3),
-.league-standings-table th:nth-child(4),
-.league-standings-table td:nth-child(4),
-.league-standings-table th:nth-child(5),
-.league-standings-table td:nth-child(5),
-.league-standings-table th:nth-child(6),
-.league-standings-table td:nth-child(6),
-.league-standings-table th:nth-child(7),
-.league-standings-table td:nth-child(7),
-.league-standings-table th:nth-child(8),
-.league-standings-table td:nth-child(8) {
-  width: 78px;
+.league-matrix-diagonal-line line {
+  stroke: #cbd5e1;
+  stroke-width: 0.75;
+  vector-effect: non-scaling-stroke;
+}
+
+.league-standings-table th:not(.league-participant-column),
+.league-standings-table td:not(.league-participant-column) {
+  width: calc((100% - 250px) / 7);
   text-align: center;
 }
 

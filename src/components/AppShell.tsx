@@ -55,7 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             className={isLeagueArea ? "active" : undefined}
             viewTransition={viewTransitionsEnabled}
           >
-            リーグ表
+            リーグ
           </NavLink>
         </nav>
         <section className="related-apps" aria-label="関連アプリ" hidden={isSidebarCollapsed}>
@@ -157,7 +157,7 @@ function getScreenName(pathname: string): string {
   }
 
   if (pathname === "/leagues" || pathname === "/leagues/import") {
-    return pathname.endsWith("import") ? "リーグ情報の復元" : "リーグ表";
+    return pathname.endsWith("import") ? "リーグ情報の復元" : "リーグ";
   }
 
   if (pathname.includes("/leagues/")) {
