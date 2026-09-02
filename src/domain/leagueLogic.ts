@@ -204,23 +204,68 @@ export function calculateStandings(
     applyResult(left, right, match.result, scoringPolicy);
   }
 
-  return standings;
+  const automaticRanks = calculateAutomaticRanks(groups, standings);
+  return standings.map((standing) => ({
+    ...standing,
+    rank: automaticRanks.get(standing.participantId),
+  }));
+}
+
+/**
+ * 勝点降順、同点時は星取表の参加者順で、グループごとの自動順位を計算する。
+ * 順位は同順位を作らず、1位からの連番とする。
+ */
+export function calculateAutomaticRanks(
+  groups: readonly LeagueGroup[],
+  standings: readonly LeagueStanding[],
+): Map<string, number> {
+  const standingByParticipantId = new Map(standings.map((standing) => [standing.participantId, standing]));
+  const automaticRanks = new Map<string, number>();
+
+  for (const group of groups) {
+    const orderByParticipantId = new Map(group.participantIds.map((participantId, index) => [participantId, index]));
+    const groupStandings = group.participantIds
+      .map((participantId) => standingByParticipantId.get(participantId))
+      .filter((standing): standing is LeagueStanding => standing?.groupId === group.id);
+
+    groupStandings
+      .sort((left, right) => right.points - left.points
+        || (orderByParticipantId.get(left.participantId) ?? Number.MAX_SAFE_INTEGER)
+        - (orderByParticipantId.get(right.participantId) ?? Number.MAX_SAFE_INTEGER))
+      .forEach((standing, index) => automaticRanks.set(standing.participantId, index + 1));
+  }
+
+  return automaticRanks;
+}
+
+export function getEffectiveLeagueRank(
+  standing: LeagueStanding,
+  automaticRanks: ReadonlyMap<string, number>,
+): number | undefined {
+  return standing.manualRank ?? standing.rank ?? automaticRanks.get(standing.participantId);
 }
 
 export function validateManualRanks(league: League): LeagueValidationResult {
   const errors: LeagueValidationIssue[] = [];
+  const automaticRanks = calculateAutomaticRanks(league.groups, league.standings);
+
   for (const group of league.groups) {
     const groupStandings = league.standings.filter((standing) => standing.groupId === group.id);
-    const ranks = groupStandings.map((standing) => standing.manualRank);
-    if (ranks.some((rank) => rank === undefined)) {
-      errors.push({ code: "MANUAL_RANK_INCOMPLETE", message: `グループ${group.name}の順位をすべて入力してください。`, groupId: group.id });
-      continue;
+    for (const standing of groupStandings) {
+      const rank = standing.manualRank;
+      if (rank !== undefined && (!Number.isInteger(rank) || rank < 1 || rank > group.participantIds.length)) {
+        errors.push({ code: "MANUAL_RANK_INVALID", message: `グループ${group.name}の訂正順位は1〜${group.participantIds.length}の整数で指定してください。`, participantId: standing.participantId, groupId: group.id });
+      }
     }
-    const numericRanks = ranks as number[];
-    const expected = new Set(Array.from({ length: group.participantIds.length }, (_, index) => index + 1));
-    const actual = new Set(numericRanks);
-    if (numericRanks.some((rank) => !Number.isInteger(rank) || rank < 1 || rank > group.participantIds.length) || actual.size !== numericRanks.length || actual.size !== expected.size || [...expected].some((rank) => !actual.has(rank))) {
-      errors.push({ code: "MANUAL_RANK_INVALID", message: `グループ${group.name}の順位は1〜${group.participantIds.length}を重複・欠番なく入力してください。`, groupId: group.id });
+
+    const effectiveRanks = group.participantIds
+      .map((participantId) => {
+        const standing = groupStandings.find((item) => item.participantId === participantId);
+        return standing ? getEffectiveLeagueRank(standing, automaticRanks) : undefined;
+      })
+      .filter((rank): rank is number => rank !== undefined);
+    if (effectiveRanks.length !== group.participantIds.length || new Set(effectiveRanks).size !== effectiveRanks.length) {
+      errors.push({ code: "MANUAL_RANK_CONFLICT", message: `グループ${group.name}の訂正後順位が重複または不足しています。`, groupId: group.id });
     }
   }
   return { errors, warnings: [] };

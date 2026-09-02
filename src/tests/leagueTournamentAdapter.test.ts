@@ -81,11 +81,11 @@ describe("leagueTournamentAdapter", () => {
     expect(result.integration.sourceGroupSizes).toEqual([2, 1]);
   });
 
-  it("意図: 順位未入力は欠損のまま引き継ぎ、トーナメント側で編集できる", () => {
+  it("意図: 自動順位を引き継ぎ、訂正順位があればそれを優先する", () => {
     const league = makeLeague({ standings: [] });
     const result = createLeagueToTournament({ ...createDefaultTournament(), drawSize: 4 }, league, { min: 1, max: 4 });
     const p3 = result.integration.participants.find((participant) => participant.sourceParticipantId === "p3")!;
-    expect(p3.rank).toBeUndefined();
+    expect(p3.rank).toBe(1);
 
     const edited = updateTournamentIntegrationPlacement(result.integration, p3.tournamentEntrantId, {
       groupKey: "g3",
@@ -98,6 +98,17 @@ describe("leagueTournamentAdapter", () => {
       rank: 3,
       rankOrigin: "tournament-manual",
     });
+  });
+
+  it("意図: リーグ側の訂正順位を自動順位より優先して引き継ぐ", () => {
+    const league = makeLeague({
+      standings: makeLeague().standings.map((standing) => standing.participantId === "p1"
+        ? { ...standing, rank: 1, manualRank: 2, rankStatus: "confirmed" as const }
+        : standing),
+    });
+    const result = createLeagueToTournament({ ...createDefaultTournament(), drawSize: 4 }, league, { min: 1, max: 2 });
+
+    expect(result.integration.participants.find((participant) => participant.sourceParticipantId === "p1")).toMatchObject({ rank: 2, rankOrigin: "league" });
   });
 
   it("意図: 名簿行の追加・削除時も既存の連携項目を参加者IDで保持する", () => {

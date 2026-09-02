@@ -23,10 +23,45 @@ export function isValidRankRange(range: RankRange, upperBound?: number): boolean
     && (upperBound === undefined || (Number.isInteger(upperBound) && upperBound >= 1 && range.max <= upperBound));
 }
 
-export function getRankRangeValidationMessage(upperBound?: number): string {
+export function getRankOptions(upperBound?: number, minimum = 1): number[] {
+  const validUpperBound = typeof upperBound === "number" && Number.isInteger(upperBound) && upperBound >= 1
+    ? upperBound
+    : undefined;
+  if (validUpperBound === undefined || !Number.isInteger(minimum) || minimum < 1 || minimum > validUpperBound) {
+    return [];
+  }
+  return Array.from({ length: validUpperBound - minimum + 1 }, (_, index) => minimum + index);
+}
+
+export function normalizeRankRange(range: RankRange, upperBound?: number): RankRange {
+  const min = Number.isInteger(range.min) && range.min >= 1 ? range.min : 1;
+  const max = Number.isInteger(range.max) && range.max >= 1 ? range.max : min;
+  const validUpperBound = typeof upperBound === "number" && Number.isInteger(upperBound) && upperBound >= 1
+    ? upperBound
+    : undefined;
+  if (validUpperBound === undefined) {
+    return { min, max: Math.max(min, max) };
+  }
+  const normalizedMin = Math.min(min, validUpperBound);
+  return {
+    min: normalizedMin,
+    max: Math.min(Math.max(max, normalizedMin), validUpperBound),
+  };
+}
+
+export function getRankRangeValidationMessage(range: RankRange, upperBound?: number): string {
+  if (!Number.isInteger(range.min) || range.min < 1) {
+    return "開始順位は1位以上で指定してください";
+  }
+  if (!Number.isInteger(range.max) || range.max < 1) {
+    return "終了順位は1位以上で指定してください";
+  }
+  if (range.max < range.min) {
+    return `終了順位は開始順位（${range.min}位）以上で指定してください`;
+  }
   return upperBound === undefined
-    ? "順位区分は1位以上、かつ開始順位以下の終了順位で指定してください"
-    : `順位区分は1位以上、かつ終了順位をグループ内の人数（${upperBound}位）以下で指定してください`;
+    ? "順位区分を正しい範囲で指定してください"
+    : `終了順位をグループ内の人数（${upperBound}位）以下で指定してください`;
 }
 
 export function getLeagueTournamentScope(
@@ -45,7 +80,7 @@ export function getLeagueTournamentScope(
   if (!isValidRankRange(rankRange, rankUpperBound)) {
     errors.push({
       code: "LEAGUE_RANK_RANGE_INVALID",
-      message: getRankRangeValidationMessage(rankUpperBound),
+      message: getRankRangeValidationMessage(rankRange, rankUpperBound),
       field: "rankRange",
     });
   }

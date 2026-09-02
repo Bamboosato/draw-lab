@@ -57,6 +57,9 @@ export type LeagueStanding = {
   draws: number;
   losses: number;
   points: number;
+  /** 勝点と星取表の並び順から計算した自動順位。旧JSONでは未保持の場合がある。 */
+  rank?: number;
+  /** 旧来の手動順位欄。現在は訂正入力された順位として扱う。 */
   manualRank?: number;
   rankStatus: "unconfirmed" | "confirmed";
 };

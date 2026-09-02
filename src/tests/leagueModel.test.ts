@@ -8,6 +8,7 @@ import {
   reopenLeague,
   selectParticipantIds,
   updateGroups,
+  updateManualRanks,
   updateMatch,
   updateMatchValidity,
   updateParticipants,
@@ -38,22 +39,17 @@ describe("league model state transitions", () => {
       expect(played.scoringPolicy).toEqual({ winPoints: 3, drawPoints: 1, lossPoints: 0 });
     });
 
-    it("順位未入力では完了せず、全順位入力後だけcompletedになる", () => {
+    it("自動順位だけで完了でき、訂正順位は試合結果変更後も保持する", () => {
       const league = makeLeague({
         status: "inProgress",
-        standings: [
-          { groupId: "g1", participantId: "p1", played: 0, wins: 0, draws: 0, losses: 0, points: 0, manualRank: 1, rankStatus: "confirmed" },
-          { groupId: "g1", participantId: "p2", played: 0, wins: 0, draws: 0, losses: 0, points: 0, rankStatus: "unconfirmed" },
-        ],
       });
-      expect(completeLeague(league).status).toBe("inProgress");
+      expect(completeLeague(league).status).toBe("completed");
 
-      const completed = completeLeague({
-        ...league,
-        standings: league.standings.map((standing) => ({ ...standing, manualRank: standing.manualRank ?? 2, rankStatus: "confirmed" as const })),
-      });
-      expect(completed.status).toBe("completed");
-      expect(reopenLeague(completed).status).toBe("inProgress");
+      const played = updateMatch(league, "m1", { result: "participantAWin" });
+      const corrected = updateManualRanks(played, new Map([["p1", 2]]));
+      const changed = updateMatch(corrected, "m1", { result: "unplayed" });
+      expect(changed.standings.find((standing) => standing.participantId === "p1")).toMatchObject({ rank: 1, manualRank: 2 });
+      expect(reopenLeague(completeLeague(league)).status).toBe("inProgress");
     });
   });
 

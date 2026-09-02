@@ -641,7 +641,8 @@ a {
 }
 
 .league-standings-table input {
-  min-width: 90px;
+  width: 70px;
+  min-width: 0;
 }
 
 .league-standings-table {
@@ -650,12 +651,28 @@ a {
 
 .league-standings-table th:first-child,
 .league-standings-table td:first-child {
-  width: 128px;
+  width: 250px;
 }
 
 .league-standings-table th:nth-child(2),
 .league-standings-table td:nth-child(2) {
-  width: 250px;
+  width: 64px;
+}
+
+.league-standings-table th:nth-child(3),
+.league-standings-table td:nth-child(3),
+.league-standings-table th:nth-child(4),
+.league-standings-table td:nth-child(4),
+.league-standings-table th:nth-child(5),
+.league-standings-table td:nth-child(5),
+.league-standings-table th:nth-child(6),
+.league-standings-table td:nth-child(6),
+.league-standings-table th:nth-child(7),
+.league-standings-table td:nth-child(7),
+.league-standings-table th:nth-child(8),
+.league-standings-table td:nth-child(8) {
+  width: 78px;
+  text-align: center;
 }
 
 .participant-readonly {

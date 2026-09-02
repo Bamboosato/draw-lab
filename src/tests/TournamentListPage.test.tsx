@@ -88,7 +88,7 @@ describe("TournamentListPage", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(createTournamentMock).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "league-source" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0]!, { target: { value: "league-source" } });
 
     fireEvent.click(screen.getByRole("button", { name: "基本情報へ進む" }));
 

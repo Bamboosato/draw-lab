@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createLeagueToTournament } from "../app/leagueTournamentAdapter";
-import { getLeagueTournamentScope } from "../app/leagueTournamentPlacement";
+import { getLeagueTournamentScope, getRankRangeValidationMessage } from "../app/leagueTournamentPlacement";
 import { createDefaultLeague } from "../app/leagueModel";
 import { applyBasicInfoPatch, createDefaultTournament, generateTournamentDraw, isTournamentDrawCurrent, validateTournamentForUi } from "../app/tournamentModel";
 import type { League } from "../domain/leagueTypes";
@@ -43,6 +43,11 @@ function makeLinkedTeamTournament(): { tournament: ReturnType<typeof createDefau
 }
 
 describe("leagueTournamentPlacement", () => {
+  it("意図: 開始順位が終了順位を超える場合に前後関係に合ったエラー文言を返す", () => {
+    expect(getRankRangeValidationMessage({ min: 3, max: 2 }, 4))
+      .toBe("終了順位は開始順位（3位）以上で指定してください");
+  });
+
   it("意図: 順位区分内だけを生成対象にし、生成署名へ連携条件を反映する", () => {
     const linked = makeLinkedTeamTournament();
     const integration = { ...linked.integration, rankRange: { min: 1, max: 2 } };

@@ -148,7 +148,7 @@ describe("BasicInfoPage", () => {
 
     const { container } = render(<BasicInfoPage />);
     const rankEndField = getField(Array.from(container.querySelectorAll<HTMLLabelElement>("label.field")), "順位区分（終了）");
-    fireEvent.change(rankEndField.querySelector("input")!, { target: { value: "1" } });
+    fireEvent.change(rankEndField.querySelector("select")!, { target: { value: "1" } });
 
     expect(updateTournamentWithIntegrationMock).toHaveBeenCalledTimes(1);
     const [nextTournament, nextIntegration] = updateTournamentWithIntegrationMock.mock.calls[0];
@@ -171,13 +171,29 @@ describe("BasicInfoPage", () => {
 
     const { container } = render(<BasicInfoPage />);
     const rankEndField = getField(Array.from(container.querySelectorAll<HTMLLabelElement>("label.field")), "順位区分（終了）");
-    const rankEndInput = rankEndField.querySelector<HTMLInputElement>("input")!;
+    const rankEndInput = rankEndField.querySelector<HTMLSelectElement>("select")!;
 
-    expect(rankEndInput.max).toBe("4");
-    fireEvent.change(rankEndInput, { target: { value: "5" } });
+    expect(Array.from(rankEndInput.options, (option) => option.value)).toEqual(["1", "2", "3", "4"]);
+    expect(Array.from(rankEndInput.options, (option) => option.value)).not.toContain("5");
 
     expect(updateTournamentWithIntegrationMock).not.toHaveBeenCalled();
-    expect(container.querySelector(".validation-banner")?.textContent).toContain("終了順位をグループ内の人数（4位）以下");
+    expect(container.querySelector(".validation-banner")).toBeNull();
+  });
+
+  it("意図: 開始順位が終了順位を超える場合は前後関係に合ったエラーを表示する", () => {
+    const sourceLeague = makeLeagueWithGroups("league-source", "元リーグ", 4);
+    const linked = createLeagueToTournament(makeTournament(), sourceLeague, { min: 1, max: 2 });
+    getTournamentIntegrationMock.mockReturnValue(linked.integration);
+    useLeaguesMock.mockReturnValue({ leagues: [sourceLeague] });
+    useTournamentMock.mockReturnValue(linked.tournament);
+
+    const { container } = render(<BasicInfoPage />);
+    const rankStartField = getField(Array.from(container.querySelectorAll<HTMLLabelElement>("label.field")), "順位区分（開始）");
+    const rankEndField = getField(Array.from(container.querySelectorAll<HTMLLabelElement>("label.field")), "順位区分（終了）");
+    fireEvent.change(rankStartField.querySelector("select")!, { target: { value: "3" } });
+
+    expect(rankEndField.querySelector<HTMLSelectElement>("select")?.value).toBe("3");
+    expect(container.querySelector(".validation-banner")).toBeNull();
   });
 
   it("意図: ドローサイズを手動変更済みの場合、順位区分の変更でもその値を保持する", () => {
@@ -190,7 +206,7 @@ describe("BasicInfoPage", () => {
 
     const { container } = render(<BasicInfoPage />);
     const rankEndField = getField(Array.from(container.querySelectorAll<HTMLLabelElement>("label.field")), "順位区分（終了）");
-    fireEvent.change(rankEndField.querySelector("input")!, { target: { value: "1" } });
+    fireEvent.change(rankEndField.querySelector("select")!, { target: { value: "1" } });
 
     expect(updateTournamentWithIntegrationMock).toHaveBeenCalledTimes(1);
     const [nextTournament] = updateTournamentWithIntegrationMock.mock.calls[0];
@@ -209,7 +225,7 @@ describe("BasicInfoPage", () => {
 
     const { container } = render(<BasicInfoPage />);
     const rankEndField = getField(Array.from(container.querySelectorAll<HTMLLabelElement>("label.field")), "順位区分（終了）");
-    fireEvent.change(rankEndField.querySelector("input")!, { target: { value: "4" } });
+    fireEvent.change(rankEndField.querySelector("select")!, { target: { value: "4" } });
 
     const [nextTournament] = updateTournamentWithIntegrationMock.mock.calls[0];
     expect(nextTournament.drawSize).toBe(16);
@@ -244,10 +260,7 @@ describe("BasicInfoPage", () => {
 
     const { container } = render(<BasicInfoPage />);
     const rankEndField = getField(Array.from(container.querySelectorAll<HTMLLabelElement>("label.field")), "順位区分（終了）");
-    const rankEndInput = rankEndField.querySelector("input")!;
-    fireEvent.change(rankEndInput, { target: { value: "" } });
-    expect(updateTournamentWithIntegrationMock).not.toHaveBeenCalled();
-
+    const rankEndInput = rankEndField.querySelector("select")!;
     fireEvent.change(rankEndInput, { target: { value: "4" } });
 
     expect(updateTournamentWithIntegrationMock).toHaveBeenCalledTimes(1);

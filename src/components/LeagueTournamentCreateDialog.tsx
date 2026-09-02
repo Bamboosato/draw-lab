@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { calculateLeagueDrawSize, getLeagueRankUpperBound, resolveLeagueDrawSize } from "../app/leagueTournamentAdapter";
-import { getRankRangeValidationMessage, isValidRankRange } from "../app/leagueTournamentPlacement";
+import { getRankOptions, getRankRangeValidationMessage, isValidRankRange, normalizeRankRange } from "../app/leagueTournamentPlacement";
 import type { League } from "../domain/leagueTypes";
 import type { RankRange } from "../domain/leagueTournamentTypes";
 import { CompactSummary } from "./CompactSummary";
@@ -51,13 +51,16 @@ export function LeagueTournamentCreateDialog({
 
   const selectedLeague = confirmedLeagues.find((league) => league.id === leagueId);
   const rankUpperBound = selectedLeague ? getLeagueRankUpperBound(selectedLeague) : undefined;
+  const minimumRank = Number.isInteger(Number(minRank)) && Number(minRank) >= 1 ? Number(minRank) : 1;
+  const rankOptions = getRankOptions(rankUpperBound);
+  const endRankOptions = getRankOptions(rankUpperBound, minimumRank);
   const rankRange = { min: Number(minRank), max: Number(maxRank) };
   const rankRangeValid = isValidRankRange(rankRange, rankUpperBound);
   const calculatedDrawSize = selectedLeague ? calculateLeagueDrawSize(selectedLeague.groups.length, rankRange) : undefined;
   const drawSize = selectedLeague ? resolveLeagueDrawSize(selectedLeague.groups.length, rankRange) : undefined;
   const canCreate = Boolean(selectedLeague && rankRangeValid && drawSize !== undefined);
   const feedbackMessage = selectedLeague && !rankRangeValid
-    ? `${getRankRangeValidationMessage(rankUpperBound)}。`
+    ? `${getRankRangeValidationMessage(rankRange, rankUpperBound)}。`
     : selectedLeague && rankRangeValid && drawSize === undefined
       ? `グループ数×順位数（${calculatedDrawSize ?? "-"}）は対応しているドローサイズではありません。`
       : selectedLeague && canCreate
@@ -86,7 +89,21 @@ export function LeagueTournamentCreateDialog({
 
         <label className="field">
           <span>引継ぎ元のリーグ表</span>
-          <select value={leagueId} onChange={(event) => setLeagueId(event.target.value)}>
+          <select
+            value={leagueId}
+            onChange={(event) => {
+              const nextLeagueId = event.target.value;
+              setLeagueId(nextLeagueId);
+              const nextLeague = confirmedLeagues.find((league) => league.id === nextLeagueId);
+              if (!nextLeague) return;
+              const nextRankRange = normalizeRankRange(
+                { min: Number(minRank), max: Number(maxRank) },
+                getLeagueRankUpperBound(nextLeague),
+              );
+              setMinRank(String(nextRankRange.min));
+              setMaxRank(String(nextRankRange.max));
+            }}
+          >
             <option value="">リーグ表を選択してください</option>
             {confirmedLeagues.map((league) => (
               <option key={league.id} value={league.id}>{league.title || "無題のリーグ"}</option>
@@ -107,19 +124,27 @@ export function LeagueTournamentCreateDialog({
         <div className="form-grid league-create-rank-fields">
           <label className="field">
             <span>順位区分（開始）</span>
-            <input type="number" min={1} max={rankUpperBound} value={minRank} onChange={(event) => setMinRank(event.target.value)} />
+            <select
+              value={minRank}
+              disabled={!selectedLeague}
+              onChange={(event) => {
+                const nextMinRank = event.target.value;
+                setMinRank(nextMinRank);
+                if (Number(maxRank) < Number(nextMinRank)) setMaxRank(nextMinRank);
+              }}
+            >
+              {(rankOptions.length > 0 ? rankOptions : [Number(minRank) || 1]).map((rank) => <option key={rank} value={rank}>{rank}</option>)}
+            </select>
           </label>
           <label className="field">
             <span>順位区分（終了）</span>
-            <input type="number" min={1} max={rankUpperBound} value={maxRank} onChange={(event) => setMaxRank(event.target.value)} />
+            <select value={maxRank} disabled={!selectedLeague} onChange={(event) => setMaxRank(event.target.value)}>
+              {(endRankOptions.length > 0 ? endRankOptions : [Number(maxRank) || minimumRank]).map((rank) => <option key={rank} value={rank}>{rank}</option>)}
+            </select>
           </label>
         </div>
 
-        <p className="field-hint league-create-rank-limit-hint">
-          {selectedLeague && rankUpperBound !== undefined
-            ? <>終了順位は、最も人数の少ないグループの人数（{rankUpperBound}位）まで指定できます。</>
-            : <span aria-hidden="true">&nbsp;</span>}
-        </p>
+        <p className="field-hint league-create-rank-limit-hint" aria-hidden="true">&nbsp;</p>
 
         {confirmedLeagues.length === 0 ? (
           <p className="field-hint" role="status">対戦カード確定済みのリーグ表がありません。</p>
