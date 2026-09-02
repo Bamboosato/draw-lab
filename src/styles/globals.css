@@ -1397,11 +1397,18 @@ a {
 
 .tournament-list-table th:nth-child(2),
 .tournament-list-table td:nth-child(2) {
-  width: 120px;
+  width: 64px;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .tournament-list-table th:nth-child(3),
 .tournament-list-table td:nth-child(3) {
+  width: 120px;
+}
+
+.tournament-list-table th:nth-child(4),
+.tournament-list-table td:nth-child(4) {
   width: 110px;
   white-space: nowrap;
 }
@@ -1417,8 +1424,44 @@ a {
   margin-left: 4px;
 }
 
-.tournament-list-table th:nth-child(6),
-.tournament-list-table td:nth-child(6) {
+.tournament-list-table .tournament-qualifier-cell {
+  text-align: center;
+}
+
+.tournament-list-table .tournament-source-link {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #1d4ed8;
+  vertical-align: middle;
+}
+
+.tournament-list-table .tournament-source-link:hover,
+.tournament-list-table .tournament-source-link:focus-visible {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.tournament-list-table .tournament-source-link:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 1px;
+}
+
+.tournament-list-table .tournament-source-link svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.tournament-list-table th:nth-child(7),
+.tournament-list-table td:nth-child(7) {
   width: 160px;
   white-space: nowrap;
 }
@@ -1428,8 +1471,8 @@ a {
   width: 82px;
 }
 
-.tournament-list-table th:nth-child(4),
-.tournament-list-table td:nth-child(4) {
+.tournament-list-table th:nth-child(6),
+.tournament-list-table td:nth-child(6) {
   width: 82px;
 }
 

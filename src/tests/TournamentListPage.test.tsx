@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDefaultLeague } from "../app/leagueModel";
 
@@ -83,7 +83,7 @@ describe("TournamentListPage", () => {
     render(<TournamentListPage />);
 
     fireEvent.click(screen.getByRole("button", { name: "トーナメント一覧のその他の操作" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "リーグ表の参加者名簿からトーナメントを作成" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "予選のリーグ表からトーナメントを作成" }));
 
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(createTournamentMock).not.toHaveBeenCalled();
@@ -105,5 +105,114 @@ describe("TournamentListPage", () => {
       rankRange: { min: 1, max: 2 },
     });
     expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/tournaments\/[^/]+\/edit\/basic$/));
+  });
+
+  it("意図: 大会名と種目の間に予選列を追加し、引継ぎ元リーグがある行だけリンクを表示する", () => {
+    const sourceLeague = {
+      ...createDefaultLeague(),
+      id: "league-source",
+      title: "富浜予選リーグ",
+    };
+    const linkedTournament = {
+      ...createDefaultTournament(),
+      id: "tournament-linked",
+      title: "富浜予選（1-2位）",
+      venue: "富浜公園",
+      eventName: "男子",
+    };
+    const ordinaryTournament = {
+      ...createDefaultTournament(),
+      id: "tournament-ordinary",
+      title: "通常大会",
+      eventName: "女子",
+    };
+    const integration = {
+      tournamentId: linkedTournament.id,
+      kind: "league-to-tournament" as const,
+      schemaVersion: 1 as const,
+      source: {
+        leagueId: sourceLeague.id,
+        leagueUpdatedAt: sourceLeague.updatedAt,
+        matchSelectionStatus: "confirmed" as const,
+      },
+      sourceParticipantType: sourceLeague.participantType,
+      sourceGroupCount: 2,
+      rankRange: { min: 1, max: 2 },
+      participants: [],
+      createdAt: sourceLeague.createdAt,
+      updatedAt: sourceLeague.updatedAt,
+    };
+    getTournamentIntegrationMock.mockImplementation((tournamentId: string) => (
+      tournamentId === linkedTournament.id ? integration : undefined
+    ));
+    useLeaguesMock.mockReturnValue({ leagues: [sourceLeague] });
+    useTournamentsMock.mockReturnValue({
+      createTournament: createTournamentMock,
+      deleteTournament: vi.fn(),
+      duplicateTournament: vi.fn(),
+      getTournamentIntegration: getTournamentIntegrationMock,
+      storageError: undefined,
+      storageStatus: "ready",
+      tournaments: [linkedTournament, ordinaryTournament],
+      updateTournamentWithIntegration: updateTournamentWithIntegrationMock,
+    });
+
+    render(<TournamentListPage />);
+
+    expect(screen.getByRole("columnheader", { name: "予選" })).toBeTruthy();
+    const linkedRow = screen.getByText(linkedTournament.title).closest("tr");
+    const ordinaryRow = screen.getByText(ordinaryTournament.title).closest("tr");
+    expect(linkedRow).not.toBeNull();
+    expect(ordinaryRow).not.toBeNull();
+    expect(within(linkedRow!).getByRole("link", { name: "引継ぎ元のリーグ表を表示" }).getAttribute("href")).toBe(
+      "/leagues/league-source/dashboard",
+    );
+    expect(linkedRow!.querySelector("td:nth-child(2)")?.textContent).toBe("");
+    expect(within(linkedRow!).queryByText(/リーグ:/)).toBeNull();
+    expect(ordinaryRow!.querySelector("td:nth-child(2)")?.textContent).toBe("");
+    expect(within(ordinaryRow!).queryByRole("link", { name: "引継ぎ元のリーグ表を表示" })).toBeNull();
+  });
+
+  it("意図: 引継ぎ元リーグを参照できない場合は予選表示とリンクを空白にする", () => {
+    const tournament = {
+      ...createDefaultTournament(),
+      id: "tournament-orphan",
+      title: "引継ぎ元なし大会",
+      eventName: "男子",
+    };
+    getTournamentIntegrationMock.mockReturnValue({
+      tournamentId: tournament.id,
+      kind: "league-to-tournament",
+      schemaVersion: 1,
+      source: {
+        leagueId: "deleted-league",
+        leagueUpdatedAt: "2026-09-02T00:00:00.000Z",
+        matchSelectionStatus: "confirmed",
+      },
+      sourceParticipantType: "individual",
+      sourceGroupCount: 2,
+      rankRange: { min: 1, max: 2 },
+      participants: [],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    useLeaguesMock.mockReturnValue({ leagues: [] });
+    useTournamentsMock.mockReturnValue({
+      createTournament: createTournamentMock,
+      deleteTournament: vi.fn(),
+      duplicateTournament: vi.fn(),
+      getTournamentIntegration: getTournamentIntegrationMock,
+      storageError: undefined,
+      storageStatus: "ready",
+      tournaments: [tournament],
+      updateTournamentWithIntegration: updateTournamentWithIntegrationMock,
+    });
+
+    render(<TournamentListPage />);
+
+    const row = screen.getByText(tournament.title).closest("tr");
+    expect(row).not.toBeNull();
+    expect(row!.querySelector("td:nth-child(2)")?.textContent).toBe("");
+    expect(within(row!).queryByRole("link", { name: "引継ぎ元のリーグ表を表示" })).toBeNull();
   });
 });
