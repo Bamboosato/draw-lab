@@ -5,6 +5,7 @@ import {
   getTournamentStepPath,
   type TournamentEditStep,
 } from "../app/tournamentFlow";
+import { getLeagueStepPath } from "../app/leagueFlow";
 import {
   DEFAULT_TOURNAMENT_SORT,
   getNextTournamentSort,
@@ -71,7 +72,7 @@ export function TournamentListPage() {
                 items: [
                   {
                     label: "リーグ表から作成",
-                    title: "リーグ表の参加者名簿からトーナメントを作成",
+                    title: "予選のリーグ表からトーナメントを作成",
                     icon: "basic",
                     onSelect: () => setLeagueCreateDialogOpen(true),
                   },
@@ -141,6 +142,7 @@ export function TournamentListPage() {
             <thead>
               <tr>
                 <th scope="col">大会名</th>
+                <th scope="col">予選</th>
                 <th scope="col">種目</th>
                 <SortableHeader
                   label="開催日"
@@ -178,7 +180,22 @@ export function TournamentListPage() {
                   <td>
                     <strong title={tournament.title || "無題のトーナメント"}>{tournament.title || "無題のトーナメント"}</strong>
                     <span className="muted-line">{tournament.venue || "会場未設定"}</span>
-                    {integration ? <span className="muted-line">リーグ: {sourceLeague?.title || "不明"} / {integration.rankRange.min}-{integration.rankRange.max}位</span> : null}
+                  </td>
+                  <td className="tournament-qualifier-cell">
+                    {sourceLeague ? (
+                      <a
+                        className="tournament-source-link"
+                        href={getLeagueStepPath(sourceLeague.id, "dashboard")}
+                        aria-label="引継ぎ元のリーグ表を表示"
+                        title={`引継ぎ元のリーグ表「${sourceLeague.title || "無題のリーグ"}」を表示`}
+                      >
+                        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                          <path d="M8 12l4-4" />
+                          <path d="M6.5 15.5H5a3 3 0 0 1 0-6h2" />
+                          <path d="M13.5 4.5H15a3 3 0 0 1 0 6h-2" />
+                        </svg>
+                      </a>
+                    ) : null}
                   </td>
                   <td
                     className="tournament-event-cell"
