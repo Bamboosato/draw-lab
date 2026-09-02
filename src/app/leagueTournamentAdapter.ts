@@ -8,6 +8,7 @@ import type {
   TournamentIntegrationParticipant,
   TournamentIntegrationRecord,
 } from "../domain/leagueTournamentTypes";
+import { calculateAutomaticRanks, calculateStandings, getEffectiveLeagueRank } from "../domain/leagueLogic";
 import { createEmptyEntrant, createId, ensureEntrantRows } from "./tournamentModel";
 
 export function formatLeagueTournamentTitle(leagueTitle: string, rankRange: RankRange): string {
@@ -77,13 +78,15 @@ export function createLeagueToTournament(
   }
   const selectedParticipants = getSelectedLeagueParticipants(league);
   const groupByParticipantId = getGroupByParticipantId(league.groups);
-  const standingByParticipantId = getStandingByParticipantId(league.standings);
+  const calculatedStandings = calculateStandings(league.groups, league.matches, league.scoringPolicy, league.standings);
+  const standingByParticipantId = getStandingByParticipantId(calculatedStandings);
+  const automaticRanks = calculateAutomaticRanks(league.groups, calculatedStandings);
   const matchType = toMatchType(league.participantType);
   const drawSize = resolveLeagueDrawSize(league.groups.length, rankRange) ?? tournament.drawSize;
   const entrants = selectedParticipants.map((participant, index) =>
     toEntrant(participant, matchType, index + 1));
   const placements = selectedParticipants.map((participant) =>
-    toPlacement(participant, groupByParticipantId.get(participant.id), standingByParticipantId.get(participant.id)));
+    toPlacement(participant, groupByParticipantId.get(participant.id), standingByParticipantId.get(participant.id), automaticRanks));
   const source = {
     leagueId: league.id,
     leagueUpdatedAt: league.updatedAt,
@@ -132,7 +135,9 @@ export function createLeagueToTournamentSetup(
     throw new Error("対戦カードが確定しているリーグ表だけを引き継げます。");
   }
   const groupByParticipantId = getGroupByParticipantId(league.groups);
-  const standingByParticipantId = getStandingByParticipantId(league.standings);
+  const calculatedStandings = calculateStandings(league.groups, league.matches, league.scoringPolicy, league.standings);
+  const standingByParticipantId = getStandingByParticipantId(calculatedStandings);
+  const automaticRanks = calculateAutomaticRanks(league.groups, calculatedStandings);
   return {
     kind: "league-to-tournament",
     schemaVersion: 1,
@@ -149,6 +154,7 @@ export function createLeagueToTournamentSetup(
         participant,
         groupByParticipantId.get(participant.id),
         standingByParticipantId.get(participant.id),
+        automaticRanks,
       ),
     })),
   };
@@ -261,8 +267,9 @@ function toPlacement(
   participant: LeagueParticipant,
   group: LeagueGroup | undefined,
   standing: LeagueStanding | undefined,
+  automaticRanks: ReadonlyMap<string, number>,
 ): LeagueParticipantPlacement {
-  const rank = standing?.manualRank;
+  const rank = standing ? getEffectiveLeagueRank(standing, automaticRanks) : undefined;
   return {
     sourceParticipantId: participant.id,
     sourceGroupId: group?.id,
@@ -286,9 +293,7 @@ function getGroupByParticipantId(groups: readonly LeagueGroup[]): Map<string, Le
 function getStandingByParticipantId(standings: readonly LeagueStanding[]): Map<string, LeagueStanding> {
   const result = new Map<string, LeagueStanding>();
   for (const standing of standings) {
-    if (standing.manualRank !== undefined && standing.rankStatus === "confirmed") {
-      result.set(standing.participantId, standing);
-    }
+    result.set(standing.participantId, standing);
   }
   return result;
 }

@@ -239,13 +239,19 @@ export function updateMatch(league: League, matchId: string, patch: Partial<Leag
   };
 }
 
-export function updateManualRank(league: League, participantId: string, manualRank: number | undefined): League {
+export function updateManualRanks(league: League, manualRanks: ReadonlyMap<string, number | undefined>): League {
   return {
     ...league,
-    standings: league.standings.map((standing) => standing.participantId === participantId
-      ? { ...standing, manualRank, rankStatus: manualRank === undefined ? "unconfirmed" : "confirmed" }
-      : standing),
+    standings: league.standings.map((standing) => {
+      if (!manualRanks.has(standing.participantId)) return standing;
+      const manualRank = manualRanks.get(standing.participantId);
+      return { ...standing, manualRank, rankStatus: manualRank === undefined ? "unconfirmed" : "confirmed" };
+    }),
   };
+}
+
+export function updateManualRank(league: League, participantId: string, manualRank: number | undefined): League {
+  return updateManualRanks(league, new Map([[participantId, manualRank]]));
 }
 
 export function markMatchSelectionConfirmed(league: League): League {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { calculateLeagueDrawSize, createLeagueToTournament, formatLeagueTournamentTitle, getLeagueRankUpperBound, resolveLeagueDrawSize } from "../app/leagueTournamentAdapter";
-import { getRankRangeValidationMessage, isValidRankRange } from "../app/leagueTournamentPlacement";
+import { getRankOptions, getRankRangeValidationMessage, isValidRankRange, normalizeRankRange } from "../app/leagueTournamentPlacement";
 import { getBasicInfoErrors } from "../app/tournamentFlow";
 import { applyBasicInfoPatch, applyEntrantsUpdate, DRAW_SIZES, ensureEntrantRows, SEED_COUNTS } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
@@ -35,6 +35,9 @@ export function BasicInfoPage() {
 
   const selectedLeague = leagues.find((league) => league.id === (integration?.source.leagueId ?? sourceLeagueId));
   const rankUpperBound = selectedLeague ? getLeagueRankUpperBound(selectedLeague) : undefined;
+  const minimumRank = Number.isInteger(Number(minRank)) && Number(minRank) >= 1 ? Number(minRank) : 1;
+  const rankOptions = getRankOptions(rankUpperBound);
+  const endRankOptions = getRankOptions(rankUpperBound, minimumRank);
   useEffect(() => {
     if (!tournament || !integration || integration.drawSizeMode !== undefined || !selectedLeague) return;
     if (!isValidRankRange(integration.rankRange, rankUpperBound)) return;
@@ -58,7 +61,7 @@ export function BasicInfoPage() {
         errors.push("引継ぎ元のリーグ表を選択してください。");
       }
       if (!isValidRankRange(rankRange, rankUpperBound)) {
-        errors.push(`${getRankRangeValidationMessage(rankUpperBound)}。`);
+        errors.push(`${getRankRangeValidationMessage(rankRange, rankUpperBound)}。`);
       }
     }
     return errors;
@@ -76,7 +79,7 @@ export function BasicInfoPage() {
     ? resolveLeagueDrawSize(selectedLeague.groups.length, rankRange)
     : undefined;
   const leagueFeedbackMessage = selectedLeague && !rankRangeValid
-    ? `${getRankRangeValidationMessage(rankUpperBound)}。`
+    ? `${getRankRangeValidationMessage(rankRange, rankUpperBound)}。`
     : selectedLeague && rankRangeValid && resolvedLeagueDrawSize === undefined
       ? `グループ数×順位数（${calculatedLeagueDrawSize ?? "-"}）は対応しているドローサイズではありません。`
       : selectedLeague
@@ -102,7 +105,10 @@ export function BasicInfoPage() {
     setSourceLeagueId(leagueId);
     const league = leagues.find((item) => item.id === leagueId);
     if (!league) return;
-    const result = createLeagueToTournament(tournament, league, rankRange);
+    const nextRankRange = normalizeRankRange(rankRange, getLeagueRankUpperBound(league));
+    setMinRank(String(nextRankRange.min));
+    setMaxRank(String(nextRankRange.max));
+    const result = createLeagueToTournament(tournament, league, nextRankRange);
     updateTournamentWithIntegration({
       ...result.tournament,
       title: tournament.title,
@@ -118,12 +124,16 @@ export function BasicInfoPage() {
   };
 
   const updateRankRange = (field: "min" | "max", value: string): void => {
-    if (field === "min") setMinRank(value);
-    else setMaxRank(value);
+    const nextMinRank = field === "min" ? Number(value) : Number(minRank);
+    const nextMaxRank = field === "min" ? Math.max(Number(maxRank), Number(value)) : Number(value);
+    if (field === "min") {
+      setMinRank(value);
+      if (Number(maxRank) < Number(value)) setMaxRank(value);
+    } else setMaxRank(value);
     if (!integration) return;
     const nextRankRange = {
-      min: field === "min" ? Number(value) : Number(minRank),
-      max: field === "max" ? Number(value) : Number(maxRank),
+      min: nextMinRank,
+      max: nextMaxRank,
     };
     if (!isValidRankRange(nextRankRange, rankUpperBound)) return;
     const currentAutoTitle = selectedLeague
@@ -258,19 +268,19 @@ export function BasicInfoPage() {
           <div className="form-grid league-create-rank-fields">
             <label className="field">
               {renderRequiredLabel("順位区分（開始）")}
-              <input type="number" min={1} max={rankUpperBound} value={minRank} onChange={(event) => updateRankRange("min", event.target.value)} />
+              <select value={minRank} disabled={!selectedLeague} onChange={(event) => updateRankRange("min", event.target.value)}>
+                {(rankOptions.length > 0 ? rankOptions : [Number(minRank) || 1]).map((rank) => <option key={rank} value={rank}>{rank}</option>)}
+              </select>
             </label>
             <label className="field">
               {renderRequiredLabel("順位区分（終了）")}
-              <input type="number" min={1} max={rankUpperBound} value={maxRank} onChange={(event) => updateRankRange("max", event.target.value)} />
+              <select value={maxRank} disabled={!selectedLeague} onChange={(event) => updateRankRange("max", event.target.value)}>
+                {(endRankOptions.length > 0 ? endRankOptions : [Number(maxRank) || minimumRank]).map((rank) => <option key={rank} value={rank}>{rank}</option>)}
+              </select>
             </label>
           </div>
 
-          <p className="field-hint league-create-rank-limit-hint">
-            {selectedLeague && rankUpperBound !== undefined
-              ? <>終了順位は、最も人数の少ないグループの人数（{rankUpperBound}位）まで指定できます。</>
-              : <span aria-hidden="true">&nbsp;</span>}
-          </p>
+          <p className="field-hint league-create-rank-limit-hint" aria-hidden="true">&nbsp;</p>
 
           <p
             className={`field-hint league-create-feedback-hint${leagueFeedbackIsError ? " error-text" : " league-create-draw-size-hint"}`}

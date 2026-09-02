@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateStandings, countValidMatchesByParticipant, createCandidateMatches, validateLeague, validateManualRanks } from "../domain/leagueLogic";
+import { calculateAutomaticRanks, calculateStandings, countValidMatchesByParticipant, createCandidateMatches, validateLeague, validateManualRanks } from "../domain/leagueLogic";
 import { distributeLeagueParticipants } from "../domain/leagueGrouping";
 import type { League, LeagueGroup, LeagueMatch, LeagueParticipant } from "../domain/leagueTypes";
 
@@ -107,6 +107,24 @@ describe("league domain logic", () => {
   });
 
   describe("データ観点: 集計と順位", () => {
+    it("勝点の降順で自動順位を付け、同点時は星取表の並び順を優先する", () => {
+      const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p1", "p2", "p3"] }];
+      const matches: LeagueMatch[] = [
+        { id: "m1", groupId: "g1", order: 1, participantAId: "p1", participantBId: "p2", isValid: true, result: "draw" },
+        { id: "m2", groupId: "g1", order: 2, participantAId: "p2", participantBId: "p3", isValid: true, result: "participantAWin" },
+        { id: "m3", groupId: "g1", order: 3, participantAId: "p1", participantBId: "p3", isValid: true, result: "participantAWin" },
+      ];
+
+      const standings = calculateStandings(groups, matches, { winPoints: 3, drawPoints: 1, lossPoints: 0 });
+
+      expect(standings.map((standing) => [standing.participantId, standing.points, standing.rank])).toEqual([
+        ["p1", 4, 1],
+        ["p2", 4, 2],
+        ["p3", 0, 3],
+      ]);
+      expect(calculateAutomaticRanks(groups, standings)).toEqual(new Map([["p1", 1], ["p2", 2], ["p3", 3]]));
+    });
+
     it("大会名が未入力でもリーグのドメイン検証を通過する", () => {
       const league = makeLeague([], []);
       expect(validateLeague({ ...league, title: "" }).errors.some((issue) => issue.field === "title")).toBe(false);
@@ -137,16 +155,22 @@ describe("league domain logic", () => {
       expect(standings.find((standing) => standing.participantId === "p2")?.losses).toBe(1);
     });
 
-    it("順位の一部未入力を作業中に保持し、完了時は拒否する", () => {
+    it("訂正順位は任意入力とし、入力された場合だけ値と重複を検証する", () => {
       const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p1", "p2"] }];
       const league = {
         ...makeLeague(groups, []),
         standings: [
-          { groupId: "g1", participantId: "p1", played: 0, wins: 0, draws: 0, losses: 0, points: 0, manualRank: 1, rankStatus: "confirmed" as const },
-          { groupId: "g1", participantId: "p2", played: 0, wins: 0, draws: 0, losses: 0, points: 0, rankStatus: "unconfirmed" as const },
+          { groupId: "g1", participantId: "p1", played: 0, wins: 0, draws: 0, losses: 0, points: 0, rank: 1, rankStatus: "unconfirmed" as const },
+          { groupId: "g1", participantId: "p2", played: 0, wins: 0, draws: 0, losses: 0, points: 0, rank: 2, rankStatus: "unconfirmed" as const },
         ],
       };
-      expect(validateManualRanks(league).errors).toHaveLength(1);
+      expect(validateManualRanks(league).errors).toHaveLength(0);
+      expect(validateManualRanks({ ...league, standings: league.standings.map((standing) => ({ ...standing, manualRank: 1, rankStatus: "confirmed" as const })) }).errors).toEqual([
+        expect.objectContaining({ code: "MANUAL_RANK_CONFLICT", groupId: "g1" }),
+      ]);
+      expect(validateManualRanks({ ...league, standings: [{ ...league.standings[0]!, manualRank: 3, rankStatus: "confirmed" as const }, league.standings[1]!] }).errors).toEqual([
+        expect.objectContaining({ code: "MANUAL_RANK_INVALID", participantId: "p1" }),
+      ]);
     });
 
     it("ダブルスはメンバー2名、チームはメンバー1名以上を要求する", () => {

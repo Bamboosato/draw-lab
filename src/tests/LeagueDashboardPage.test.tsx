@@ -72,7 +72,7 @@ describe("LeagueDashboardPage", () => {
     expect(screen.queryByRole("heading", { name: "星取表" })).toBeNull();
   });
 
-  it("初期表示では順位未入力エラーを表示せず、完了時だけ検証する", () => {
+  it("初期表示の自動順位だけでリーグを完了できる", () => {
     render(<LeagueDashboardPage />);
 
     expect(screen.queryByRole("alert")).toBeNull();
@@ -81,8 +81,8 @@ describe("LeagueDashboardPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "リーグを完了" }));
 
-    expect(screen.getByRole("alert").textContent).toContain("グループAの順位をすべて入力してください。");
-    expect(saveLeagueMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(saveLeagueMock).toHaveBeenCalledWith(expect.objectContaining({ status: "completed" }));
   });
 
   it("PDF/印刷は選択中グループの専用印刷文書を対象にブラウザ印刷を起動する", () => {
@@ -128,6 +128,42 @@ describe("LeagueDashboardPage", () => {
     expect(document.querySelectorAll(".league-participant-label").length).toBeGreaterThan(0);
     expect(screen.queryByRole("textbox", { name: /表示名/ })).toBeNull();
     expect(screen.queryByDisplayValue("ペア01")).toBeNull();
+  });
+
+  it("順位表は自動順位と訂正欄を分け、訂正ボタンで保存モードを切り替える", () => {
+    render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+
+    expect(Array.from(document.querySelectorAll(".league-standings-table thead th"), (header) => header.textContent)).toEqual([
+      "参加者", "試合", "勝", "分", "負", "勝点", "順位", "訂正",
+    ]);
+    expect(screen.getByRole("button", { name: "訂正" })).toHaveProperty("disabled", false);
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "訂正" }));
+    expect(screen.getByRole("button", { name: "キャンセル" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "訂正を保存" })).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Aの訂正順位" }), { target: { value: "2" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Bの訂正順位" }), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "訂正を保存" }));
+
+    expect(saveLeagueMock).toHaveBeenCalledWith(expect.objectContaining({
+      standings: expect.arrayContaining([
+        expect.objectContaining({ participantId: "p1", manualRank: 2, rankStatus: "confirmed" }),
+        expect.objectContaining({ participantId: "p2", manualRank: 1, rankStatus: "confirmed" }),
+      ]),
+    }));
+    expect(screen.getByRole("button", { name: "訂正" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "訂正を保存" })).toBeNull();
+  });
+
+  it("完了済みリーグでは訂正ボタンを無効にする", () => {
+    useLeagueMock.mockReturnValue({ ...makeLeague(), status: "completed" });
+    render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+
+    expect(screen.getByRole("button", { name: "訂正" })).toHaveProperty("disabled", true);
   });
 
   it("星取表では無効の対戦を無と表示する", () => {

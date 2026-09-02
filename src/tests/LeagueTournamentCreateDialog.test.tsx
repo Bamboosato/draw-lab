@@ -40,7 +40,7 @@ describe("LeagueTournamentCreateDialog", () => {
       />,
     );
 
-    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("");
+    expect((screen.getAllByRole("combobox")[0] as HTMLSelectElement).value).toBe("");
     expect(screen.queryByText("対戦カード確定済みのリーグ表がありません。")).toBeNull();
     const summary = document.querySelector(".league-create-dialog .compact-summary");
     expect(summary).not.toBeNull();
@@ -48,12 +48,12 @@ describe("LeagueTournamentCreateDialog", () => {
     expect(Array.from(summary?.querySelectorAll("dd") ?? [], (element) => element.textContent)).toEqual(["", "", "", ""]);
     expect(document.querySelector(".league-create-feedback-hint")?.textContent).toBe("\u00a0");
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "league-source" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0]!, { target: { value: "league-source" } });
 
     expect(screen.getByText("リーグ表の状態")).toBeTruthy();
     expect(screen.getByText("対戦前")).toBeTruthy();
     expect(screen.getByText("4名")).toBeTruthy();
-    expect(screen.getByText("2")).toBeTruthy();
+    expect(Array.from(summary?.querySelectorAll("dd") ?? [], (element) => element.textContent)).toContain("2");
     expect(screen.getByText("選択済み参加者数")).toBeTruthy();
     expect(screen.getByText("3名")).toBeTruthy();
     expect(screen.getByText("作成時のドローサイズ: 4")).toBeTruthy();
@@ -70,10 +70,10 @@ describe("LeagueTournamentCreateDialog", () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "league-source" } });
-    const numberInputs = screen.getAllByRole("spinbutton");
-    fireEvent.change(numberInputs[0], { target: { value: "2" } });
-    fireEvent.change(numberInputs[1], { target: { value: "3" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0]!, { target: { value: "league-source" } });
+    const rankSelects = screen.getAllByRole("combobox").slice(1);
+    fireEvent.change(rankSelects[0], { target: { value: "2" } });
+    fireEvent.change(rankSelects[1], { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "基本情報へ進む" }));
 
     expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: "league-source" }), { min: 2, max: 3 });
@@ -89,12 +89,31 @@ describe("LeagueTournamentCreateDialog", () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "league-source" } });
-    const numberInputs = screen.getAllByRole("spinbutton");
-    fireEvent.change(numberInputs[1], { target: { value: "4" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0]!, { target: { value: "league-source" } });
+    const rankSelects = screen.getAllByRole("combobox").slice(1);
 
-    expect((screen.getByRole("button", { name: "基本情報へ進む" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole("alert").textContent).toContain("終了順位をグループ内の人数（3位）以下");
+    expect(Array.from((rankSelects[1] as HTMLSelectElement).options, (option) => option.value)).toEqual(["1", "2", "3"]);
+    expect(Array.from((rankSelects[1] as HTMLSelectElement).options, (option) => option.value)).not.toContain("4");
+    expect((screen.getByRole("button", { name: "基本情報へ進む" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("意図: 開始順位が終了順位を超える場合は前後関係に合ったエラーを表示する", () => {
+    render(
+      <LeagueTournamentCreateDialog
+        open
+        leagues={[makeLeague()]}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getAllByRole("combobox")[0]!, { target: { value: "league-source" } });
+    const rankSelects = screen.getAllByRole("combobox").slice(1);
+    fireEvent.change(rankSelects[0], { target: { value: "3" } });
+
+    expect((rankSelects[1] as HTMLSelectElement).value).toBe("3");
+    expect(screen.getByRole("alert").textContent).toContain("グループ数×順位数（2）");
+    expect(screen.getByRole("alert").textContent).not.toContain("終了順位は開始順位");
   });
 
   it("意図: 対応外のドローサイズを予約行内のエラー表示へ置き換える", () => {
@@ -107,9 +126,9 @@ describe("LeagueTournamentCreateDialog", () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "league-source" } });
-    const numberInputs = screen.getAllByRole("spinbutton");
-    fireEvent.change(numberInputs[1], { target: { value: "3" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0]!, { target: { value: "league-source" } });
+    const rankSelects = screen.getAllByRole("combobox").slice(1);
+    fireEvent.change(rankSelects[1], { target: { value: "3" } });
 
     expect(screen.getByRole("alert").textContent).toContain("グループ数×順位数（6）");
     expect(document.querySelectorAll(".league-create-feedback-hint")).toHaveLength(1);
