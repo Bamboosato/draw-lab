@@ -3,12 +3,14 @@ import { useParams } from "react-router-dom";
 import {
   createRandomSeed,
   generateTournamentDraw,
+  hasTournamentMatchData,
   isTournamentDrawCurrent,
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { DrawPreview } from "../components/DrawPreview";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ValidationBanner } from "../components/ValidationBanner";
 import { buildBracketViewModel } from "../domain/bracketViewModel";
 import { buildTournamentPrintFilename, printWithFilename } from "../utils/print";
@@ -19,6 +21,7 @@ export function PreviewPage() {
   const tournament = useTournament(id);
   const { updateTournament, getTournamentIntegration } = useTournaments();
   const [showIssues, setShowIssues] = useState(false);
+  const [regenerateOpen, setRegenerateOpen] = useState(false);
   const integration = tournament ? getTournamentIntegration(tournament.id) : undefined;
   const validation = useMemo(
     () => tournament ? validateTournamentForUi(tournament, integration) : { errors: [], warnings: [] },
@@ -31,7 +34,7 @@ export function PreviewPage() {
 
   const drawCurrent = isTournamentDrawCurrent(tournament, integration);
 
-  const regenerate = (): void => {
+  const runRegenerate = (): void => {
     setShowIssues(true);
     const result = generateTournamentDraw(tournament, createRandomSeed(), integration);
 
@@ -40,6 +43,14 @@ export function PreviewPage() {
     }
 
     updateTournament(result.tournament);
+  };
+
+  const regenerate = (): void => {
+    if (hasTournamentMatchData(tournament)) {
+      setRegenerateOpen(true);
+      return;
+    }
+    runRegenerate();
   };
 
   const viewModel = drawCurrent && tournament.generatedDraw
@@ -81,9 +92,21 @@ export function PreviewPage() {
       )}
 
       <div className="bottom-actions preview-footer-actions no-print">
-        <button type="button" className="button secondary" title="オプション設定へ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/options`)}>戻る</button>
+        <button type="button" className="button secondary" title="対戦カードへ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/matches`)}>戻る</button>
         <button type="button" className="button primary" title="トーナメント一覧へ戻る" onClick={() => navigate("/")}>一覧</button>
       </div>
+      <ConfirmDialog
+        open={regenerateOpen}
+        title="トーナメント表を再生成します"
+        message="再生成すると、入力済みの勝敗と備考がリセットされます。再生成してもよろしいですか？"
+        confirmLabel="再生成する"
+        cancelLabel="キャンセル"
+        onCancel={() => setRegenerateOpen(false)}
+        onConfirm={() => {
+          setRegenerateOpen(false);
+          runRegenerate();
+        }}
+      />
     </div>
   );
 }

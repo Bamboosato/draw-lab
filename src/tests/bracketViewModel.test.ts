@@ -26,6 +26,7 @@ describe("buildBracketViewModel", () => {
         { position: 3, entrantId: "entrant-2", isBye: false },
         { position: 4, isBye: false },
       ],
+      matches: [],
     };
 
     const viewModel = buildBracketViewModel(tournament, draw);
@@ -82,6 +83,7 @@ describe("buildBracketViewModel", () => {
       randomSeed: "view-seed",
       generatedAt: "2026-07-02T00:00:00.000Z",
       slots: [{ position: 1, entrantId: "entrant-1", isBye: false }],
+      matches: [],
     };
 
     const viewModel = buildBracketViewModel(tournament, draw);
@@ -113,6 +115,7 @@ describe("buildBracketViewModel", () => {
       randomSeed: "view-seed",
       generatedAt: "2026-07-02T00:00:00.000Z",
       slots: [{ position: 1, entrantId: "entrant-1", isBye: false }],
+      matches: [],
     };
 
     const row = buildBracketViewModel(tournament, draw).rows[0];
@@ -138,6 +141,7 @@ describe("buildBracketViewModel", () => {
       randomSeed: "view-seed",
       generatedAt: "2026-07-02T00:00:00.000Z",
       slots: [{ position: 1, entrantId: "entrant-1", isBye: false }],
+      matches: [],
     };
 
     const row = buildBracketViewModel(tournament, draw).rows[0];

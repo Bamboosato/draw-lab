@@ -5,6 +5,7 @@ import {
   compactTournament,
   createEmptyEntrant,
   getEntrantStats,
+  hasTournamentMatchData,
   getVisibleEntrantRowCount,
   mergeEntrantsIntoEmptyRows,
   parseEntrantsFromText,
@@ -17,6 +18,7 @@ import { CompactSummary } from "../components/CompactSummary";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ValidationBanner } from "../components/ValidationBanner";
 import type { Entrant } from "../domain/types";
+import type { TournamentIntegrationRecord } from "../domain/leagueTournamentTypes";
 
 export function EntrantsPage() {
   const navigate = useViewTransitionNavigate();
@@ -33,6 +35,9 @@ export function EntrantsPage() {
   const [warningConfirmOpen, setWarningConfirmOpen] = useState(false);
   const [manualVisibleRowCount, setManualVisibleRowCount] = useState(0);
   const [showRosterDetails, setShowRosterDetails] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [pendingEntrants, setPendingEntrants] = useState<Entrant[]>();
+  const [pendingIntegrationChange, setPendingIntegrationChange] = useState<TournamentIntegrationRecord>();
 
   useEffect(() => {
     setManualVisibleRowCount(0);
@@ -84,13 +89,22 @@ export function EntrantsPage() {
     </button>
   );
 
-  const updateEntrants = (entrants: Entrant[]): void => {
-    const next = applyEntrantsUpdate(tournament, entrants, integration);
-    if (integration) {
-      updateTournamentWithIntegration(next, syncTournamentIntegrationParticipants(integration, entrants));
+  const saveEntrants = (next: ReturnType<typeof applyEntrantsUpdate>, nextIntegration = integration, entrants = next.entrants): void => {
+    if (nextIntegration) {
+      updateTournamentWithIntegration(next, syncTournamentIntegrationParticipants(nextIntegration, entrants));
       return;
     }
     updateTournament(next);
+  };
+
+  const updateEntrants = (entrants: Entrant[]): void => {
+    const next = applyEntrantsUpdate(tournament, entrants, integration);
+    if (hasTournamentMatchData(tournament) && next.generatedDraw?.id !== tournament.generatedDraw?.id) {
+      setPendingEntrants(entrants);
+      setResetConfirmOpen(true);
+      return;
+    }
+    saveEntrants(next, integration, entrants);
   };
 
   const updateEntrant = (entrantId: string, patch: Partial<Entrant>): void => {
@@ -99,7 +113,13 @@ export function EntrantsPage() {
 
   const updatePlacement = (entrantId: string, patch: Parameters<typeof updateTournamentIntegrationPlacement>[2]): void => {
     if (!integration) return;
-    updateTournamentIntegration(updateTournamentIntegrationPlacement(integration, entrantId, patch));
+    const nextIntegration = updateTournamentIntegrationPlacement(integration, entrantId, patch);
+    if (hasTournamentMatchData(tournament)) {
+      setPendingIntegrationChange(nextIntegration);
+      setResetConfirmOpen(true);
+      return;
+    }
+    updateTournamentIntegration(nextIntegration);
   };
 
   const addVisibleRow = (): void => {
@@ -353,6 +373,35 @@ export function EntrantsPage() {
         </button>
       </div>
 
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        title="結果と備考をリセットします"
+        message="名簿を変更すると、トーナメントの再生成により入力済みの勝敗と備考がリセットされます。続行してもよろしいですか？"
+        confirmLabel="リセットして続行"
+        cancelLabel="キャンセル"
+        onCancel={() => {
+          setResetConfirmOpen(false);
+          setPendingEntrants(undefined);
+          setPendingIntegrationChange(undefined);
+        }}
+        onConfirm={() => {
+          const integrationToSave = pendingIntegrationChange;
+          if (integrationToSave) {
+            setResetConfirmOpen(false);
+            setPendingEntrants(undefined);
+            setPendingIntegrationChange(undefined);
+            updateTournamentIntegration(integrationToSave);
+            return;
+          }
+          const entrantsToSave = pendingEntrants;
+          setResetConfirmOpen(false);
+          setPendingEntrants(undefined);
+          setPendingIntegrationChange(undefined);
+          if (!entrantsToSave) return;
+          const next = applyEntrantsUpdate(tournament, entrantsToSave, integration);
+          saveEntrants(next, integration, entrantsToSave);
+        }}
+      />
       <ConfirmDialog
         open={warningConfirmOpen}
         title="警告があります"

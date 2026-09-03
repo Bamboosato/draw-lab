@@ -176,6 +176,10 @@ function getScreenName(pathname: string): string {
     return "オプション設定";
   }
 
+  if (pathname.includes("/matches")) {
+    return "対戦カード";
+  }
+
   if (pathname.includes("/preview")) {
     return "プレビュー";
   }

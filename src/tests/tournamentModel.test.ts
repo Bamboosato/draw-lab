@@ -26,6 +26,7 @@ const generatedDraw = {
   tournamentId: "tournament-1",
   randomSeed: "seed-1",
   slots: [],
+  matches: [],
   generatedAt: "2026-07-02T00:00:00.000Z",
 };
 

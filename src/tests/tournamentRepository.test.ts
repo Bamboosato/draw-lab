@@ -43,6 +43,7 @@ describe("TournamentRepository", () => {
         tournamentId: "with-generation-signature",
         randomSeed: "seed-1",
         slots: [{ position: 1, isBye: true }],
+        matches: [],
         generatedAt: "2026-01-01T00:00:00.000Z",
         generationInputSignature: '{"version":1,"drawSize":4}',
       },

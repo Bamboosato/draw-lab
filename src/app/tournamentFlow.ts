@@ -6,6 +6,7 @@ export const TOURNAMENT_STEPS = [
   { key: "basic", label: "基本情報", path: "edit/basic" },
   { key: "entrants", label: "名簿入力", path: "edit/entrants" },
   { key: "options", label: "オプション設定", path: "edit/options" },
+  { key: "matches", label: "対戦カード", path: "edit/matches" },
   { key: "preview", label: "生成・プレビュー", path: "preview" },
 ] as const;
 
@@ -25,7 +26,7 @@ export function getTournamentStepPath(tournamentId: string, step: TournamentStep
 
 export function getTournamentEditSteps(tournament: Tournament): readonly TournamentEditStep[] {
   return tournament.generatedDraw
-    ? ["basic", "entrants", "options"]
+    ? ["basic", "entrants", "options", "matches"]
     : ["basic"];
 }
 
@@ -36,6 +37,10 @@ export function getTournamentStepFromPath(pathname: string): TournamentStep | un
 
   if (pathname.includes("/edit/options")) {
     return "options";
+  }
+
+  if (pathname.includes("/edit/matches")) {
+    return "matches";
   }
 
   if (pathname.includes("/preview")) {
@@ -74,6 +79,7 @@ export function isTournamentStepComplete(
     case "entrants":
       return isRosterComplete(tournament, integration);
     case "options":
+    case "matches":
     case "preview":
       return isTournamentDrawCurrent(tournament, integration);
   }
@@ -117,7 +123,9 @@ export function getTournamentStepAccess(
       canEnter: false,
       reason: tournament.generatedDraw
         ? "入力内容が生成時から変更されています。設定を元に戻すか、再生成してください。"
-        : "トーナメント表を生成してからプレビューへ進んでください。",
+        : step === "matches"
+          ? "トーナメント表を生成してから対戦カードへ進んでください。"
+          : "トーナメント表を生成してからプレビューへ進んでください。",
       redirectStep: "options",
     };
   }

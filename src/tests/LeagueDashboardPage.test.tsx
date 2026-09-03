@@ -60,6 +60,7 @@ describe("LeagueDashboardPage", () => {
     expect(screen.getByRole("tab", { name: "対戦カード" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByRole("heading", { name: "星取表" })).toBeNull();
     expect(document.querySelector(".match-card-players.match-pair")).toBeTruthy();
+    expect(screen.getAllByRole("textbox", { name: "備考" }).every((input) => input.getAttribute("placeholder") === "結果の詳細を記録してください（任意）")).toBe(true);
 
     fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
 

@@ -77,8 +77,34 @@ export type GeneratedDraw = {
   tournamentId: string;
   randomSeed: string;
   slots: DrawSlot[];
+  matches: TournamentMatch[];
   generatedAt: string;
   generationInputSignature?: string;
+};
+
+export type TournamentMatchResult = "unplayed" | "participantAWin" | "participantBWin";
+
+export type TournamentMatchSource =
+  | { slotPosition: number }
+  | { matchId: string };
+
+export type TournamentMatch = {
+  id: string;
+  round: number;
+  matchNo: number;
+  sourceA: TournamentMatchSource;
+  sourceB: TournamentMatchSource;
+  result: TournamentMatchResult;
+  note?: string;
+};
+
+export type TournamentMatchState = "pending" | "ready" | "completed" | "byeAdvance";
+
+export type ResolvedTournamentMatch = TournamentMatch & {
+  state: TournamentMatchState;
+  participantAId?: string;
+  participantBId?: string;
+  winnerEntrantId?: string;
 };
 
 export type ValidationResult = {
@@ -148,6 +174,7 @@ export type CreateGeneratedDrawParams = {
   tournamentId: string;
   randomSeed: string;
   slots: DrawSlot[];
+  drawSize: DrawSize;
   now: string;
 };
 
@@ -160,6 +187,8 @@ export type BracketViewModel = {
   drawSize: DrawSize;
   outputOptions: DrawOutputOptions;
   rows: BracketRow[];
+  matches: ResolvedTournamentMatch[];
+  championDrawPosition?: number;
 };
 
 export type BracketRow = {

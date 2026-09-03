@@ -15,6 +15,7 @@ describe("tournamentFlow", () => {
       "基本情報",
       "名簿入力",
       "オプション設定",
+      "対戦カード",
       "生成・プレビュー",
     ]);
   });
@@ -42,10 +43,11 @@ describe("tournamentFlow", () => {
         randomSeed: "seed-1",
         generatedAt: "2026-07-03T00:00:00.000Z",
         slots: [],
+        matches: [],
       },
     });
 
-    expect(getTournamentEditSteps(tournament)).toEqual(["basic", "entrants", "options"]);
+    expect(getTournamentEditSteps(tournament)).toEqual(["basic", "entrants", "options", "matches"]);
   });
 
   it("allows options settings after roster errors are resolved", () => {
@@ -72,6 +74,7 @@ describe("tournamentFlow", () => {
         randomSeed: "seed-1",
         generatedAt: "2026-07-03T00:00:00.000Z",
         slots: [],
+        matches: [],
       },
     });
 
@@ -90,10 +93,11 @@ describe("tournamentFlow", () => {
         generatedAt: "2026-07-03T00:00:00.000Z",
         generationInputSignature: "stale-signature",
         slots: [],
+        matches: [],
       },
     });
 
-    expect(getTournamentEditSteps(tournament)).toEqual(["basic", "entrants", "options"]);
+    expect(getTournamentEditSteps(tournament)).toEqual(["basic", "entrants", "options", "matches"]);
     expect(isTournamentStepComplete(tournament, "options")).toBe(false);
     expect(isTournamentStepComplete(tournament, "preview")).toBe(false);
     expect(getTournamentStepAccess(tournament, "preview")).toMatchObject({

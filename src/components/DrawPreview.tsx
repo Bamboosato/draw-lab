@@ -1,4 +1,4 @@
-import type { BracketRow, BracketViewModel, DrawOutputOptions, DrawSize } from "../domain/types";
+import type { BracketRow, BracketViewModel, DrawOutputOptions, DrawSize, ResolvedTournamentMatch } from "../domain/types";
 import { getEffectiveOutputPageCount } from "../domain/outputOptions";
 
 const singleSlotHeight = 44;
@@ -185,6 +185,27 @@ export function getPrintPageBrackets(
   }));
 }
 
+export function getPrintPageMatches(
+  matches: readonly ResolvedTournamentMatch[],
+  pageDrawSize: DrawSize,
+  pageIndex: number,
+): ResolvedTournamentMatch[] {
+  const pageStartPosition = pageIndex * pageDrawSize + 1;
+  const pageRoundCount = Math.log2(pageDrawSize);
+
+  return Array.from({ length: pageRoundCount }, (_, roundIndex) => roundIndex + 1)
+    .flatMap((round) => {
+      const matchCount = pageDrawSize / 2 ** round;
+      return Array.from({ length: matchCount }, (_, localMatchIndex) => {
+        const localMatchNo = localMatchIndex + 1;
+        const sourcePosition = pageStartPosition + localMatchIndex * 2 ** round;
+        const globalMatchNo = Math.floor((sourcePosition - 1) / 2 ** round) + 1;
+        const match = matches.find((candidate) => candidate.round === round && candidate.matchNo === globalMatchNo);
+        return match ? { ...match, round, matchNo: localMatchNo } : undefined;
+      }).filter((match): match is ResolvedTournamentMatch => match !== undefined);
+    });
+}
+
 export function getColumnTextLayout(
   value: string,
   startX: number,
@@ -320,6 +341,11 @@ export function DrawPreview({
   const leftRoundX = (round: number): number => leftBaseX + slotWidth + connectorOffset + roundGap * (round - 1);
   const rightRoundX = (round: number): number => rightBaseX - connectorOffset - roundGap * (round - 1);
   const connectorStrokeWidth = getLineWidth(viewModel.outputOptions.lineWeight);
+  const winnerStrokeWidth = Math.max(connectorStrokeWidth + 1.5, 3.25);
+  const matches = viewModel.matches ?? [];
+  const matchByRoundAndNo = (round: number, matchNo: number) => matches.find(
+    (match) => match.round === round && match.matchNo === matchNo,
+  );
 
   const matchCenterY = (round: number, matchIndex: number, side: "single" | "left" | "right"): number => {
     const rowCount = side === "single" ? viewModel.drawSize : viewModel.drawSize / 2;
@@ -484,6 +510,73 @@ export function DrawPreview({
     })
   );
 
+  const getWinnerSide = (match: (typeof matches)[number]): "A" | "B" | undefined => {
+    if (!match.winnerEntrantId) {
+      return undefined;
+    }
+    return match.winnerEntrantId === match.participantAId ? "A" : "B";
+  };
+
+  const getWinnerBranchPath = (
+    sourceX: number,
+    targetX: number,
+    topY: number,
+    bottomY: number,
+    winnerSide: "A" | "B",
+    nextTargetX?: number,
+  ): string => {
+    const centerY = (topY + bottomY) / 2;
+    const sourceY = winnerSide === "A" ? topY : bottomY;
+    return `M ${sourceX} ${sourceY} H ${targetX} V ${centerY}${nextTargetX === undefined ? "" : ` H ${nextTargetX}`}`;
+  };
+
+  const renderWinnerConnectors = (side: "single" | "left" | "right", connectorRounds: number[]) => (
+    connectorRounds.flatMap((round) => {
+      const isLeft = side !== "right";
+      const matchCount = side === "single"
+        ? viewModel.drawSize / 2 ** round
+        : viewModel.drawSize / 2 / 2 ** round;
+      const sourceX = round === 1
+        ? (isLeft ? leftBaseX + slotWidth : rightBaseX)
+        : (isLeft ? leftRoundX(round - 1) : rightRoundX(round - 1));
+      const targetX = isLeft ? leftRoundX(round) : rightRoundX(round);
+      const sideMatchOffset = side === "right" ? matchCount : 0;
+
+      return Array.from({ length: matchCount }, (_, localMatchIndex) => {
+        const logicalMatchNo = sideMatchOffset + localMatchIndex + 1;
+        const match = matchByRoundAndNo(round, logicalMatchNo);
+        const winnerSide = match ? getWinnerSide(match) : undefined;
+        if (!match || !winnerSide) {
+          return null;
+        }
+        const topY = round === 1
+          ? rowCenterY(localMatchIndex * 2)
+          : matchCenterY(round - 1, localMatchIndex * 2, side);
+        const bottomY = round === 1
+          ? rowCenterY(localMatchIndex * 2 + 1)
+          : matchCenterY(round - 1, localMatchIndex * 2 + 1, side);
+
+        return (
+          <path
+            className="svg-connector winner"
+            key={`winner-connector-${side}-${round}-${localMatchIndex}`}
+            style={{ strokeWidth: winnerStrokeWidth }}
+            d={getWinnerBranchPath(
+              sourceX,
+              targetX,
+              topY,
+              bottomY,
+              winnerSide,
+              round < (side === "single" ? roundCount : sideRounds[sideRounds.length - 1] ?? round)
+                ? (isLeft ? leftRoundX(round + 1) : rightRoundX(round + 1))
+                : undefined,
+            )}
+          />
+        );
+      }).filter(Boolean);
+    })
+  );
+
   const renderBothSideFinalConnector = () => {
     const lastSideRound = sideRounds[sideRounds.length - 1];
     const finalCenterY = getBothSideJoinCenterY(viewModel.drawSize, slotHeight);
@@ -495,6 +588,28 @@ export function DrawPreview({
         className="svg-connector svg-final-connector"
         style={{ strokeWidth: connectorStrokeWidth }}
         d={getBothSideJoinPath(leftSourceX, rightSourceX, finalCenterY)}
+      />
+    );
+  };
+
+  const renderWinnerFinalConnector = () => {
+    const finalMatch = matchByRoundAndNo(roundCount, 1);
+    const winnerSide = finalMatch ? getWinnerSide(finalMatch) : undefined;
+    if (!finalMatch || !winnerSide) {
+      return null;
+    }
+
+    const finalCenterY = getBothSideJoinCenterY(viewModel.drawSize, slotHeight);
+    const leftSourceX = leftRoundX(sideRounds[sideRounds.length - 1] ?? 1);
+    const rightSourceX = rightRoundX(sideRounds[sideRounds.length - 1] ?? 1);
+    const centerX = (leftSourceX + rightSourceX) / 2;
+    const sourceX = winnerSide === "A" ? leftSourceX : rightSourceX;
+
+    return (
+      <path
+        className="svg-connector winner svg-final-connector"
+        style={{ strokeWidth: winnerStrokeWidth }}
+        d={`M ${sourceX} ${finalCenterY} H ${centerX} M ${centerX} ${finalCenterY} V ${finalCenterY - connectorLength}`}
       />
     );
   };
@@ -511,6 +626,53 @@ export function DrawPreview({
         style={{ strokeWidth: connectorStrokeWidth }}
         d={getSingleSideFinalConnectorPath(targetX, finalCenterY)}
       />
+    );
+  };
+
+  const renderSingleSideWinnerFinalConnector = () => {
+    const finalMatch = matchByRoundAndNo(roundCount, 1);
+    if (!finalMatch?.winnerEntrantId) {
+      return null;
+    }
+    const finalTopY = matchCenterY(roundCount - 1, 0, "single");
+    const finalBottomY = matchCenterY(roundCount - 1, 1, "single");
+    const finalCenterY = (finalTopY + finalBottomY) / 2;
+    const targetX = leftRoundX(roundCount);
+    const endpointX = targetX + connectorLength;
+
+    return (
+      <path
+        className="svg-connector winner svg-final-connector"
+        style={{ strokeWidth: winnerStrokeWidth }}
+        d={`M ${targetX} ${finalCenterY} H ${endpointX} M ${endpointX} ${finalCenterY} V ${finalCenterY - connectorLength}`}
+      />
+    );
+  };
+
+  const renderChampionNumber = () => {
+    if (viewModel.championDrawPosition === undefined) {
+      return null;
+    }
+
+    if (bothSides) {
+      const finalCenterY = getBothSideJoinCenterY(viewModel.drawSize, slotHeight);
+      const leftSourceX = leftRoundX(sideRounds[sideRounds.length - 1] ?? 1);
+      const rightSourceX = rightRoundX(sideRounds[sideRounds.length - 1] ?? 1);
+      const centerX = (leftSourceX + rightSourceX) / 2;
+      return (
+        <text className="svg-champion-number" x={centerX} y={finalCenterY - connectorLength - 8} textAnchor="middle">
+          No.{viewModel.championDrawPosition}
+        </text>
+      );
+    }
+
+    const finalTopY = matchCenterY(roundCount - 1, 0, "single");
+    const finalBottomY = matchCenterY(roundCount - 1, 1, "single");
+    const targetX = leftRoundX(roundCount) + connectorLength;
+    return (
+      <text className="svg-champion-number" x={targetX} y={(finalTopY + finalBottomY) / 2 - connectorLength - 8} textAnchor="middle">
+        No.{viewModel.championDrawPosition}
+      </text>
     );
   };
 
@@ -542,6 +704,21 @@ export function DrawPreview({
           </>
         )}
       </g>
+      <g className="svg-winner-connectors">
+        {bothSides ? (
+          <>
+            {renderWinnerConnectors("left", sideRounds)}
+            {renderWinnerConnectors("right", sideRounds)}
+            {renderWinnerFinalConnector()}
+          </>
+        ) : (
+          <>
+            {renderWinnerConnectors("single", rounds)}
+            {renderSingleSideWinnerFinalConnector()}
+          </>
+        )}
+      </g>
+      {renderChampionNumber()}
 
       {bothSides
         ? <>{leftRows.map((row, index) => renderSlot(row, index, "left"))}{rightRows.map((row, index) => renderSlot(row, index, "right"))}</>
@@ -600,6 +777,7 @@ export function DrawPreview({
               ...viewModel,
               drawSize: pageBracket.drawSize,
               rows: pageBracket.rows,
+              matches: getPrintPageMatches(viewModel.matches, pageBracket.drawSize, index),
             }}
             generatedAt={generatedAt}
             renderMode="canvas"
