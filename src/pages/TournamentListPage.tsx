@@ -97,7 +97,7 @@ export function TournamentListPage() {
                     label: "大会情報の復元",
                     title: "大会情報をファイルから復元",
                     icon: "restore",
-                    onSelect: () => navigate("/import"),
+                    onSelect: () => navigate("/tournaments/import"),
                   },
                 ],
               },

@@ -12,6 +12,22 @@ export const LEAGUE_STEPS = [
 export type LeagueStep = (typeof LEAGUE_STEPS)[number]["key"];
 export type LeagueEditStep = Exclude<LeagueStep, "dashboard">;
 
+export type LeagueStatusPresentation = {
+  label: "編集中" | "運用中" | "完了";
+  className: "generated" | "draft";
+  category: "editing" | "operating" | "completed";
+};
+
+export function getLeagueStatus(league: League): LeagueStatusPresentation {
+  if (league.status === "completed") {
+    return { label: "完了", className: "generated", category: "completed" };
+  }
+  if (league.matchSelectionStatus === "confirmed") {
+    return { label: "運用中", className: "generated", category: "operating" };
+  }
+  return { label: "編集中", className: "draft", category: "editing" };
+}
+
 export function getLeagueStepPath(id: string, step: LeagueStep): string {
   const definition = LEAGUE_STEPS.find((item) => item.key === step);
   return `/leagues/${id}/${definition?.path ?? "edit/basic"}`;

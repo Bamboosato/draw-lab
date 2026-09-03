@@ -93,7 +93,7 @@ export function PreviewPage() {
 
       <div className="bottom-actions preview-footer-actions no-print">
         <button type="button" className="button secondary" title="対戦カードへ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/matches`)}>戻る</button>
-        <button type="button" className="button primary" title="トーナメント一覧へ戻る" onClick={() => navigate("/")}>一覧</button>
+        <button type="button" className="button primary" title="トーナメント一覧へ戻る" onClick={() => navigate("/tournaments")}>一覧</button>
       </div>
       <ConfirmDialog
         open={regenerateOpen}

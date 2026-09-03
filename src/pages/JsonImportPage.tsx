@@ -87,7 +87,7 @@ export function JsonImportPage() {
     setRestoreError(undefined);
     try {
       await replaceAllTournaments(backup.tournaments, backup.integrations);
-      navigate("/");
+      navigate("/tournaments");
     } catch (error) {
       setRestoreError(error instanceof Error ? error.message : "全大会の復元に失敗しました。");
     }
@@ -164,7 +164,7 @@ export function JsonImportPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" title="トーナメント一覧へ戻る" disabled={interactionDisabled} onClick={() => navigate("/")}>一覧へ戻る</button>
+        <button type="button" className="button secondary" title="トーナメント一覧へ戻る" disabled={interactionDisabled} onClick={() => navigate("/tournaments")}>一覧へ戻る</button>
         {parsed.state === "success" && parsed.kind === "tournament" ? (
           <button
             type="button"
@@ -173,7 +173,7 @@ export function JsonImportPage() {
             disabled={interactionDisabled || validation.errors.length > 0}
             onClick={() => {
               importTournament(parsed.tournament, parsed.integration);
-              navigate("/");
+              navigate("/tournaments");
             }}
           >
             個別大会を追加

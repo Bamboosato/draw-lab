@@ -13,6 +13,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const location = useLocation();
   const screenName = getScreenName(location.pathname);
+  const isHome = location.pathname === "/";
   const showTournamentStepper = location.pathname.includes("/tournaments/") && location.pathname !== "/tournaments/new";
   const showLeagueStepper = location.pathname.includes("/leagues/") && location.pathname !== "/leagues/new" && location.pathname !== "/leagues/import";
   const tournamentId = getTournamentId(location.pathname);
@@ -38,13 +39,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <SidebarToggleIcon isCollapsed={isSidebarCollapsed} />
           </button>
-          <div className="brand">
+          <NavLink
+            className="brand"
+            to="/"
+            aria-label="DrawLab トップへ"
+            viewTransition={viewTransitionsEnabled}
+          >
             <strong>DrawLab</strong>
-          </div>
+          </NavLink>
         </div>
         <nav className="nav-list" aria-label="グローバルナビゲーション">
           <NavLink
-            to="/"
+            to="/tournaments"
             className={isTournamentArea ? "active" : undefined}
             viewTransition={viewTransitionsEnabled}
           >
@@ -99,10 +105,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="stepper-band no-print">
             <LeagueStepper currentStep={currentLeagueStep} />
           </div>
-        ) : (
+        ) : isHome ? null : (
           <header className="topbar no-print">
             <div>
-              <p className="eyebrow">DrawLab Tournament Manager</p>
+              <p className="eyebrow">DrawLab</p>
               <h1>{screenName}</h1>
             </div>
           </header>
@@ -149,10 +155,18 @@ function TournamentStepper({ currentStep }: { currentStep: TournamentStep | unde
 
 function getScreenName(pathname: string): string {
   if (pathname === "/") {
-    return "トーナメント";
+    return "トーナメント・リーグ表";
   }
 
   if (pathname === "/import") {
+    return "大会情報の復元";
+  }
+
+  if (pathname === "/tournaments") {
+    return "トーナメント";
+  }
+
+  if (pathname === "/tournaments/import") {
     return "大会情報の復元";
   }
 
@@ -217,7 +231,7 @@ function getLeagueId(pathname: string): string | undefined {
 }
 
 function isTournamentPath(pathname: string): boolean {
-  return pathname === "/" || pathname === "/import" || pathname.startsWith("/tournaments/");
+  return pathname === "/tournaments" || pathname.startsWith("/tournaments/");
 }
 
 function isLeaguePath(pathname: string): boolean {

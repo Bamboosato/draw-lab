@@ -15,6 +15,12 @@ afterEach(() => {
 });
 
 describe("AppShell related app link", () => {
+  it("サイドバーのトーナメントからトーナメント一覧を開く", () => {
+    renderAppShell();
+
+    expect(screen.getByRole("link", { name: "トーナメント" }).getAttribute("href")).toBe("/tournaments");
+  });
+
   it("displays the MatchupLab link, favicon, and description", () => {
     renderAppShell();
 

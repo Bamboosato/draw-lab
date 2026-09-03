@@ -322,7 +322,7 @@ export function OptionsPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" title="トーナメント一覧へ戻る" onClick={() => navigate("/")}>一覧</button>
+        <button type="button" className="button secondary" title="トーナメント一覧へ戻る" onClick={() => navigate("/tournaments")}>一覧</button>
         <button type="button" className="button secondary" title="名簿入力へ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/entrants`)}>戻る</button>
         <button
           type="button"

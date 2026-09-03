@@ -360,7 +360,7 @@ export function EntrantsPage() {
       </section>
 
       <div className="bottom-actions no-print">
-        <button type="button" className="button secondary" title="トーナメント一覧へ戻る" onClick={() => navigate("/")}>一覧</button>
+        <button type="button" className="button secondary" title="トーナメント一覧へ戻る" onClick={() => navigate("/tournaments")}>一覧</button>
         <button type="button" className="button secondary" title="基本情報へ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/basic`)}>戻る</button>
         <button
           type="button"
