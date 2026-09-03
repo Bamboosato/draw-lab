@@ -3,6 +3,7 @@ import type { Tournament } from "../domain/types";
 import { isTournamentDrawCurrent } from "../app/tournamentModel";
 import { createLeagueToTournament } from "../app/leagueTournamentAdapter";
 import { createDefaultLeague } from "../app/leagueModel";
+import { createTournamentMatches } from "../domain/tournamentMatches";
 import {
   parseJsonImport,
   serializeAllTournaments,
@@ -36,9 +37,25 @@ describe("tournament JSON backup", () => {
     expect(result.tournament.entrants[1].id).not.toBe(source.entrants[1].id);
     expect(result.tournament.generatedDraw?.tournamentId).toBe(result.tournament.id);
     expect(result.tournament.generatedDraw?.slots[0].entrantId).toBe(result.tournament.entrants[0].id);
+    expect(result.tournament.generatedDraw?.matches).toHaveLength(3);
     expect(result.tournament.generatedDraw?.generationInputSignature).toBeDefined();
     expect(isTournamentDrawCurrent(result.tournament)).toBe(true);
     expect(result.tournament.createdAt).toBe("2026-02-02T00:00:00.000Z");
+  });
+
+  it("旧形式のmatchesなしドローを読み込むと未実施カードを補完する", () => {
+    const source = createTournament("legacy-match-source");
+    const raw = JSON.parse(serializeTournament(source)) as {
+      tournament: { generatedDraw?: Record<string, unknown> };
+    };
+    delete raw.tournament.generatedDraw?.matches;
+
+    const result = parseJsonImport(JSON.stringify(raw));
+
+    expect(result.state).toBe("success");
+    if (result.state !== "success" || result.kind !== "tournament") return;
+    expect(result.tournament.generatedDraw?.matches).toHaveLength(3);
+    expect(result.tournament.generatedDraw?.matches.every((match) => match.result === "unplayed")).toBe(true);
   });
 
   it("imports a stale individual draw as ungenerated", () => {
@@ -155,6 +172,38 @@ describe("tournament JSON backup", () => {
     expect(isTournamentDrawCurrent(result.tournament)).toBe(true);
   });
 
+  it("reassigns match IDs and keeps result, note, and previous-round references on import", () => {
+    const base = createTournament("match-source");
+    const entrants = Array.from({ length: 4 }, (_, index) => ({
+      id: `match-source-entrant-${index + 1}`,
+      player1Name: `選手${index + 1}`,
+    }));
+    const slots = entrants.map((entrant, index) => ({ position: index + 1, entrantId: entrant.id, isBye: false }));
+    const matches = createTournamentMatches(slots, 4);
+    const source: Tournament = {
+      ...base,
+      entrants,
+      generatedDraw: {
+        ...base.generatedDraw!,
+        slots,
+        matches: matches.map((match) => match.id === "match-1"
+          ? { ...match, result: "participantAWin" as const, note: "1回戦メモ" }
+          : match),
+      },
+    };
+
+    const result = parseJsonImport(serializeTournament(source));
+
+    expect(result.state).toBe("success");
+    if (result.state !== "success" || result.kind !== "tournament") return;
+    const importedMatches = result.tournament.generatedDraw?.matches ?? [];
+    expect(importedMatches).toHaveLength(3);
+    expect(importedMatches[0]?.id).not.toBe("match-1");
+    expect(importedMatches[0]).toMatchObject({ result: "participantAWin", note: "1回戦メモ" });
+    const importedSecondRound = importedMatches.find((match) => match.round === 2);
+    expect(importedSecondRound?.sourceA).toEqual({ matchId: importedMatches[0]?.id });
+  });
+
   it("round-trips league source, rank range, and manual placement metadata with remapped IDs", () => {
     const league = {
       ...createDefaultLeague(),
@@ -203,6 +252,7 @@ function createTournament(id: string): Tournament {
       tournamentId: id,
       randomSeed: "seed",
       slots: [{ position: 1, entrantId, isBye: false }],
+      matches: [],
       generatedAt: "2026-01-01T00:00:00.000Z",
     },
     createdAt: "2026-01-01T00:00:00.000Z",

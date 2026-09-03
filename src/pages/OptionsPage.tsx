@@ -1,15 +1,18 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   applyOptionsPatch,
   applyOutputOptionsPatch,
   createRandomSeed,
   generateTournamentDraw,
+  hasTournamentMatchData,
+  isTournamentDrawCurrent,
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { ValidationBanner } from "../components/ValidationBanner";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import {
   getAvailableOutputPageCounts,
   getDrawOutputOptions,
@@ -22,6 +25,10 @@ export function OptionsPage() {
   const { id } = useParams();
   const tournament = useTournament(id);
   const { updateTournament, getTournamentIntegration } = useTournaments();
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [pendingReset, setPendingReset] = useState<
+    { kind: "options"; patch: Partial<DrawOptions> } | { kind: "generate" } | undefined
+  >();
   const integration = tournament ? getTournamentIntegration(tournament.id) : undefined;
 
   const validation = useMemo(
@@ -35,7 +42,13 @@ export function OptionsPage() {
   const hasValidationErrors = validation.errors.length > 0;
 
   const updateOptions = (patch: Partial<DrawOptions>): void => {
-    updateTournament(applyOptionsPatch(tournament, patch, integration));
+    const next = applyOptionsPatch(tournament, patch, integration);
+    if (hasTournamentMatchData(tournament) && next.generatedDraw?.id !== tournament.generatedDraw?.id) {
+      setPendingReset({ kind: "options", patch });
+      setResetConfirmOpen(true);
+      return;
+    }
+    updateTournament(next);
   };
 
   const outputOptions = getDrawOutputOptions(tournament.outputOptions);
@@ -59,7 +72,7 @@ export function OptionsPage() {
     }
 
     updateTournament(result.tournament);
-    navigate(`/tournaments/${tournament.id}/preview`);
+    navigate(`/tournaments/${tournament.id}/edit/matches`);
   };
 
   const generate = (): void => {
@@ -67,6 +80,16 @@ export function OptionsPage() {
       return;
     }
 
+    if (tournament.generatedDraw && isTournamentDrawCurrent(tournament, integration)) {
+      navigate(`/tournaments/${tournament.id}/edit/matches`);
+      return;
+    }
+
+    if (hasTournamentMatchData(tournament)) {
+      setPendingReset({ kind: "generate" });
+      setResetConfirmOpen(true);
+      return;
+    }
     proceedGenerate();
   };
 
@@ -304,13 +327,35 @@ export function OptionsPage() {
         <button
           type="button"
           className="button primary"
-          title="プレビューへ進む"
+          title="対戦カードへ進む"
           disabled={hasValidationErrors}
           onClick={generate}
         >
           {hasValidationErrors ? "エラー修正後に次へ" : "次へ"}
         </button>
       </div>
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        title="結果と備考をリセットします"
+        message="生成対象の設定を変更すると、入力済みの勝敗と備考がリセットされます。続行してもよろしいですか？"
+        confirmLabel="リセットして続行"
+        cancelLabel="キャンセル"
+        onCancel={() => {
+          setResetConfirmOpen(false);
+          setPendingReset(undefined);
+        }}
+        onConfirm={() => {
+          const action = pendingReset;
+          setResetConfirmOpen(false);
+          setPendingReset(undefined);
+          if (!action) return;
+          if (action.kind === "generate") {
+            proceedGenerate();
+            return;
+          }
+          updateTournament(applyOptionsPatch(tournament, action.patch, integration));
+        }}
+      />
     </div>
   );
 }

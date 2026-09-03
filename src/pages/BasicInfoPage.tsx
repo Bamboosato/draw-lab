@@ -3,12 +3,14 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { calculateLeagueDrawSize, createLeagueToTournament, formatLeagueTournamentTitle, getLeagueRankUpperBound, resolveLeagueDrawSize } from "../app/leagueTournamentAdapter";
 import { getRankOptions, getRankRangeValidationMessage, isValidRankRange, normalizeRankRange } from "../app/leagueTournamentPlacement";
 import { getBasicInfoErrors } from "../app/tournamentFlow";
-import { applyBasicInfoPatch, applyEntrantsUpdate, DRAW_SIZES, ensureEntrantRows, SEED_COUNTS } from "../app/tournamentModel";
+import { applyBasicInfoPatch, applyEntrantsUpdate, DRAW_SIZES, ensureEntrantRows, hasTournamentMatchData, SEED_COUNTS } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import { useLeagues } from "../app/LeagueProvider";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { CompactSummary } from "../components/CompactSummary";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { DrawSize, MatchType, Tournament } from "../domain/types";
+import type { TournamentIntegrationRecord } from "../domain/leagueTournamentTypes";
 
 export function BasicInfoPage() {
   const navigate = useViewTransitionNavigate();
@@ -26,6 +28,11 @@ export function BasicInfoPage() {
   const [sourceLeagueId, setSourceLeagueId] = useState("");
   const [minRank, setMinRank] = useState("1");
   const [maxRank, setMaxRank] = useState("2");
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [pendingBasicChange, setPendingBasicChange] = useState<{
+    tournament: Tournament;
+    integration?: TournamentIntegrationRecord;
+  }>();
 
   useEffect(() => {
     setSourceLeagueId(integration?.source.leagueId ?? "");
@@ -88,17 +95,33 @@ export function BasicInfoPage() {
   const leagueFeedbackIsError = Boolean(selectedLeague && !rankRangeValid)
     || Boolean(selectedLeague && rankRangeValid && resolvedLeagueDrawSize === undefined);
 
-  const update = (patch: Partial<Tournament>): void => {
-    const nextTournament = applyBasicInfoPatch(tournament, patch, integration);
-    if (integration && patch.drawSize !== undefined) {
-      updateTournamentWithIntegration(nextTournament, {
-        ...integration,
-        drawSizeMode: "manual",
-        updatedAt: new Date().toISOString(),
-      });
+  const saveBasicChange = (nextTournament: Tournament, nextIntegration?: TournamentIntegrationRecord): void => {
+    if (nextIntegration) {
+      updateTournamentWithIntegration(nextTournament, nextIntegration);
       return;
     }
     updateTournament(nextTournament);
+  };
+
+  const requestBasicChange = (nextTournament: Tournament, nextIntegration?: TournamentIntegrationRecord): void => {
+    if (hasTournamentMatchData(tournament) && nextTournament.generatedDraw?.id !== tournament.generatedDraw?.id) {
+      setPendingBasicChange({ tournament: nextTournament, integration: nextIntegration });
+      setResetConfirmOpen(true);
+      return;
+    }
+    saveBasicChange(nextTournament, nextIntegration);
+  };
+
+  const update = (patch: Partial<Tournament>): void => {
+    const nextTournament = applyBasicInfoPatch(tournament, patch, integration);
+    const nextIntegration = integration && patch.drawSize !== undefined
+      ? {
+          ...integration,
+          drawSizeMode: "manual" as const,
+          updatedAt: new Date().toISOString(),
+        }
+      : integration;
+    requestBasicChange(nextTournament, nextIntegration);
   };
 
   const selectSourceLeague = (leagueId: string): void => {
@@ -109,7 +132,7 @@ export function BasicInfoPage() {
     setMinRank(String(nextRankRange.min));
     setMaxRank(String(nextRankRange.max));
     const result = createLeagueToTournament(tournament, league, nextRankRange);
-    updateTournamentWithIntegration({
+    requestBasicChange({
       ...result.tournament,
       title: tournament.title,
       date: tournament.date,
@@ -162,7 +185,7 @@ export function BasicInfoPage() {
       && nextAutoDrawSize !== undefined
       ? nextAutoDrawSize
       : tournament.drawSize;
-    updateTournamentWithIntegration({ ...tournament, title: nextTitle, drawSize: nextDrawSize, generatedDraw: undefined }, {
+    requestBasicChange({ ...tournament, title: nextTitle, drawSize: nextDrawSize, generatedDraw: undefined }, {
       ...integration,
       rankRange: nextRankRange,
       drawSizeMode: integration.drawSizeMode ?? (drawSizeIsAuto ? "auto" : "manual"),
@@ -307,6 +330,24 @@ export function BasicInfoPage() {
           次へ
         </button>
       </div>
+
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        title="結果と備考をリセットします"
+        message="生成対象の基本情報を変更すると、入力済みの勝敗と備考がリセットされます。続行してもよろしいですか？"
+        confirmLabel="リセットして続行"
+        cancelLabel="キャンセル"
+        onCancel={() => {
+          setResetConfirmOpen(false);
+          setPendingBasicChange(undefined);
+        }}
+        onConfirm={() => {
+          const change = pendingBasicChange;
+          setResetConfirmOpen(false);
+          setPendingBasicChange(undefined);
+          if (change) saveBasicChange(change.tournament, change.integration);
+        }}
+      />
     </div>
   );
 }

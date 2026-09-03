@@ -7,6 +7,7 @@ import {
   getColumnTextLayout,
   getDistributedTextLayout,
   getPrintPageBrackets,
+  getPrintPageMatches,
   getRoundConnectorPath,
   getSingleSideFinalConnectorPath,
   getSlotContentLayout,
@@ -180,6 +181,7 @@ describe("draw output options", () => {
       matchType: "singles",
       drawSize: 4,
       outputOptions: DEFAULT_DRAW_OUTPUT_OPTIONS,
+      matches: [],
       rows: [{ position: 1, label: "A", isBye: false }],
     })).toBe(210);
   });
@@ -189,6 +191,7 @@ describe("draw output options", () => {
       matchType: "doubles",
       drawSize: 4,
       outputOptions: DEFAULT_DRAW_OUTPUT_OPTIONS,
+      matches: [],
       rows: [{
         position: 1,
         label: "チーム5-1 / チーム5-2",
@@ -207,6 +210,7 @@ describe("draw output options", () => {
       matchType: "doubles",
       drawSize: 4,
       outputOptions: DEFAULT_DRAW_OUTPUT_OPTIONS,
+      matches: [],
       rows: [{
         position: 1,
         label: "東京都市大学附属高等学校 / 神奈川県立総合高等学校",
@@ -290,5 +294,29 @@ describe("draw output options", () => {
     }));
 
     expect(getPrintPageBrackets(rows, 32, 3)).toEqual([{ drawSize: 32, rows }]);
+  });
+
+  it("remaps winner matches to the local numbering of each print page", () => {
+    const matches = [
+      { id: "r1-1", round: 1, matchNo: 1 },
+      { id: "r1-2", round: 1, matchNo: 2 },
+      { id: "r1-3", round: 1, matchNo: 3 },
+      { id: "r1-4", round: 1, matchNo: 4 },
+      { id: "r2-1", round: 2, matchNo: 1 },
+      { id: "r2-2", round: 2, matchNo: 2 },
+      { id: "r3-1", round: 3, matchNo: 1 },
+    ].map((match) => ({
+      ...match,
+      sourceA: { slotPosition: 1 } as const,
+      sourceB: { slotPosition: 2 } as const,
+      result: "unplayed" as const,
+      state: "ready" as const,
+    }));
+
+    expect(getPrintPageMatches(matches, 4, 1).map((match) => [match.id, match.round, match.matchNo])).toEqual([
+      ["r1-3", 1, 1],
+      ["r1-4", 1, 2],
+      ["r2-2", 2, 1],
+    ]);
   });
 });

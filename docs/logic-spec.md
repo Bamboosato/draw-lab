@@ -1,7 +1,7 @@
 # 処理ロジック仕様書
 
 作成日: 2026-07-02  
-更新日: 2026-08-21
+更新日: 2026-09-03
 対象: draw-lab WEB版トーナメント表作成アプリ PoC（正式リリース版 1.0.0）
 参照: `docs/requirements.md`, `docs/screen-spec.md`
 
@@ -67,7 +67,7 @@ validation / seedPlacement / byePlacement / scoring / random
 | Player | 個々の選手。シングルス・ダブルスではEntrant内のplayer1/player2、チームではmemberNamesとして表現する |
 | DrawSlot | ドロー上の1枠。EntrantまたはBYEが入る |
 | Position | ドロー上の枠番号。1始まりを推奨 |
-| Match | 初戦などの対戦単位。PoCでは主に初戦衝突判定に使う |
+| Match | 回戦内の1対戦カード。対戦者、勝敗、備考、前回戦からの参照関係を持つ |
 | Block | 山、準決勝ブロック、準々決勝ブロックなどの範囲 |
 | Seed | シード番号。上位選手・ペアの配置制約に使う |
 | BYE | 不戦勝枠。選手ではなくスロット状態として扱う |
@@ -144,6 +144,7 @@ type GeneratedDraw = {
   tournamentId: string;
   randomSeed: string;
   slots: DrawSlot[];
+  matches: TournamentMatch[];
   generatedAt: string;
   generationInputSignature?: string;
 };
@@ -160,7 +161,41 @@ type DrawSlot = {
 };
 ```
 
-## 4.7 ValidationResult
+## 4.7 TournamentMatch
+
+```ts
+type TournamentMatchResult =
+  | "unplayed"
+  | "participantAWin"
+  | "participantBWin";
+
+type TournamentMatchSource =
+  | { slotPosition: number }
+  | { matchId: string };
+
+type TournamentMatch = {
+  id: string;
+  round: number;
+  matchNo: number;
+  sourceA: TournamentMatchSource;
+  sourceB: TournamentMatchSource;
+  result: TournamentMatchResult;
+  note?: string;
+};
+
+type TournamentMatchState = "pending" | "ready" | "completed" | "byeAdvance";
+
+type ResolvedTournamentMatch = TournamentMatch & {
+  state: TournamentMatchState;
+  participantAId?: string;
+  participantBId?: string;
+  winnerEntrantId?: string;
+};
+```
+
+`TournamentMatch`は特定の`GeneratedDraw`に属する。1回戦は`DrawSlot.position`、2回戦以降は直前回戦の`matchId`を参照する。現在の対戦者と勝者は参照関係・スロット・結果から導出し、対戦者IDをカードへ重複保存しない。`drawSize`が128の場合も、回戦数は`log2(drawSize)`で生成する。
+
+## 4.8 ValidationResult
 
 ```ts
 type ValidationResult = {
@@ -657,6 +692,7 @@ type CreateGeneratedDrawParams = {
   tournamentId: string;
   randomSeed: string;
   slots: DrawSlot[];
+  matches: TournamentMatch[];
   now: string;
 };
 ```
@@ -667,10 +703,57 @@ type CreateGeneratedDrawParams = {
 - `tournamentId` を保持する
 - `randomSeed` を保持する
 - `slots` はposition昇順に並べる
+- `matches` にドローサイズに応じた全回戦の対戦カードを生成する
 - `generatedAt` を保持する
 - 生成結果へ影響する入力から決定的な `generationInputSignature` を作成して保持する
 
-## 14.3 生成時入力署名と自動再生成
+## 14.3 対戦カード生成と勝ち上がり解決
+
+```ts
+function createTournamentMatches(
+  slots: readonly DrawSlot[],
+  drawSize: DrawSize,
+  createId: () => string,
+): TournamentMatch[];
+
+function resolveTournamentMatches(
+  draw: GeneratedDraw,
+  entrants: readonly Entrant[],
+): ResolvedTournamentMatch[];
+
+function updateTournamentMatch(
+  draw: GeneratedDraw,
+  matchId: string,
+  patch: Pick<TournamentMatch, "result" | "note">,
+): GeneratedDraw;
+```
+
+`createTournamentMatches`は、1回戦の各2スロットを起点に、直前回戦の2カードを参照するカードを決勝まで作成する。カードの`matchNo`は回戦内で1から採番する。
+
+`resolveTournamentMatches`の解決規則は以下とする。
+
+- 対戦者が2名とも確定した実試合は、結果入力可能な`ready`状態とする
+- `result`が`participantAWin`または`participantBWin`の場合、その参加者を勝者として次回戦へ渡す
+- 1名とBYEの組み合わせは自動勝ち上がりとし、結果入力を要求しない
+- 前回戦の結果が未入力、または対戦者が未確定の場合は、対戦カードの枠だけを表示する`pending`状態とする
+- 引き分けは結果値として保存しない。ただしUIではリーグと同じ見た目の無効ボタンを表示する
+- 最終カードの勝者が確定した場合、その参加者のドロー番号を優勝者番号として返す
+
+結果変更により後続カードの対戦者が変わった場合は、対戦者が変わったカードとその子孫カードの結果を`unplayed`へ戻し、旧対戦者に紐づく備考を削除する。対戦者が変わらないカードの結果・備考は保持する。
+
+## 14.4 結果入力と生成状態
+
+勝敗と備考は生成入力署名に含めない。結果入力だけでは`GeneratedDraw`を再生成せず、`updatedAt`だけを更新して保存する。
+
+次の入力が変わってドローを再生成する場合は、新しい`GeneratedDraw`と未入力状態の`matches`を作成する。
+
+- 種目、ドローサイズ、シード数
+- 完全空行を除く名簿または参加者の生成対象フィールド
+- シード位置、BYE位置、選手配置順序、乱数シード
+
+結果または備考が存在する場合の自動再生成はデータ消失を伴うため、UIでは再生成前に結果・備考がリセットされることを確認できる状態にする。大会名、開催日、会場、種目名、`DrawOutputOptions`の変更では結果・備考を保持する。
+
+## 14.5 生成時入力署名と自動再生成
 
 `generationInputSignature` は、次の値を順序が安定した形へ正規化し、決定的に直列化して作成する。
 
@@ -779,16 +862,18 @@ async function restoreAllTournaments(
 - 既存大会を変更せず、新しい大会として追加する
 - Tournament ID、Entrant ID、GeneratedDraw IDを新規採番する
 - `GeneratedDraw.tournamentId` と `DrawSlot.entrantId` は、新しいIDへ対応付けて更新する
+- `TournamentMatch.id` と、後続カードが保持する`source.matchId`も新しいIDへ対応付けて更新する
 - ID再採番前に生成済みだったデータは、新しいTournament IDとEntrant IDを反映した入力から生成時入力署名を再計算する。入力と署名が不一致の生成済みドローは復元せず、未生成として追加する
 - createdAt / updatedAt はインポート時点で更新する
 - generatedDrawが含まれている場合は、参照整合性を保った状態で復元する
+- 旧形式の`GeneratedDraw`に`matches`がない場合は、`slots`から未実施状態の全回戦カードを補完する
 - `schemaVersion` が未設定の既存個別JSONは、検証可能な範囲で読み込む
 
 ## 16.3 全大会バックアップ復元
 
 - `schemaVersion` が対応範囲内であることを必須とする
 - 全大会と、各大会内のID参照を事前検証する
-- 復元時は大会ID、参加者ID、生成済みドローのIDを再採番しない
+- 復元時は大会ID、参加者ID、生成済みドローのID、対戦カードIDと参照関係を保持する
 - 現在の全大会をバックアップ内の全大会で置き換える
 - 初期PoCではマージ復元を行わない
 - 0大会のバックアップも復元可能とするが、現在の全大会が削除されることを明示して確認を必須とする
@@ -805,7 +890,7 @@ async function restoreAllTournaments(
 | `IMPORT_INVALID_TOURNAMENT` | Tournamentとして不正 | トーナメントデータが不正です |
 | `BACKUP_SCHEMA_UNSUPPORTED` | schemaVersionが未対応 | このバックアップ形式には対応していません |
 | `BACKUP_DUPLICATE_ID` | バックアップ内でIDが重複 | バックアップ内のIDが重複しています |
-| `BACKUP_REFERENCE_INVALID` | generatedDraw等の参照先が不正 | バックアップ内の参照関係が不正です |
+| `BACKUP_REFERENCE_INVALID` | generatedDraw、DrawSlot、TournamentMatch等の参照先が不正 | バックアップ内の参照関係が不正です |
 | `BACKUP_RESTORE_FAILED` | IndexedDBの全置換またはトランザクション内確認に失敗 | バックアップを復元できませんでした。元のデータは保持されています |
 
 ---
@@ -959,8 +1044,12 @@ type BracketViewModel = {
   date?: string;
   venue?: string;
   eventName?: string;
+  matchType: "singles" | "doubles" | "team";
   drawSize: DrawSize;
+  outputOptions: DrawOutputOptions;
   rows: BracketRow[];
+  matches: ResolvedTournamentMatch[];
+  championDrawPosition?: number;
 };
 
 type BracketRow = {
@@ -974,6 +1063,8 @@ type BracketRow = {
 ```
 
 レンダラーは `Tournament` と `GeneratedDraw` を直接解釈しすぎず、ViewModelを受け取って描画する。
+
+`matches`の解決結果をもとに、レンダラーは勝者が通過した区間だけへ勝者用の濃いオレンジ色（`#c2410c`）と少し太い線を適用する。勝者線は参加者側の横線、回戦の縦線、次回戦側の横線を一続きの経路として強調する。既存のU字型接続線を一つのパスとして全体着色せず、参加者側、接続部、次回戦側の区間を対戦カードに対応付ける。`championDrawPosition`がある場合だけ、決勝の優勝線の上へ同じ色のNo.を表示する。対戦結果、スコア、備考、途中回戦の対戦カードはViewModelの表示対象に含めない。
 
 ---
 
@@ -1046,6 +1137,24 @@ type BracketRow = {
 | シードあり | シードが所定位置に配置される |
 | 参加者超過 | drawが返らずvalidation errorになる |
 
+## 19.7.1 tournamentMatches.test.ts
+
+対戦カードと勝ち上がりのテストは、機能、データ、UI連携、異常系、境界値、状態遷移を分け、各ケースの意図を明確にする。
+
+| 観点 | ケース | 意図 | 期待結果 |
+|---|---|---|---|
+| 機能・正常系 | 1回戦のA勝を入力 | 勝者が次回戦へ伝播することを確認する | 対応する2回戦のA側に参加者Aが解決される |
+| 機能・正常系 | 2回戦、決勝まで勝敗を入力 | 複数回戦の連鎖を確認する | 最終勝者が正しく解決される |
+| 機能・正常系 | 1名対BYE | BYEを手動結果として扱わないことを確認する | 実参加者が自動で次回戦へ進み、入力操作は無効になる |
+| 機能・正常系 | 決勝結果を入力 | 優勝確定条件を確認する | `championDrawPosition`が返る |
+| UI連携 | 引き分けボタンを確認 | リーグと同じ表示を保ちつつ選択不可であることを確認する | ボタンは表示されるがdisabledで、結果は変化しない |
+| 状態遷移 | 前回戦が未入力 | 未確定カードの表示条件を確認する | 次回戦は枠だけ表示され、結果入力できない |
+| 状態遷移 | 前回戦の結果を変更 | 古い勝者の残存を防ぐことを確認する | 対戦者が変わる後続カードの結果・備考がリセットされる |
+| データ | 結果・備考だけを更新 | 生成状態と試合状態を分離できていることを確認する | 生成入力署名は変わらず、ドローは再生成されない |
+| 境界値 | 4、128ドロー | 最小・最大対象サイズを確認する | それぞれ2回戦、7回戦のカードが生成される |
+| 異常系 | 未確定カードへ結果を指定 | 不正な状態遷移を防ぐことを確認する | 更新されず、エラーまたは無効操作として扱われる |
+| 異常系 | 不正なmatchIdまたは参照 | 存在しないカードの更新を防ぐことを確認する | 状態を変更せず、検証エラーになる |
+
 ## 19.8 tournamentStorage.test.ts
 
 テスト観点は、機能、データ、異常系・境界値、状態遷移に分ける。
@@ -1054,7 +1163,7 @@ type BracketRow = {
 |---|---|---|
 | 機能・正常系 | 大会の追加、更新、取得、削除 | 対象大会だけが変更される |
 | 機能・正常系 | 複数大会を保存して再初期化 | 更新日時順の一覧を復元できる |
-| データ | generatedDraw、乱数seed、出力形式を含む大会 | 保存前後で欠落しない |
+| データ | generatedDraw、対戦カード、勝敗、備考、乱数seed、出力形式を含む大会 | 保存前後で欠落しない |
 | 移行・正常系 | 有効なlocalStorage全大会 | IndexedDBへ全件移行し、移行完了になる |
 | 移行・異常系 | localStorageのJSON破損 | IndexedDBを空データ扱いせず、移行元を保持してエラーになる |
 | 異常系 | IndexedDB書き込み失敗 | 保存済みデータを壊さず `error` になる |
@@ -1068,7 +1177,9 @@ type BracketRow = {
 |---|---|---|
 | 個別・正常系 | 個別大会JSONをインポート | 新IDへ再採番され、関連IDも整合した大会が追加される |
 | バックアップ・正常系 | 複数大会をエクスポートして全置換復元 | 全大会とID参照が同一内容で復元される |
-| データ | generatedDraw、乱数seed、作成・更新日時 | エクスポート・復元後も保持される |
+| データ | generatedDraw、対戦カード、勝敗、備考、乱数seed、作成・更新日時 | エクスポート・復元後も保持される |
+| 互換性 | 対戦カードがない旧JSON | 既存データを失わず新機能へ移行できることを確認する | 配置枠から未実施の対戦カードが補完される |
+| 参照整合性 | 個別JSONインポート | 前回戦カード参照の再採番を確認する | 新しいmatch IDと参照先が一貫する |
 | 境界値 | 0大会のバックアップ | 有効なJSONを出力でき、確認後に0件へ全置換できる |
 | 異常系 | JSON構文不正 | `JSON_PARSE_ERROR` となり保存済みデータは変化しない |
 | 異常系 | 未対応schemaVersion | `BACKUP_SCHEMA_UNSUPPORTED` となり全置換しない |
@@ -1131,17 +1242,18 @@ Codexに実装させる場合は、以下の順序を推奨する。
 6. src/domain/byePlacement.ts + tests
 7. src/domain/scoring.ts + tests
 8. src/domain/drawGenerator.ts + tests
-9. src/storage/tournamentRepository.ts + IndexedDB実装 + tests
-10. src/storage/localStorageMigration.ts + tests
-11. src/storage/jsonExport.ts / jsonImport.ts / jsonBackup.ts + tests
-12. src/renderers/svgBracketRenderer.ts
-13. UI components
-14. print CSS
-15. public/manifest.webmanifest + PWAアイコン
-16. vite.config.ts + Service Worker生成・登録
-17. 本番ホスティングのSPAフォールバック
-18. 更新通知と更新適用制御
-19. PWA対象ブラウザ結合テスト
+9. src/domain/tournamentMatchFlow.ts + tests
+10. src/storage/tournamentRepository.ts + IndexedDB実装 + tests
+11. src/storage/localStorageMigration.ts + tests
+12. src/storage/jsonExport.ts / jsonImport.ts / jsonBackup.ts + tests
+13. src/renderers/svgBracketRenderer.ts
+14. UI components
+15. print CSS
+16. public/manifest.webmanifest + PWAアイコン
+17. vite.config.ts + Service Worker生成・登録
+18. 本番ホスティングのSPAフォールバック
+19. 更新通知と更新適用制御
+20. PWA対象ブラウザ結合テスト
 ```
 
 ---
@@ -1158,6 +1270,11 @@ Codexに実装させる場合は、以下の順序を推奨する。
 - ノーシードが空き枠に配置される
 - チーム・地区偏り回避スコアが動作する
 - 同じ乱数seedで同じ結果が再現される
+- 回戦ごとの対戦カードが生成され、前回戦の勝者が後続カードへ反映される
+- BYE対戦が自動勝ち上がりとなり、実試合だけが結果入力対象になる
+- 引き分けボタンが表示されるが、結果として選択・保存できない
+- 決勝勝者のドロー番号を取得でき、勝者経路を描画へ渡せる
+- 結果と備考だけの変更で生成入力署名が変化しない
 - IndexedDBへ大会単位で保存し、再初期化後に全大会を復元できる
 - localStorageからIndexedDBへ既存データを安全に移行できる
 - 個別大会JSONを新しい大会として追加インポートできる

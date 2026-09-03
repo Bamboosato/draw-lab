@@ -4,6 +4,7 @@ import { createSeededRandom, pickWithRandom } from "./random";
 import { calculatePlacementPenalty } from "./scoring";
 import { getSeedPositionLookup, placeSeededEntrants } from "./seedPlacement";
 import { getTeamRelationTokens } from "./teamGrouping";
+import { createTournamentMatches } from "./tournamentMatches";
 import type {
   CreateGeneratedDrawParams,
   DrawSlot,
@@ -66,6 +67,7 @@ export function generateDraw(input: GenerateDrawInput): GenerateDrawResult {
     tournamentId: normalizedTournament.id,
     randomSeed,
     slots,
+    drawSize: normalizedTournament.drawSize,
     now,
   });
 
@@ -113,6 +115,7 @@ export function createGeneratedDraw(params: CreateGeneratedDrawParams): Generate
     tournamentId: params.tournamentId,
     randomSeed: params.randomSeed,
     slots: sortedSlots,
+    matches: createTournamentMatches(sortedSlots, params.drawSize),
     generatedAt: params.now,
   };
 }

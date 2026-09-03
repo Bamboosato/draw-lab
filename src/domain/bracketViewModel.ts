@@ -1,5 +1,6 @@
 import type { BracketRow, BracketViewModel, Entrant, GeneratedDraw, Tournament } from "./types";
 import { getDrawOutputOptions } from "./outputOptions";
+import { resolveTournamentMatches } from "./tournamentMatches";
 import { normalizeTournament } from "./validation";
 
 export function buildBracketViewModel(tournament: Tournament, draw: GeneratedDraw): BracketViewModel {
@@ -25,6 +26,10 @@ export function buildBracketViewModel(tournament: Tournament, draw: GeneratedDra
       };
     });
 
+  const matches = resolveTournamentMatches(draw, normalizedTournament.entrants);
+  const finalMatch = matches.find((match) => match.round === Math.log2(normalizedTournament.drawSize));
+  const championEntrantId = finalMatch?.winnerEntrantId;
+
   return {
     title: normalizedTournament.title,
     date: normalizedTournament.date,
@@ -34,6 +39,10 @@ export function buildBracketViewModel(tournament: Tournament, draw: GeneratedDra
     drawSize: normalizedTournament.drawSize,
     outputOptions: getDrawOutputOptions(tournament.outputOptions),
     rows,
+    matches,
+    championDrawPosition: championEntrantId
+      ? draw.slots.find((slot) => slot.entrantId === championEntrantId)?.position
+      : undefined,
   };
 }
 

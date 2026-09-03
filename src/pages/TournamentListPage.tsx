@@ -365,6 +365,8 @@ function getEditStepMenuPresentation(step: TournamentEditStep): Pick<OverflowMen
       return { label: "名簿入力", title: "名簿入力を編集", icon: "entrants" };
     case "options":
       return { label: "オプション設定", title: "オプション設定を編集", icon: "options" };
+    case "matches":
+      return { label: "対戦カード", title: "対戦カードを編集", icon: "options" };
   }
 }
 

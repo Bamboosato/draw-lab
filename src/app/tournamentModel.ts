@@ -121,6 +121,12 @@ export function touchTournament(
   };
 }
 
+export function hasTournamentMatchData(tournament: Tournament): boolean {
+  return tournament.generatedDraw?.matches?.some(
+    (match) => match.result !== "unplayed" || Boolean(match.note?.trim()),
+  ) ?? false;
+}
+
 export function compactTournament(tournament: Tournament): Tournament {
   return {
     ...tournament,

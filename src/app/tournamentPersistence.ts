@@ -1,6 +1,17 @@
-import type { DrawOptions, DrawSize, DrawSlot, Entrant, GeneratedDraw, Tournament } from "../domain/types";
+import type {
+  DrawOptions,
+  DrawSize,
+  DrawSlot,
+  Entrant,
+  GeneratedDraw,
+  Tournament,
+  TournamentMatch,
+  TournamentMatchResult,
+  TournamentMatchSource,
+} from "../domain/types";
 import type { TournamentIntegrationRecord, TournamentIntegrationParticipant } from "../domain/leagueTournamentTypes";
 import { normalizeDrawOutputOptions } from "../domain/outputOptions";
+import { createTournamentMatches } from "../domain/tournamentMatches";
 import { VALID_DRAW_SIZES } from "../domain/types";
 import {
   createDefaultTournament,
@@ -206,6 +217,9 @@ export function cloneImportedTournamentWithIntegration(
   integrationValue: unknown,
   now = new Date().toISOString(),
 ): { tournament: Tournament; integration?: TournamentIntegrationRecord } {
+  if (isRecord(value) && value.generatedDraw !== undefined) {
+    validateStoredDrawShape(value.generatedDraw);
+  }
   const source = coerceTournament(value);
   const sourceIntegration = integrationValue === undefined ? undefined : coerceIntegration(integrationValue);
   validateTournamentReferences(source, new Set<string>());
@@ -220,22 +234,7 @@ export function cloneImportedTournamentWithIntegration(
   });
 
   const generatedDraw = source.generatedDraw
-    ? {
-        ...source.generatedDraw,
-        id: createId("draw"),
-        tournamentId,
-        slots: source.generatedDraw.slots.map((slot) => {
-          if (!slot.entrantId) {
-            return { ...slot };
-          }
-
-          const entrantId = entrantIdMap.get(slot.entrantId);
-          if (!entrantId) {
-            throw new ImportDataError("IMPORT_REFERENCE_INVALID", "生成済みドローが存在しない参加者を参照しています。");
-          }
-          return { ...slot, entrantId };
-        }),
-      }
+    ? cloneGeneratedDraw(source.generatedDraw, tournamentId, entrantIdMap)
     : undefined;
 
   const tournament: Tournament = {
@@ -263,6 +262,52 @@ export function cloneImportedTournamentWithIntegration(
   }
 
   return { tournament, integration: importedIntegration };
+}
+
+function cloneGeneratedDraw(
+  source: GeneratedDraw,
+  tournamentId: string,
+  entrantIdMap: ReadonlyMap<string, string>,
+): GeneratedDraw {
+  const sourceMatches = source.matches ?? [];
+  const matchIdMap = new Map(sourceMatches.map((match) => [match.id, createId("match")]));
+
+  return {
+    ...source,
+    id: createId("draw"),
+    tournamentId,
+    matches: sourceMatches.map((match) => ({
+      ...match,
+      id: matchIdMap.get(match.id) ?? createId("match"),
+      sourceA: remapMatchSource(match.sourceA, matchIdMap),
+      sourceB: remapMatchSource(match.sourceB, matchIdMap),
+    })),
+    slots: source.slots.map((slot) => {
+      if (!slot.entrantId) {
+        return { ...slot };
+      }
+
+      const entrantId = entrantIdMap.get(slot.entrantId);
+      if (!entrantId) {
+        throw new ImportDataError("IMPORT_REFERENCE_INVALID", "生成済みドローが存在しない参加者を参照しています。");
+      }
+      return { ...slot, entrantId };
+    }),
+  };
+}
+
+function remapMatchSource(
+  source: TournamentMatchSource,
+  matchIdMap: ReadonlyMap<string, string>,
+): TournamentMatchSource {
+  if ("slotPosition" in source) {
+    return { ...source };
+  }
+  const matchId = matchIdMap.get(source.matchId);
+  if (!matchId) {
+    throw new ImportDataError("IMPORT_REFERENCE_INVALID", "対戦カードの前回戦参照が不正です。");
+  }
+  return { matchId };
 }
 
 function parseTournamentBackup(value: Record<string, unknown>): TournamentBackup {
@@ -374,6 +419,49 @@ function validateStoredDrawShape(value: unknown): void {
     }
     positions.add(slot.position);
   }
+
+  if (value.matches !== undefined) {
+    if (!Array.isArray(value.matches)) {
+      throw new ImportDataError("IMPORT_INVALID_TOURNAMENT", "バックアップ内の対戦カードが不正です。");
+    }
+    validateStoredMatches(value.matches);
+  }
+}
+
+function validateStoredMatches(value: unknown[]): void {
+  const ids = new Set<string>();
+
+  for (const item of value) {
+    if (!isRecord(item)
+      || typeof item.id !== "string"
+      || !item.id
+      || typeof item.round !== "number"
+      || !Number.isInteger(item.round)
+      || item.round < 1
+      || typeof item.matchNo !== "number"
+      || !Number.isInteger(item.matchNo)
+      || item.matchNo < 1
+      || !isTournamentMatchSource(item.sourceA)
+      || !isTournamentMatchSource(item.sourceB)
+      || !isTournamentMatchResult(item.result)
+      || (item.note !== undefined && typeof item.note !== "string")
+      || ids.has(item.id)) {
+      throw new ImportDataError("IMPORT_INVALID_TOURNAMENT", "バックアップ内の対戦カードが不正です。");
+    }
+    ids.add(item.id);
+  }
+
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    for (const source of [item.sourceA, item.sourceB]) {
+      if (isRecord(source)
+        && "matchId" in source
+        && typeof source.matchId === "string"
+        && !ids.has(source.matchId)) {
+        throw new ImportDataError("BACKUP_REFERENCE_INVALID", "対戦カードの前回戦参照が不正です。");
+      }
+    }
+  }
 }
 
 function validateTournamentReferences(tournament: Tournament, tournamentIds: Set<string>): void {
@@ -395,6 +483,20 @@ function validateTournamentReferences(tournament: Tournament, tournamentIds: Set
   for (const slot of tournament.generatedDraw.slots) {
     if (slot.entrantId && !entrantIds.has(slot.entrantId)) {
       throw new ImportDataError("BACKUP_REFERENCE_INVALID", "生成済みドローが存在しない参加者を参照しています。");
+    }
+  }
+  const matchIds = new Set<string>();
+  for (const match of tournament.generatedDraw.matches ?? []) {
+    if (matchIds.has(match.id)) {
+      throw new ImportDataError("BACKUP_DUPLICATE_ID", `対戦カードID「${match.id}」が重複しています。`);
+    }
+    matchIds.add(match.id);
+  }
+  for (const match of tournament.generatedDraw.matches ?? []) {
+    for (const source of [match.sourceA, match.sourceB]) {
+      if ("matchId" in source && !matchIds.has(source.matchId)) {
+        throw new ImportDataError("BACKUP_REFERENCE_INVALID", "対戦カードの前回戦参照が不正です。");
+      }
     }
   }
 }
@@ -491,7 +593,7 @@ function coerceTournament(value: unknown): Tournament {
         }
       : fallback.options,
     outputOptions: normalizeDrawOutputOptions(value.outputOptions ?? fallback.outputOptions),
-    generatedDraw: coerceGeneratedDraw(value.generatedDraw, id),
+    generatedDraw: coerceGeneratedDraw(value.generatedDraw, id, drawSize),
     createdAt: coerceString(value.createdAt) ?? now,
     updatedAt: coerceString(value.updatedAt) ?? now,
   };
@@ -580,7 +682,7 @@ function coerceEntrant(value: unknown, index: number): Entrant {
   };
 }
 
-function coerceGeneratedDraw(value: unknown, tournamentId: string): GeneratedDraw | undefined {
+function coerceGeneratedDraw(value: unknown, tournamentId: string, drawSize: DrawSize): GeneratedDraw | undefined {
   if (!isRecord(value) || !Array.isArray(value.slots)) {
     return undefined;
   }
@@ -592,14 +694,63 @@ function coerceGeneratedDraw(value: unknown, tournamentId: string): GeneratedDra
   if (slots.length === 0) {
     return undefined;
   }
+  const matches = coerceTournamentMatches(value.matches) ?? createTournamentMatches(slots, drawSize);
   return {
     id: coerceString(value.id) ?? createId("draw"),
     tournamentId: coerceString(value.tournamentId) ?? tournamentId,
     randomSeed: coerceString(value.randomSeed) ?? createRandomSeed(),
     slots,
+    matches,
     generatedAt: coerceString(value.generatedAt) ?? new Date().toISOString(),
     generationInputSignature: coerceString(value.generationInputSignature),
   };
+}
+
+function coerceTournamentMatches(value: unknown): TournamentMatch[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const matches = value
+    .map(coerceTournamentMatch)
+    .filter((match): match is TournamentMatch => match !== undefined)
+    .sort((left, right) => left.round - right.round || left.matchNo - right.matchNo);
+  return matches.length > 0 ? matches : undefined;
+}
+
+function coerceTournamentMatch(value: unknown): TournamentMatch | undefined {
+  if (!isRecord(value)
+    || typeof value.id !== "string"
+    || typeof value.round !== "number"
+    || typeof value.matchNo !== "number"
+    || !isTournamentMatchSource(value.sourceA)
+    || !isTournamentMatchSource(value.sourceB)) {
+    return undefined;
+  }
+  return {
+    id: value.id,
+    round: value.round,
+    matchNo: value.matchNo,
+    sourceA: value.sourceA,
+    sourceB: value.sourceB,
+    result: isTournamentMatchResult(value.result) ? value.result : "unplayed",
+    note: typeof value.note === "string" && value.note.trim() ? value.note : undefined,
+  };
+}
+
+function isTournamentMatchSource(value: unknown): value is TournamentMatchSource {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const hasSlotPosition = typeof value.slotPosition === "number"
+    && Number.isInteger(value.slotPosition)
+    && value.slotPosition > 0;
+  const hasMatchId = typeof value.matchId === "string" && value.matchId.length > 0;
+  return hasSlotPosition !== hasMatchId;
+}
+
+function isTournamentMatchResult(value: unknown): value is TournamentMatchResult {
+  return value === "unplayed" || value === "participantAWin" || value === "participantBWin";
 }
 
 function coerceDrawSlot(value: unknown): DrawSlot | undefined {

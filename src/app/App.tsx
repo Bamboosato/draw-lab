@@ -6,6 +6,7 @@ import { EntrantsPage } from "../pages/EntrantsPage";
 import { JsonImportPage } from "../pages/JsonImportPage";
 import { OptionsPage } from "../pages/OptionsPage";
 import { PreviewPage } from "../pages/PreviewPage";
+import { TournamentMatchesPage } from "../pages/TournamentMatchesPage";
 import { TournamentListPage } from "../pages/TournamentListPage";
 import { LeagueBasicInfoPage } from "../pages/LeagueBasicInfoPage";
 import { LeagueDashboardPage } from "../pages/LeagueDashboardPage";
@@ -55,6 +56,10 @@ export const appRoutes: RouteObject[] = [
       {
         path: "tournaments/:id/edit/options",
         element: <GuardedTournamentStep step="options"><OptionsPage /></GuardedTournamentStep>,
+      },
+      {
+        path: "tournaments/:id/edit/matches",
+        element: <GuardedTournamentStep step="matches"><TournamentMatchesPage /></GuardedTournamentStep>,
       },
       {
         path: "tournaments/:id/preview",
