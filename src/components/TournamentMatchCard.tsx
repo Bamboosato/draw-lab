@@ -1,4 +1,5 @@
 import type { ResolvedTournamentMatch, TournamentMatchResult } from "../domain/types";
+import { MatchWinnerSelector } from "./MatchWinnerSelector";
 
 export function TournamentMatchCard({
   match,
@@ -20,35 +21,20 @@ export function TournamentMatchCard({
   return (
     <article className={`league-match-card tournament-match-card tournament-match-${match.state}`}>
       <div className="match-card-heading">
-        <strong>第{match.matchNo}試合</strong>
+        <strong className="match-order-label">第{match.matchNo}試合</strong>
         <span className={`status-badge ${statusClass}`}>{status}</span>
       </div>
-      <div className="match-pair match-card-players">
-        <span>{participantALabel}</span>
-        <span className="match-vs">vs</span>
-        <span>{participantBLabel}</span>
-      </div>
-      <div className="result-toggle" role="group" aria-label={`第${match.matchNo}試合の結果`}>
-        <ResultButton
-          label="未実施"
-          active={match.result === "unplayed"}
-          disabled={!canEditResult}
-          onClick={() => onResultChange("unplayed")}
-        />
-        <ResultButton
-          label="A勝"
-          active={match.result === "participantAWin"}
-          disabled={!canEditResult}
-          onClick={() => onResultChange("participantAWin")}
-        />
-        <ResultButton label="引き分け" active={false} disabled onClick={() => undefined} />
-        <ResultButton
-          label="B勝"
-          active={match.result === "participantBWin"}
-          disabled={!canEditResult}
-          onClick={() => onResultChange("participantBWin")}
-        />
-      </div>
+      <MatchWinnerSelector
+        ariaLabel={`第${match.matchNo}試合の結果`}
+        participantALabel={participantALabel}
+        participantBLabel={participantBLabel}
+        result={match.result}
+        disabled={!canEditResult}
+        drawDisabled
+        onResultChange={(result) => {
+          if (result !== "draw") onResultChange(result);
+        }}
+      />
       <label className="field">
         <span>備考</span>
         <input
@@ -60,30 +46,6 @@ export function TournamentMatchCard({
         />
       </label>
     </article>
-  );
-}
-
-function ResultButton({
-  label,
-  active,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={active ? "result-button active" : "result-button"}
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {label}
-    </button>
   );
 }
 

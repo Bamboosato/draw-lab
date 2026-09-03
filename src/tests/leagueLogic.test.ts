@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateAutomaticRanks, calculateStandings, countValidMatchesByParticipant, createCandidateMatches, validateLeague, validateManualRanks } from "../domain/leagueLogic";
+import { calculateAutomaticRanks, calculateStandings, countValidMatchesByParticipant, createCandidateMatches, getActiveMatchOrders, validateLeague, validateManualRanks } from "../domain/leagueLogic";
 import { distributeLeagueParticipants } from "../domain/leagueGrouping";
 import type { League, LeagueGroup, LeagueMatch, LeagueParticipant } from "../domain/leagueTypes";
 
@@ -103,6 +103,20 @@ describe("league domain logic", () => {
       expect(counts.get("p2")).toBe(2);
       expect(counts.get("p3")).toBe(3);
       expect(counts.get("p4")).toBe(3);
+    });
+
+    it("無効カードを除外した表示用連番を導出し、再有効化時も生成順・カードデータを変更しない", () => {
+      const matches: LeagueMatch[] = [
+        { id: "m1", groupId: "g1", order: 8, participantAId: "p1", participantBId: "p2", isValid: false, result: "draw", note: "保持するメモ" },
+        { id: "m2", groupId: "g1", order: 12, participantAId: "p1", participantBId: "p3", isValid: true, result: "unplayed" },
+        { id: "m3", groupId: "g1", order: 15, participantAId: "p2", participantBId: "p3", isValid: false, result: "unplayed" },
+      ];
+
+      expect(Array.from(getActiveMatchOrders(matches).entries())).toEqual([["m2", 1]]);
+
+      const reenabled = { ...matches[0]!, isValid: true };
+      expect(Array.from(getActiveMatchOrders([reenabled, ...matches.slice(1)]).entries())).toEqual([["m1", 1], ["m2", 2]]);
+      expect(reenabled).toEqual(expect.objectContaining({ order: 8, result: "draw", note: "保持するメモ" }));
     });
   });
 

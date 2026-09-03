@@ -48,6 +48,23 @@ export function createCandidateMatches(groups: readonly LeagueGroup[], createId:
   return matches;
 }
 
+/**
+ * Returns the operational match number for valid cards without changing the
+ * generated order persisted on each LeagueMatch.
+ */
+export function getActiveMatchOrders(matches: readonly LeagueMatch[]): ReadonlyMap<string, number> {
+  const orders = new Map<string, number>();
+  let displayOrder = 1;
+
+  for (const match of matches) {
+    if (!match.isValid) continue;
+    orders.set(match.id, displayOrder);
+    displayOrder += 1;
+  }
+
+  return orders;
+}
+
 type MatchPairing = readonly [leftIndex: number, rightIndex: number];
 
 function createMatchPairings(participantCount: number): MatchPairing[] {

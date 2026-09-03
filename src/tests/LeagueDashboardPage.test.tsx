@@ -59,7 +59,9 @@ describe("LeagueDashboardPage", () => {
     expect(Array.from(viewTabs.querySelectorAll('[role="tab"]'), (tab) => tab.textContent)).toEqual(["対戦カード", "対戦結果"]);
     expect(screen.getByRole("tab", { name: "対戦カード" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByRole("heading", { name: "星取表" })).toBeNull();
-    expect(document.querySelector(".match-card-players.match-pair")).toBeTruthy();
+    expect(document.querySelector(".match-winner-selector")).toBeTruthy();
+    expect(screen.getByText("第1試合").className).toContain("match-order-label");
+    expect(screen.getByRole("button", { name: "引き分け" })).toHaveProperty("disabled", false);
     expect(screen.getAllByRole("textbox", { name: "備考" }).every((input) => input.getAttribute("placeholder") === "結果の詳細を記録してください（任意）")).toBe(true);
 
     fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
@@ -75,6 +77,36 @@ describe("LeagueDashboardPage", () => {
     fireEvent.click(screen.getByRole("tab", { name: "対戦カード" }));
     expect(screen.getByRole("heading", { name: "対戦カード" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "星取表" })).toBeNull();
+  });
+
+  it("対戦者名ボタンからリーグの勝敗を保存する", () => {
+    render(<LeagueDashboardPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Aの勝ち" }));
+
+    expect(saveLeagueMock).toHaveBeenCalledWith(expect.objectContaining({
+      matches: [expect.objectContaining({ id: "m1", result: "participantAWin" })],
+    }));
+  });
+
+  it("リーグ表の対戦カードには有効カードだけを表示し、結果状態を未実施／実施済みで示す", () => {
+    const base = makeLeague();
+    useLeagueMock.mockReturnValue({
+      ...base,
+      matches: [
+        { ...base.matches[0]!, id: "m1", order: 1, isValid: true, result: "unplayed" },
+        { ...base.matches[0]!, id: "m2", order: 2, isValid: true, result: "participantAWin" },
+        { ...base.matches[0]!, id: "m3", order: 3, isValid: false, result: "participantBWin" },
+      ],
+    });
+
+    render(<LeagueDashboardPage />);
+
+    expect(document.querySelectorAll(".league-match-card")).toHaveLength(2);
+    expect(Array.from(document.querySelectorAll(".league-match-card .match-card-heading strong"), (heading) => heading.textContent)).toEqual(["第1試合", "第2試合"]);
+    expect(screen.getByText("未実施").className).toContain("generated");
+    expect(screen.getByText("実施済").className).toContain("league-match-status-confirmed");
+    expect(screen.queryByText("無効（集計外）")).toBeNull();
   });
 
   it("初期表示の自動順位だけでリーグを完了できる", () => {
