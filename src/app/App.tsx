@@ -15,6 +15,7 @@ import { LeagueJsonImportPage } from "../pages/LeagueJsonImportPage";
 import { LeagueListPage } from "../pages/LeagueListPage";
 import { LeagueMatchesPage } from "../pages/LeagueMatchesPage";
 import { LeagueParticipantsPage } from "../pages/LeagueParticipantsPage";
+import { HomePage } from "../pages/HomePage";
 import {
   getTournamentStepAccess,
   getTournamentStepPath,
@@ -46,7 +47,8 @@ export const appRoutes: RouteObject[] = [
       </TournamentProvider>
     ),
     children: [
-      { index: true, element: <TournamentListPage /> },
+      { index: true, element: <HomePage /> },
+      { path: "tournaments", element: <TournamentListPage /> },
       { path: "tournaments/new", element: <NewTournamentRoute /> },
       { path: "tournaments/:id/edit/basic", element: <BasicInfoPage /> },
       {
@@ -65,7 +67,8 @@ export const appRoutes: RouteObject[] = [
         path: "tournaments/:id/preview",
         element: <GuardedTournamentStep step="preview"><PreviewPage /></GuardedTournamentStep>,
       },
-      { path: "import", element: <JsonImportPage /> },
+      { path: "tournaments/import", element: <JsonImportPage /> },
+      { path: "import", element: <ViewTransitionRedirect to="/tournaments/import" replace /> },
       { path: "leagues", element: <LeagueListPage /> },
       { path: "leagues/new", element: <NewLeagueRoute /> },
       { path: "leagues/import", element: <LeagueJsonImportPage /> },

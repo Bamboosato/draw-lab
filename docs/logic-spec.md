@@ -22,6 +22,9 @@
 - チーム・地区偏り回避
 - 生成結果データ作成
 - JSON入出力
+- トーナメント・リーグ共通ホーム画面の表示用ViewModel
+- トーナメント・リーグの状態集計と最近更新項目の再開先判定
+- PWA起動状態とインストールガイダンス状態の判定
 
 描画仕様そのものは `docs/screen-spec.md` のプレビュー画面仕様を参照する。
 
@@ -1021,6 +1024,35 @@ type PwaRuntimeState =
 - 更新適用に失敗した場合は `error` とし、現行アプリとIndexedDBデータを保持して再試行できるようにする
 - 初回起動がオフラインでアプリシェル未取得の場合は、保存データがない状態と混同しないエラーとして扱う
 
+### 17.5.4 インストールガイダンス状態
+
+PWAインストール案内は、Service Workerの更新状態やIndexedDBの保存状態とは別に管理する。画面表示だけでは標準インストールダイアログを開かず、ユーザー操作を必須とする。
+
+```ts
+type InstallGuideMode =
+  | "hidden"
+  | "browserInstall"
+  | "iosManual"
+  | "unsupported";
+
+type InstallGuideState = {
+  mode: InstallGuideMode;
+  isStandalone: boolean;
+  canPrompt: boolean;
+  isDismissed: boolean;
+};
+```
+
+- `display-mode: standalone` を基本に判定し、iPhone・iPadでは `navigator.standalone` を補助的に使用する
+- standalone起動中は `hidden` とし、インストールイベントを受信していても案内を表示しない
+- 非standaloneのiPhone・iPadは `iosManual` とし、「インストール方法」から手動手順を表示する
+- その他のブラウザで `beforeinstallprompt` を受信した場合はイベントを保持して `browserInstall` とする
+- `prompt()` は「インストール」押下を契機に1回だけ呼び、イベントを再利用しない
+- `appinstalled` の受信またはインストール成功後は `hidden` とする
+- 標準ダイアログのキャンセル、または案内の「閉じる」操作時刻を `localStorage` に保存し、30日間は `isDismissed` とする
+- `localStorage` が利用できない場合はセッション内状態だけで抑制し、画面をエラーにしない
+- 端末やブラウザを確実に判定できず、実行可能なインストール手段も説明できない場合は `unsupported` とし、案内を表示しない
+
 Service Workerの実装を変更しても、`generateDraw()`、`buildBracketViewModel()`、`TournamentRepository` の公開責務は変更しない。
 
 ---
@@ -1066,6 +1098,71 @@ type BracketRow = {
 レンダラーは `Tournament` と `GeneratedDraw` を直接解釈しすぎず、ViewModelを受け取って描画する。
 
 `matches`の解決結果をもとに、レンダラーは勝者が通過した区間だけへ勝者用の濃いオレンジ色（`#c2410c`）と少し太い線を適用する。勝者線は参加者側の横線、回戦の縦線、次回戦側の横線を一続きの経路として強調する。既存のU字型接続線を一つのパスとして全体着色せず、参加者側、接続部、次回戦側の区間を対戦カードに対応付ける。`championDrawPosition`がある場合だけ、決勝の優勝線の上へ同じ色のNo.を表示する。対戦結果、スコア、備考、途中回戦の対戦カードはViewModelの表示対象に含めない。
+
+## 18.4 ホーム画面ViewModel
+
+ホーム画面は、`TournamentProvider` と `LeagueProvider` の既存データから表示用ViewModelを生成する。ViewModelは保存せず、ReactコンポーネントやRepositoryから分離した純粋関数として実装する。
+
+```ts
+type HomeRecentItem = {
+  kind: "tournament" | "league";
+  id: string;
+  title: string;
+  dateLabel: string;
+  statusLabel: string;
+  updatedAt?: string;
+  resumePath: string;
+};
+
+type HomeViewModel = {
+  tournament: {
+    total: number;
+    generated: number;
+    editing: number;
+  };
+  league: {
+    total: number;
+    editing: number;
+    operating: number;
+    completed: number;
+  };
+  recentItems: HomeRecentItem[];
+};
+
+function buildHomeViewModel(
+  tournaments: readonly Tournament[],
+  leagues: readonly League[],
+  integrations: readonly TournamentIntegrationRecord[],
+): HomeViewModel;
+```
+
+実装ルールは以下とする。
+
+- トーナメントの生成済み判定は、連携情報を含む既存のドロー有効性判定を使用する。生成済みでない項目を編集中へ集計する
+- リーグの編集中・運用中・完了は、リーグ一覧画面と同じ判定を使用する
+- 大会名のフォールバックは、トーナメントを「無題のトーナメント」、リーグを「無題のリーグ」とする。開催日未設定は「未設定」とする
+- `updatedAt` を日時として解釈できない項目は最近更新一覧の末尾に置く。同日時の場合は入力順を維持する
+- 最近更新項目は種別をまたいで統合し、最大5件とする。最大件数は画面幅によって変更しない
+- `resumePath` は現在のフロー判定結果から生成し、表示コンポーネントで条件分岐しない
+
+## 18.5 最近更新項目の再開先
+
+ホーム画面の「開く」は、次の純粋関数で一意に決定する。
+
+```ts
+function getTournamentResumePath(
+  tournament: Tournament,
+  integration?: TournamentIntegrationRecord,
+): string;
+
+function getLeagueResumePath(league: League): string;
+```
+
+トーナメントは、基本情報、名簿、オプションの順に最初の未完了ステップへ遷移する。ただし現在のドローが有効な場合は `/preview` へ遷移する。生成済みドローが入力変更により無効な場合は、再生成可能なオプション設定へ遷移する。対戦カード画面は既存の編集導線として維持するが、ホームの単一再開先には使用しない。
+
+リーグは、基本情報、名簿・選出、グループ設定、対戦カードの順に最初の未完了ステップへ遷移する。対戦カード確定済みまたは完了済みの場合はリーグ表へ遷移する。完了済みリーグは読み取り専用のリーグ表を再開先とする。
+
+既存の `getTournamentStepAccess`、`getLeagueStepAccess`、状態判定関数を構成要素として利用し、ホーム専用の判定規則を別に持たせない。再開先関数には未入力、部分入力、生成済み、生成結果の陳腐化、完了済みのケースを与えて単体テストする。
 
 ---
 
@@ -1230,6 +1327,29 @@ PWA変更では、機能、非機能、データ、UIの観点を先に分け、
 
 ---
 
+## 19.12 ホーム画面ViewModelテスト観点
+
+ホーム画面の表示用ロジックは、UIや保存層をモックせずに純粋関数としてテストする。
+
+| 観点 | ケース | 意図 |
+|---|---|---|
+| 件数 | 0件、片方のみ、両方あり | 保存データの有無にかかわらずカードと件数が正しく構成されることを確認する |
+| 状態 | トーナメントの生成済み・編集中、リーグの編集中・運用中・完了 | 各一覧と同じ状態判定になることを確認する |
+| 連携 | リーグ由来トーナメントの連携情報あり・なし | 生成済み判定に連携情報を反映し、誤集計しないことを確認する |
+| 最近更新 | 種別混在、6件以上、同日時 | 種別をまたいだ降順、最大5件、同値時の入力順を確認する |
+| 日時異常 | `updatedAt` の欠損・不正値 | ホーム全体を停止せず、不正項目を末尾へ置くことを確認する |
+| 表示補完 | タイトル・開催日の未入力 | 種別ごとの代替表記が一覧画面と一致することを確認する |
+| 再開先 | 未入力、部分入力、生成済み、陳腐化、完了済み | 「開く」が最初の未完了ステップ、プレビュー、リーグ表へ正しく遷移することを確認する |
+
+## 19.13 PWAインストールガイダンスのテスト観点
+
+- standalone起動中、通常ブラウザ、`beforeinstallprompt` 対応ブラウザ、iPhone・iPad、未対応ブラウザを分けて確認する
+- `prompt()` がユーザー操作時に1回だけ呼ばれ、ページ表示時には呼ばれないことを確認する
+- `appinstalled`、標準ダイアログのキャンセル、「閉じる」操作で表示状態と30日間の抑制状態が正しく変化することを確認する
+- `localStorage` の禁止、読み取り失敗、破損値でも通常利用が継続することを確認する
+- 手順ダイアログのフォーカス移動、フォーカストラップ、閉じた後の操作元へのフォーカス復帰を確認する
+- Service Workerの更新通知、オフライン表示、IndexedDB保存状態とインストール案内を混同しないことを確認する
+
 ## 20. 実装優先順位
 
 Codexに実装させる場合は、以下の順序を推奨する。
@@ -1255,6 +1375,11 @@ Codexに実装させる場合は、以下の順序を推奨する。
 18. 本番ホスティングのSPAフォールバック
 19. 更新通知と更新適用制御
 20. PWA対象ブラウザ結合テスト
+21. ホーム画面ViewModel・状態集計・再開先判定 + tests
+22. ホーム画面、AppShell、ルーティング変更 + tests
+23. PWAインストールガイダンスの状態管理・UI + tests
+24. ホーム画面のレスポンシブ・アクセシビリティ・オフラインE2E
+25. `docs/requirements.md`、`docs/screen-spec.md`、README、CHANGELOGの整合性確認
 ```
 
 ---
@@ -1288,4 +1413,9 @@ Codexに実装させる場合は、以下の順序を推奨する。
 - Cache Storageにユーザーデータを保存しない
 - 更新適用時に編集中・保存中のデータを破棄しない
 - 画面URLの直接再読み込みがSPAフォールバックで成功する
+- `buildHomeViewModel` がトーナメントとリーグの件数・状態・最近更新項目を一貫して生成する
+- `getTournamentResumePath` と `getLeagueResumePath` が既存フロー判定に沿って再開先を返す
+- ホーム画面用の表示データや状態をIndexedDB・JSONへ追加保存しない
+- 不正な `updatedAt`、片方の保存領域のエラー、読み込み中の状態を空データと混同しない
+- PWA起動状態、標準インストール、iPhone・iPad手動案内、30日間抑制を状態遷移として検証できる
 - 主要ロジックにVitestの単体テストがある

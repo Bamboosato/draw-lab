@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
-import { getLeagueEditSteps, getLeagueStepPath, type LeagueEditStep } from "../app/leagueFlow";
+import { getLeagueEditSteps, getLeagueStatus, getLeagueStepPath, type LeagueEditStep } from "../app/leagueFlow";
 import {
   DEFAULT_LEAGUE_SORT,
   getNextLeagueSort,
@@ -295,16 +295,6 @@ function getLeagueEditStepMenuPresentation(step: LeagueEditStep): Pick<OverflowM
     case "matches":
       return { label: "対戦カード", title: "対戦カードを編集", icon: "options" };
   }
-}
-
-function getLeagueStatus(league: League): { label: string; className: "generated" | "draft" } {
-  if (league.status === "completed") {
-    return { label: "完了", className: "generated" };
-  }
-  if (league.matchSelectionStatus === "confirmed") {
-    return { label: "運用中", className: "generated" };
-  }
-  return { label: "編集中", className: "draft" };
 }
 
 function formatDateTime(value: string): string {
