@@ -364,6 +364,7 @@ function validateStoredTournamentShape(value: unknown): asserts value is Record<
     || !Number.isFinite(value.seedCount)
     || typeof value.createdAt !== "string"
     || typeof value.updatedAt !== "string"
+    || (value.status !== undefined && value.status !== "inProgress" && value.status !== "completed")
   ) {
     throw new ImportDataError("IMPORT_INVALID_TOURNAMENT", "バックアップ内の大会データに必要な項目が不足しています。");
   }
@@ -563,6 +564,7 @@ function coerceTournament(value: unknown): Tournament {
   return {
     ...fallback,
     id,
+    status: value.status === "completed" ? "completed" : "inProgress",
     title: coerceString(value.title) ?? "",
     date: coerceString(value.date) ?? "",
     venue: coerceString(value.venue) ?? "",

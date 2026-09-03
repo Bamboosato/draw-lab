@@ -1502,24 +1502,24 @@ a {
 
 .tournament-list-table th:first-child,
 .tournament-list-table td:first-child {
-  width: 200px;
+  width: 184px;
 }
 
 .tournament-list-table th:nth-child(2),
 .tournament-list-table td:nth-child(2) {
-  width: 64px;
+  width: 48px;
   white-space: nowrap;
   text-align: center;
 }
 
 .tournament-list-table th:nth-child(3),
 .tournament-list-table td:nth-child(3) {
-  width: 120px;
+  width: 108px;
 }
 
 .tournament-list-table th:nth-child(4),
 .tournament-list-table td:nth-child(4) {
-  width: 110px;
+  width: 96px;
   white-space: nowrap;
 }
 
@@ -1578,7 +1578,7 @@ a {
 
 .tournament-list-table th:nth-child(5),
 .tournament-list-table td:nth-child(5) {
-  width: 82px;
+  width: 60px;
 }
 
 .tournament-list-table th:nth-child(6),
@@ -1588,7 +1588,8 @@ a {
 
 .tournament-list-table th:last-child,
 .tournament-list-table td:last-child {
-  width: 220px;
+  width: 240px;
+  padding-right: 16px;
   white-space: nowrap;
 }
 

@@ -47,6 +47,7 @@ export type OutputPageCount = 1 | 2 | 4 | 8 | 16 | 32;
 export type SeedPositionMode = "fixed" | "jtaRulebook" | "grandSlam";
 export type ThirdFourthSeedPlacement = "tennisRule" | "standard";
 export type EntrantPlacementOrder = "largeTeamFirst" | "random" | "rosterOrder";
+export type TournamentStatus = "inProgress" | "completed";
 
 export type Tournament = {
   id: string;
@@ -61,6 +62,8 @@ export type Tournament = {
   options: DrawOptions;
   outputOptions?: DrawOutputOptions;
   generatedDraw?: GeneratedDraw;
+  /** Optional for backwards compatibility with tournaments saved before completion status was added. */
+  status?: TournamentStatus;
   createdAt: string;
   updatedAt: string;
 };

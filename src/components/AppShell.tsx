@@ -195,7 +195,7 @@ function getScreenName(pathname: string): string {
   }
 
   if (pathname.includes("/preview")) {
-    return "プレビュー";
+    return "トーナメント表";
   }
 
   return "基本情報";

@@ -1,17 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import {
+  createRandomSeed,
+  generateTournamentDraw,
+  hasTournamentMatchData,
+  validateTournamentForUi,
+} from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import { resolveTournamentMatches, updateTournamentMatch } from "../domain/tournamentMatches";
 import type { Entrant, MatchType, TournamentMatchResult } from "../domain/types";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
+import { ValidationBanner } from "../components/ValidationBanner";
 import { TournamentMatchCard } from "../components/TournamentMatchCard";
 
 export function TournamentMatchesPage() {
   const { id } = useParams();
   const tournament = useTournament(id);
-  const { updateTournament } = useTournaments();
+  const { updateTournament, getTournamentIntegration } = useTournaments();
   const navigate = useViewTransitionNavigate();
   const [activeRound, setActiveRound] = useState(1);
+  const [showIssues, setShowIssues] = useState(false);
+  const integration = tournament ? getTournamentIntegration(tournament.id) : undefined;
+  const validation = useMemo(
+    () => tournament ? validateTournamentForUi(tournament, integration) : { errors: [], warnings: [] },
+    [integration, tournament],
+  );
 
   const matches = useMemo(
     () => tournament?.generatedDraw ? resolveTournamentMatches(tournament.generatedDraw, tournament.entrants) : [],
@@ -71,6 +84,29 @@ export function TournamentMatchesPage() {
     }
   };
 
+  const runRegenerate = (): void => {
+    setShowIssues(true);
+    const result = generateTournamentDraw(tournament, createRandomSeed(), integration);
+
+    if (result.validation.errors.length > 0) {
+      return;
+    }
+
+    setShowIssues(false);
+    updateTournament(result.tournament);
+  };
+
+  const readOnly = tournament.status === "completed";
+  const regenerateDisabled = hasTournamentMatchData(tournament) || readOnly;
+  const regenerateHelp = "結果または備考入力済みのため、1回戦の組合せを再生成できません。";
+
+  const regenerate = (): void => {
+    if (regenerateDisabled) {
+      return;
+    }
+    runRegenerate();
+  };
+
   return (
     <div className="page-stack tournament-matches-page">
       <section className="page-heading">
@@ -103,7 +139,32 @@ export function TournamentMatchesPage() {
             <h2>対戦カード</h2>
             <p>結果入力はこの一覧から行います。</p>
           </div>
+          <div
+            className="disabled-action-tooltip"
+            title={regenerateDisabled ? regenerateHelp : undefined}
+            tabIndex={regenerateDisabled ? 0 : undefined}
+            role={regenerateDisabled ? "group" : undefined}
+            aria-label={regenerateDisabled ? regenerateHelp : undefined}
+          >
+            <button
+              type="button"
+              className="button secondary"
+              title={regenerateDisabled ? regenerateHelp : "1回戦の組合せを再生成"}
+              disabled={regenerateDisabled}
+              onClick={regenerate}
+            >
+              1回戦の組合せを再生成
+            </button>
+          </div>
         </div>
+        {showIssues ? (
+          <ValidationBanner
+            errors={validation.errors}
+            warnings={validation.warnings}
+            entrants={tournament.entrants}
+            compact
+          />
+        ) : null}
         <div className="league-match-cards">
           {visibleMatches.map((match) => (
             <TournamentMatchCard
@@ -111,6 +172,7 @@ export function TournamentMatchesPage() {
               match={match}
               participantALabel={getParticipantLabel(match, "A", tournament.entrants, tournament.matchType)}
               participantBLabel={getParticipantLabel(match, "B", tournament.entrants, tournament.matchType)}
+              disabled={readOnly}
               onResultChange={(result) => saveResult(match.id, result)}
               onNoteChange={(note) => saveNote(match.id, note)}
             />
@@ -120,7 +182,7 @@ export function TournamentMatchesPage() {
 
       <div className="bottom-actions no-print">
         <button type="button" className="button secondary" title="オプション設定へ戻る" onClick={() => navigate(`/tournaments/${tournament.id}/edit/options`)}>戻る</button>
-        <button type="button" className="button primary" title="生成・プレビューへ進む" onClick={() => navigate(`/tournaments/${tournament.id}/preview`)}>次へ</button>
+        <button type="button" className="button primary" title="トーナメント表へ進む" onClick={() => navigate(`/tournaments/${tournament.id}/preview`)}>次へ</button>
       </div>
     </div>
   );

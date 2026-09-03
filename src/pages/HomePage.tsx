@@ -64,8 +64,9 @@ export function HomePage() {
             status={tournamentStorageStatus}
             items={[
               ["全件", viewModel.tournament.total],
-              ["生成済み", viewModel.tournament.generated],
               ["編集中", viewModel.tournament.editing],
+              ["運用中", viewModel.tournament.operating],
+              ["完了", viewModel.tournament.completed],
             ]}
           />
           <HomeSummaryGroup

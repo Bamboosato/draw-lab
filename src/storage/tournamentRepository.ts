@@ -113,6 +113,7 @@ export function createTournamentRepository(
           randomSeed: undefined,
         },
         generatedDraw: undefined,
+        status: "inProgress",
         createdAt: now,
         updatedAt: now,
       };

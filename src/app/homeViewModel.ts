@@ -7,6 +7,7 @@ import {
   getLeagueStepPath,
 } from "./leagueFlow";
 import {
+  getTournamentStatus,
   getTournamentStepPath,
   isTournamentStepComplete,
 } from "./tournamentFlow";
@@ -29,8 +30,9 @@ export type HomeRecentItem = {
 export type HomeViewModel = {
   tournament: {
     total: number;
-    generated: number;
+    operating: number;
     editing: number;
+    completed: number;
   };
   league: {
     total: number;
@@ -49,9 +51,13 @@ export function buildHomeViewModel(
   const integrationByTournamentId = new Map(
     integrations.map((integration) => [integration.tournamentId, integration]),
   );
-  const generatedTournamentCount = tournaments.filter((tournament) =>
-    isTournamentDrawCurrent(tournament, integrationByTournamentId.get(tournament.id)),
-  ).length;
+  const tournamentStatusCounts = tournaments.reduce(
+    (counts, tournament) => {
+      counts[getTournamentStatus(tournament, integrationByTournamentId.get(tournament.id)).category] += 1;
+      return counts;
+    },
+    { editing: 0, operating: 0, completed: 0 },
+  );
   const leagueStatusCounts = leagues.reduce(
     (counts, league) => {
       counts[getLeagueStatus(league).category] += 1;
@@ -76,8 +82,9 @@ export function buildHomeViewModel(
   return {
     tournament: {
       total: tournaments.length,
-      generated: generatedTournamentCount,
-      editing: tournaments.length - generatedTournamentCount,
+      operating: tournamentStatusCounts.operating,
+      editing: tournamentStatusCounts.editing,
+      completed: tournamentStatusCounts.completed,
     },
     league: {
       total: leagues.length,
@@ -93,6 +100,10 @@ export function getTournamentResumePath(
   tournament: Tournament,
   integration?: TournamentIntegrationRecord,
 ): string {
+  if (tournament.status === "completed") {
+    return getTournamentStepPath(tournament.id, "preview");
+  }
+
   if (!isTournamentStepComplete(tournament, "basic", integration)) {
     return getTournamentStepPath(tournament.id, "basic");
   }
@@ -139,14 +150,14 @@ function toTournamentRecentItem(
   tournament: Tournament,
   integration?: TournamentIntegrationRecord,
 ): HomeRecentItem {
-  const drawCurrent = isTournamentDrawCurrent(tournament, integration);
+  const status = getTournamentStatus(tournament, integration);
 
   return {
     kind: "tournament",
     id: tournament.id,
     title: tournament.title?.trim() || "無題のトーナメント",
     date: tournament.date?.trim() || "未設定",
-    status: drawCurrent ? "生成済" : "編集中",
+    status: status.label,
     updatedAt: normalizeUpdatedAt(tournament.updatedAt),
     resumePath: getTournamentResumePath(tournament, integration),
   };

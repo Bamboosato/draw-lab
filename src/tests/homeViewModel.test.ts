@@ -9,7 +9,7 @@ import { makeTournament } from "./testFactory";
 
 describe("homeViewModel", () => {
   describe("集計", () => {
-    it("トーナメントは現在のドロー有効性、リーグは既存の状態判定で分類する", () => {
+    it("トーナメントとリーグを編集中・運用中・完了へ分類する", () => {
       const generatedTournament = makeTournament({
         id: "tournament-generated",
         generatedDraw: {
@@ -21,6 +21,7 @@ describe("homeViewModel", () => {
           matches: [],
         },
       });
+      const completedTournament = makeTournament({ id: "tournament-completed", status: "completed" });
       const editingLeague = { ...createDefaultLeague(), id: "league-editing" };
       const operatingLeague = {
         ...createDefaultLeague(),
@@ -35,12 +36,36 @@ describe("homeViewModel", () => {
       };
 
       const viewModel = buildHomeViewModel(
-        [generatedTournament, makeTournament({ id: "tournament-editing" })],
+        [generatedTournament, makeTournament({ id: "tournament-editing" }), completedTournament],
         [editingLeague, operatingLeague, completedLeague],
       );
 
-      expect(viewModel.tournament).toEqual({ total: 2, generated: 1, editing: 1 });
+      expect(viewModel.tournament).toEqual({ total: 3, operating: 1, editing: 1, completed: 1 });
       expect(viewModel.league).toEqual({ total: 3, editing: 1, operating: 1, completed: 1 });
+    });
+
+    it("最近更新項目でもトーナメントの状態を編集中・運用中・完了で表示する", () => {
+      const operating = makeTournament({
+        id: "tournament-operating",
+        generatedDraw: {
+          id: "draw-operating",
+          tournamentId: "tournament-operating",
+          randomSeed: "seed-operating",
+          generatedAt: "2026-07-03T00:00:00.000Z",
+          slots: [],
+          matches: [],
+        },
+      });
+      const editing = makeTournament({ id: "tournament-editing" });
+      const completed = makeTournament({ id: "tournament-completed", status: "completed" });
+
+      const viewModel = buildHomeViewModel([operating, editing, completed], []);
+
+      expect(Object.fromEntries(viewModel.recentItems.map((item) => [item.id, item.status]))).toEqual({
+        "tournament-operating": "運用中",
+        "tournament-editing": "編集中",
+        "tournament-completed": "完了",
+      });
     });
   });
 
@@ -115,6 +140,8 @@ describe("homeViewModel", () => {
         .toBe("/tournaments/roster-error/edit/entrants");
       expect(getTournamentResumePath(makeTournament({ id: "options", generatedDraw: undefined })))
         .toBe("/tournaments/options/edit/options");
+      expect(getTournamentResumePath(makeTournament({ id: "completed", status: "completed" })))
+        .toBe("/tournaments/completed/preview");
       expect(getTournamentResumePath(makeTournament({
         id: "preview",
         generatedDraw: {
