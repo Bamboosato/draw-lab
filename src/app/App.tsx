@@ -50,7 +50,7 @@ export const appRoutes: RouteObject[] = [
       { index: true, element: <HomePage /> },
       { path: "tournaments", element: <TournamentListPage /> },
       { path: "tournaments/new", element: <NewTournamentRoute /> },
-      { path: "tournaments/:id/edit/basic", element: <BasicInfoPage /> },
+      { path: "tournaments/:id/edit/basic", element: <GuardedTournamentStep step="basic"><BasicInfoPage /></GuardedTournamentStep> },
       {
         path: "tournaments/:id/edit/entrants",
         element: <GuardedTournamentStep step="entrants"><EntrantsPage /></GuardedTournamentStep>,

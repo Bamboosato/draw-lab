@@ -8,6 +8,7 @@ import type {
   GeneratedDraw,
   MatchType,
   Tournament,
+  ValidationIssue,
   ValidationResult,
 } from "../domain/types";
 import type { TournamentIntegrationRecord } from "../domain/leagueTournamentTypes";
@@ -48,6 +49,7 @@ export function createDefaultTournament(): Tournament {
       entrantPlacementOrder: "largeTeamFirst",
     },
     outputOptions: { ...DEFAULT_DRAW_OUTPUT_OPTIONS },
+    status: "inProgress",
     createdAt: now,
     updatedAt: now,
   };
@@ -125,6 +127,37 @@ export function hasTournamentMatchData(tournament: Tournament): boolean {
   return tournament.generatedDraw?.matches?.some(
     (match) => match.result !== "unplayed" || Boolean(match.note?.trim()),
   ) ?? false;
+}
+
+export function getTournamentCompletionErrors(tournament: Tournament): ValidationIssue[] {
+  if (!tournament.generatedDraw) {
+    return [{
+      code: "TOURNAMENT_DRAW_REQUIRED",
+      message: "トーナメント表を生成してから完了してください。",
+    }];
+  }
+
+  return [];
+}
+
+export function canCompleteTournament(tournament: Tournament): boolean {
+  return getTournamentCompletionErrors(tournament).length === 0;
+}
+
+export function completeTournament(tournament: Tournament): Tournament {
+  if (!canCompleteTournament(tournament)) {
+    return tournament;
+  }
+
+  return { ...tournament, status: "completed" };
+}
+
+export function reopenTournament(tournament: Tournament): Tournament {
+  if (tournament.status !== "completed") {
+    return tournament;
+  }
+
+  return { ...tournament, status: "inProgress" };
 }
 
 export function compactTournament(tournament: Tournament): Tournament {

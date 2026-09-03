@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   TOURNAMENT_STEPS,
   getTournamentEditSteps,
+  getTournamentStatus,
   getTournamentStepAccess,
   getTournamentStepPath,
   isTournamentStepComplete,
@@ -16,7 +17,7 @@ describe("tournamentFlow", () => {
       "名簿入力",
       "オプション設定",
       "対戦カード",
-      "生成・プレビュー",
+      "トーナメント表",
     ]);
   });
 
@@ -48,6 +49,35 @@ describe("tournamentFlow", () => {
     });
 
     expect(getTournamentEditSteps(tournament)).toEqual(["basic", "entrants", "options", "matches"]);
+  });
+
+  it("presents tournament status with the same three labels as league status", () => {
+    const generated = makeTournament({
+      drawSize: 4,
+      generatedDraw: {
+        id: "draw-1",
+        tournamentId: "tournament-1",
+        randomSeed: "seed-1",
+        generatedAt: "2026-07-03T00:00:00.000Z",
+        slots: [],
+        matches: [],
+      },
+    });
+
+    expect(getTournamentStatus(makeTournament({ generatedDraw: undefined }))).toMatchObject({ label: "編集中", category: "editing" });
+    expect(getTournamentStatus(generated)).toMatchObject({ label: "運用中", category: "operating" });
+    expect(getTournamentStatus({ ...generated, status: "completed" })).toMatchObject({ label: "完了", category: "completed" });
+  });
+
+  it("完了済みトーナメントでは編集画面を提供せず、トーナメント表から再開させる", () => {
+    const tournament = makeTournament({ status: "completed" });
+
+    expect(getTournamentEditSteps(tournament)).toEqual([]);
+    expect(getTournamentStepAccess(tournament, "matches")).toMatchObject({
+      canEnter: false,
+      redirectStep: "preview",
+    });
+    expect(getTournamentStepAccess(tournament, "preview").canEnter).toBe(true);
   });
 
   it("allows options settings after roster errors are resolved", () => {

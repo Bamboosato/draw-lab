@@ -215,4 +215,38 @@ describe("TournamentListPage", () => {
     expect(row!.querySelector("td:nth-child(2)")?.textContent).toBe("");
     expect(within(row!).queryByRole("link", { name: "引継ぎ元のリーグを表示" })).toBeNull();
   });
+
+  it("意図: トーナメントの状態をリーグと同じ編集中・運用中・完了で表示する", () => {
+    const editing = { ...createDefaultTournament(), id: "tournament-editing", title: "編集中大会" };
+    const operating = {
+      ...createDefaultTournament(),
+      id: "tournament-operating",
+      title: "運用中大会",
+      generatedDraw: {
+        id: "draw-operating",
+        tournamentId: "tournament-operating",
+        randomSeed: "seed-operating",
+        generatedAt: "2026-09-03T00:00:00.000Z",
+        slots: [],
+        matches: [],
+      },
+    };
+    const completed = { ...createDefaultTournament(), id: "tournament-completed", title: "完了大会", status: "completed" as const };
+    useTournamentsMock.mockReturnValue({
+      createTournament: createTournamentMock,
+      deleteTournament: vi.fn(),
+      duplicateTournament: vi.fn(),
+      getTournamentIntegration: getTournamentIntegrationMock,
+      storageError: undefined,
+      storageStatus: "ready",
+      tournaments: [editing, operating, completed],
+      updateTournamentWithIntegration: updateTournamentWithIntegrationMock,
+    });
+
+    render(<TournamentListPage />);
+
+    expect(within(screen.getByText("編集中大会").closest("tr")!).getByText("編集中")).toBeTruthy();
+    expect(within(screen.getByText("運用中大会").closest("tr")!).getByText("運用中")).toBeTruthy();
+    expect(within(screen.getByText("完了大会").closest("tr")!).getByText("完了")).toBeTruthy();
+  });
 });

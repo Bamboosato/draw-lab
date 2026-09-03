@@ -8,14 +8,17 @@ import {
   createEmptyEntrant,
   createEmptyEntrants,
   createGenerationInputSignature,
+  completeTournament,
   ensureEntrantRows,
   generateTournamentDraw,
   getEntrantStats,
+  getTournamentCompletionErrors,
   getVisibleEntrantRowCount,
   hasTournamentContentChanged,
   isTournamentDrawCurrent,
   mergeEntrantsIntoEmptyRows,
   parseEntrantsFromText,
+  reopenTournament,
   touchTournament,
   validateTournamentForUi,
 } from "../app/tournamentModel";
@@ -36,6 +39,18 @@ describe("tournamentModel", () => {
 
     expect(tournament.drawSize).toBe(16);
     expect(tournament.entrants).toHaveLength(16);
+    expect(tournament.status).toBe("inProgress");
+  });
+
+  it("生成済みドローがあれば試合結果未入力でも完了でき、再開時は試合データを保持する", () => {
+    const tournament = createCompletedTournament();
+    const incomplete = { ...tournament, generatedDraw: { ...tournament.generatedDraw!, matches: tournament.generatedDraw!.matches.map((match) => ({ ...match, result: "unplayed" as const })) } };
+
+    expect(getTournamentCompletionErrors(incomplete)).toEqual([]);
+    expect(completeTournament(incomplete).status).toBe("completed");
+    expect(getTournamentCompletionErrors(tournament)).toEqual([]);
+    expect(completeTournament(tournament).status).toBe("completed");
+    expect(reopenTournament({ ...tournament, status: "completed" })).toMatchObject({ status: "inProgress", generatedDraw: tournament.generatedDraw });
   });
 
   it("creates a team roster row with a team name and variable member list", () => {
@@ -499,3 +514,27 @@ describe("tournamentModel", () => {
     expect(isTournamentDrawCurrent(updated)).toBe(true);
   });
 });
+
+function createCompletedTournament() {
+  const tournament = createDefaultTournament();
+  const entrants = Array.from({ length: 4 }, (_, index) => makeEntrant(index + 1));
+  const slots = entrants.map((entrant, index) => ({ position: index + 1, entrantId: entrant.id, isBye: false }));
+  const matches = [
+    { id: "match-1", round: 1, matchNo: 1, sourceA: { slotPosition: 1 }, sourceB: { slotPosition: 2 }, result: "participantAWin" as const },
+    { id: "match-2", round: 1, matchNo: 2, sourceA: { slotPosition: 3 }, sourceB: { slotPosition: 4 }, result: "participantAWin" as const },
+    { id: "match-3", round: 2, matchNo: 1, sourceA: { matchId: "match-1" }, sourceB: { matchId: "match-2" }, result: "participantAWin" as const },
+  ];
+  return {
+    ...tournament,
+    drawSize: 4 as const,
+    entrants,
+    generatedDraw: {
+      id: "draw-completed",
+      tournamentId: tournament.id,
+      randomSeed: "seed-completed",
+      slots,
+      matches,
+      generatedAt: "2026-09-03T00:00:00.000Z",
+    },
+  };
+}

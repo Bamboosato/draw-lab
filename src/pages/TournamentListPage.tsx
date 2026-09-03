@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import {
   getTournamentEditSteps,
+  getTournamentStatus,
   getTournamentStepPath,
+  type TournamentStep,
   type TournamentEditStep,
 } from "../app/tournamentFlow";
 import { getLeagueStepPath } from "../app/leagueFlow";
@@ -110,8 +112,9 @@ export function TournamentListPage() {
         ariaLabel="トーナメント概要"
         items={[
           { label: "全トーナメント", value: String(tournaments.length) },
-          { label: "生成済み", value: String(tournaments.filter((item) => isTournamentDrawCurrent(item, getTournamentIntegration(item.id))).length) },
-          { label: "編集中", value: String(tournaments.filter((item) => !isTournamentDrawCurrent(item, getTournamentIntegration(item.id))).length) },
+          { label: "編集中", value: String(tournaments.filter((item) => getTournamentStatus(item, getTournamentIntegration(item.id)).category === "editing").length) },
+          { label: "運用中", value: String(tournaments.filter((item) => getTournamentStatus(item, getTournamentIntegration(item.id)).category === "operating").length) },
+          { label: "完了", value: String(tournaments.filter((item) => item.status === "completed").length) },
         ]}
       />
 
@@ -222,7 +225,7 @@ export function TournamentListPage() {
                         disabled={!drawCurrent}
                         onClick={() => navigate(`/tournaments/${tournament.id}/preview`)}
                       >
-                        プレビュー
+                        トーナメント表
                       </button>
                       <ActionMenu
                         tournament={tournament}
@@ -326,9 +329,13 @@ function TournamentEditAction({
   onSelect,
 }: {
   tournament: Tournament;
-  onSelect: (step: TournamentEditStep) => void;
+  onSelect: (step: TournamentStep) => void;
 }) {
   const editSteps = getTournamentEditSteps(tournament);
+
+  if (tournament.status === "completed") {
+    return <button type="button" title="完了済みトーナメントを表示し、必要に応じて編集を再開" onClick={() => onSelect("preview")}>編集</button>;
+  }
 
   if (editSteps.length === 1) {
     return (
@@ -371,10 +378,9 @@ function getEditStepMenuPresentation(step: TournamentEditStep): Pick<OverflowMen
 }
 
 function StatusBadge({ tournament, integration }: { tournament: Tournament; integration?: TournamentIntegrationRecord }) {
-  const drawCurrent = isTournamentDrawCurrent(tournament, integration);
-  const label = drawCurrent ? "生成済" : "未生成";
+  const status = getTournamentStatus(tournament, integration);
 
-  return <span className={`status-badge ${drawCurrent ? "generated" : "draft"}`}>{label}</span>;
+  return <span className={`status-badge ${status.className}`}>{status.label}</span>;
 }
 
 function integrationsForExport(

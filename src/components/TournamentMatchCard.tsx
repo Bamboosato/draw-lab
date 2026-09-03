@@ -5,16 +5,18 @@ export function TournamentMatchCard({
   match,
   participantALabel,
   participantBLabel,
+  disabled = false,
   onResultChange,
   onNoteChange,
 }: {
   match: ResolvedTournamentMatch;
   participantALabel: string;
   participantBLabel: string;
+  disabled?: boolean;
   onResultChange: (result: TournamentMatchResult) => void;
   onNoteChange: (note: string) => void;
 }) {
-  const canEditResult = match.state === "ready" || match.state === "completed";
+  const canEditResult = !disabled && (match.state === "ready" || match.state === "completed");
   const status = getMatchStatus(match.state);
   const statusClass = match.state === "completed" ? "league-match-status-confirmed" : canEditResult ? "generated" : "draft";
 
