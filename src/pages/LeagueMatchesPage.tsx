@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useLeague, useLeagues } from "../app/LeagueProvider";
 import { markMatchSelectionConfirmed, prepareLeagueMatches, unconfirmMatchSelection, updateMatchValidity } from "../app/leagueModel";
-import { countValidMatchesByParticipant, hasLeagueResults } from "../domain/leagueLogic";
+import { countValidMatchesByParticipant, getActiveMatchOrders, hasLeagueResults } from "../domain/leagueLogic";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { LeagueNotFound, LeaguePageHeading, LeagueStorageMessage, ParticipantLabel } from "../components/LeaguePageParts";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -20,6 +20,7 @@ export function LeagueMatchesPage() {
   const hasResults = hasLeagueResults(league);
   const canContinue = confirmed && league.matches.length > 0;
   const completed = league.status === "completed";
+  const activeMatchOrders = getActiveMatchOrders(league.matches);
 
   const generate = () => { if (!confirmed && !completed) updateLeague(prepareLeagueMatches(league)); };
   const applyToggle = (matchId: string, isValid: boolean) => updateLeague(updateMatchValidity(league, matchId, isValid));
@@ -39,7 +40,7 @@ export function LeagueMatchesPage() {
 
   return (
     <div className="page-stack league-page">
-      <LeaguePageHeading description="グループ内の全組み合わせを対戦カードとして作成し、必要なカードだけを無効にします。試合順は生成順で固定です。" />
+      <LeaguePageHeading description="グループ内の全組み合わせを対戦カードとして作成し、必要なカードだけを無効にします。有効カードだけを試合順に含め、無効カードは番号を空欄で表示します。" />
       <LeagueStorageMessage status={storageStatus} error={storageError} showSaving={false} />
       {confirmed && !completed ? <section className="flow-notice" role="status">対戦カード確定後は、対戦カードの再生成と有効／無効の変更はできません。変更する場合は、確定を解除してください。</section> : null}
       <section className="compact-summary-section">
@@ -75,7 +76,7 @@ export function LeagueMatchesPage() {
                     : new Map<string, number>();
                   return (
                     <tr className={match.isValid ? "" : "is-invalid"} key={match.id}>
-                      <td>{match.order}</td>
+                      <td>{activeMatchOrders.get(match.id) ?? ""}</td>
                       <td>{group?.name ?? "-"}</td>
                       <td><span className="match-pair"><span>{ParticipantLabel(league.participants.find((item) => item.id === match.participantAId))}</span><span className="match-vs">vs</span><span>{ParticipantLabel(league.participants.find((item) => item.id === match.participantBId))}</span></span></td>
                       <td><label className="validity-control"><input type="checkbox" checked={match.isValid} disabled={completed || confirmed} onChange={(event) => applyToggle(match.id, event.target.checked)} /><span>{match.isValid ? "有効" : "無効"}</span></label></td>

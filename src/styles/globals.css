@@ -560,8 +560,8 @@ a {
   background: #f8fafc;
 }
 
-.tournament-match-card.tournament-match-pending .match-card-players,
-.tournament-match-card.tournament-match-byeAdvance .match-card-players {
+.tournament-match-card.tournament-match-pending .match-participant-button,
+.tournament-match-card.tournament-match-byeAdvance .match-participant-button {
   color: #64748b;
 }
 
@@ -576,6 +576,21 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.match-order-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 10px 4px 9px;
+  border-left: 3px solid #2563eb;
+  border-radius: 5px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .match-pair {
@@ -598,11 +613,6 @@ a {
   text-align: left;
 }
 
-.match-card-players {
-  color: #172033;
-  font-weight: 800;
-}
-
 .match-vs {
   color: #94a3b8;
   font-size: 12px;
@@ -611,27 +621,87 @@ a {
   text-transform: uppercase;
 }
 
-.result-toggle {
+.match-winner-selector {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  justify-items: center;
+  gap: 8px;
 }
 
-.result-button {
-  min-height: 38px;
+.match-participant-buttons {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.match-participant-button {
+  min-width: 0;
+  min-height: 42px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
-  padding: 7px 8px;
+  padding: 9px 10px;
   background: #ffffff;
-  color: #334155;
+  color: #172033;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.match-participant-button:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.match-participant-button.active,
+.match-draw-button.active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.match-participant-button:disabled {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.match-participant-button:disabled:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.match-draw-button {
+  min-height: 30px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 12px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
 
-.result-button.active {
-  border-color: #2563eb;
-  background: #dbeafe;
-  color: #1d4ed8;
+.match-draw-button:disabled {
+  border-color: #cbd5e1;
+  background: #e2e8f0;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.match-draw-button:disabled:hover {
+  border-color: #cbd5e1;
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.match-participant-button:focus-visible,
+.match-draw-button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .validity-control {
@@ -734,18 +804,15 @@ a {
     flex-direction: column;
   }
 
-  .result-toggle {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .match-card-players {
-    grid-template-columns: 1fr;
+  .match-participant-buttons {
+    grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
     gap: 6px;
   }
 
-  .match-card-players > :first-child,
-  .match-card-players > :last-child {
-    text-align: center;
+  .match-participant-button {
+    min-height: 40px;
+    padding: 8px 6px;
+    font-size: 14px;
   }
 }
 

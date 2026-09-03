@@ -42,10 +42,12 @@ describe("TournamentMatchesPage", () => {
     expect(screen.getByText("結果入力はこの一覧から行います。")).toBeTruthy();
     expect(screen.getByText("ラウンド")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "対戦カード" })).toBeTruthy();
+    expect(screen.getAllByText("第1試合").every((label) => label.className.includes("match-order-label"))).toBe(true);
     expect(screen.getByRole("tab", { name: "決勝" })).toBeTruthy();
     expect(document.querySelectorAll(".tournament-match-card")).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "引き分け" })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "引き分け" }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(screen.getAllByRole("button", { name: /の勝ち$/ })).toHaveLength(4);
     expect(screen.getAllByRole("textbox", { name: "備考" }).every((input) => input.getAttribute("placeholder") === "結果の詳細を記録してください（任意）")).toBe(true);
   });
 
@@ -56,7 +58,7 @@ describe("TournamentMatchesPage", () => {
 
     expect(screen.getByRole("heading", { name: "対戦カード" })).toBeTruthy();
     expect(screen.getAllByText("未確定").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "A勝" })).toHaveProperty("disabled", true);
+    expect(screen.getAllByRole("button", { name: /の勝ち$/ }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
     expect(screen.getAllByRole("textbox", { name: "備考" }).every((input) => (input as HTMLInputElement).disabled)).toBe(true);
   });
 
@@ -77,7 +79,7 @@ describe("TournamentMatchesPage", () => {
     useTournamentMock.mockReturnValue(tournament);
     render(<TournamentMatchesPage />);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "A勝" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: /の勝ち$/ })[0]!);
 
     expect(updateTournamentMock).toHaveBeenCalledWith(expect.objectContaining({
       id: tournament.id,

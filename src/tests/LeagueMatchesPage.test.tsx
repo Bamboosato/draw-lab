@@ -78,6 +78,22 @@ describe("LeagueMatchesPage", () => {
     expect(pair!.querySelector(".match-vs")?.textContent).toBe("vs");
   });
 
+  it("無効カードを除外して有効カードへ連番を振り、無効カードの番号を空欄にする", () => {
+    const base = makeLeague();
+    useLeagueMock.mockReturnValue(makeLeague({
+      matches: [
+        { ...base.matches[0]!, id: "m1", order: 1, isValid: false },
+        { ...base.matches[0]!, id: "m2", order: 2, isValid: true },
+        { ...base.matches[0]!, id: "m3", order: 3, isValid: false },
+        { ...base.matches[0]!, id: "m4", order: 4, isValid: true },
+      ],
+    }));
+
+    render(<LeagueMatchesPage />);
+
+    expect(Array.from(document.querySelectorAll(".league-matches-table tbody tr"), (row) => row.querySelector("td")?.textContent)).toEqual(["", "1", "", "2"]);
+  });
+
   it("画面遷移直後の保存中メッセージでレイアウトを変動させない", () => {
     storageStatusMock.mockReturnValue("saving");
 
