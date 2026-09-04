@@ -42,7 +42,7 @@ describe("TournamentMatchesPage", () => {
     render(<TournamentMatchesPage />);
 
     expect(screen.getByText("ラウンドごとの対戦カードに対戦結果を入力します。結果は次のラウンドに自動で反映されます。")).toBeTruthy();
-    expect(screen.getByText("結果入力はこの一覧から行います。")).toBeTruthy();
+    expect(screen.getByText("各試合の勝者を選択してください。ゲームカウント等の詳細は備考に入力します。")).toBeTruthy();
     expect(screen.getByText("ラウンド")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "対戦カード" })).toBeTruthy();
     const regenerateButton = screen.getByRole("button", { name: "1回戦の組合せを再生成" });

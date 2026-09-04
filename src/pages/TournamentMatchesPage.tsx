@@ -137,7 +137,7 @@ export function TournamentMatchesPage() {
         <div className="section-card-heading">
           <div>
             <h2>対戦カード</h2>
-            <p>結果入力はこの一覧から行います。</p>
+            <p>各試合の勝者を選択してください。ゲームカウント等の詳細は備考に入力します。</p>
           </div>
           <div
             className="disabled-action-tooltip"
