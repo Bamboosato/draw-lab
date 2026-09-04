@@ -29,6 +29,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className={isSidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
       <aside className="sidebar no-print">
         <div className="sidebar-header">
+          <NavLink
+            className="brand"
+            to="/"
+            aria-label="DrawLab トップへ"
+            viewTransition={viewTransitionsEnabled}
+          >
+            <img
+              className="sidebar-brand-icon"
+              src="/draw-lab-icon.png"
+              alt=""
+              width="24"
+              height="24"
+            />
+            <strong>DrawLab</strong>
+          </NavLink>
           <button
             type="button"
             className="sidebar-toggle"
@@ -39,14 +54,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <SidebarToggleIcon isCollapsed={isSidebarCollapsed} />
           </button>
-          <NavLink
-            className="brand"
-            to="/"
-            aria-label="DrawLab トップへ"
-            viewTransition={viewTransitionsEnabled}
-          >
-            <strong>DrawLab</strong>
-          </NavLink>
         </div>
         <nav className="nav-list" aria-label="グローバルナビゲーション">
           <NavLink
@@ -54,17 +61,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             className={isTournamentArea ? "active" : undefined}
             viewTransition={viewTransitionsEnabled}
           >
-            トーナメント
+            <SidebarNavIcon />
+            <span>トーナメント</span>
           </NavLink>
           <NavLink
             to="/leagues"
             className={isLeagueArea ? "active" : undefined}
             viewTransition={viewTransitionsEnabled}
           >
-            リーグ
+            <SidebarNavIcon />
+            <span>リーグ</span>
           </NavLink>
         </nav>
         <section className="related-apps" aria-label="関連アプリ" hidden={isSidebarCollapsed}>
+          <h2 className="related-apps-heading">関連アプリ</h2>
           <a
             className="related-app-link"
             href="https://matchup-lab.bamboosato.com/"
@@ -91,9 +101,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               <path d="M9 2h5v5" />
               <path d="M14 2 8 8" />
               <path d="M13 9v3.5A1.5 1.5 0 0 1 11.5 14h-7A1.5 1.5 0 0 1 3 12.5v-7A1.5 1.5 0 0 1 4.5 4H8" />
-            </svg>
-          </a>
-          <p className="related-app-description">対戦表作成・参加者管理</p>
+              </svg>
+            </a>
         </section>
       </aside>
       <div className="main-area">
@@ -272,9 +281,19 @@ function SidebarToggleIcon({ isCollapsed }: { isCollapsed: boolean }) {
       aria-hidden="true"
       focusable="false"
     >
-      <rect x="3.5" y="3.5" width="13" height="13" rx="1.5" />
-      <path d="M7.5 4V16" />
-      <path d={isCollapsed ? "M10 7L13 10L10 13" : "M13 7L10 10L13 13"} />
+      <path d={isCollapsed ? "M8 5L13 10L8 15" : "M12 5L7 10L12 15"} />
+      <path d={isCollapsed ? "M4 5L9 10L4 15" : "M16 5L11 10L16 15"} />
+    </svg>
+  );
+}
+
+function SidebarNavIcon() {
+  return (
+    <svg className="sidebar-nav-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <rect x="3" y="3" width="5.5" height="5.5" rx="1.2" />
+      <rect x="11.5" y="3" width="5.5" height="5.5" rx="1.2" />
+      <rect x="3" y="11.5" width="5.5" height="5.5" rx="1.2" />
+      <rect x="11.5" y="11.5" width="5.5" height="5.5" rx="1.2" />
     </svg>
   );
 }
