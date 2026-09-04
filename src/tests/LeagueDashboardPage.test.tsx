@@ -59,6 +59,7 @@ describe("LeagueDashboardPage", () => {
     expect(Array.from(viewTabs.querySelectorAll('[role="tab"]'), (tab) => tab.textContent)).toEqual(["対戦カード", "対戦結果"]);
     expect(screen.getByRole("tab", { name: "対戦カード" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByRole("heading", { name: "星取表" })).toBeNull();
+    expect(screen.getByText("各試合の勝者を選択してください。ゲームカウント等の詳細は備考に入力します。")).toBeTruthy();
     expect(document.querySelector(".match-winner-selector")).toBeTruthy();
     expect(screen.getByText("第1試合").className).toContain("match-order-label");
     expect(screen.getByRole("button", { name: "引き分け" })).toHaveProperty("disabled", false);
