@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
-import { buildHomeViewModel } from "../app/homeViewModel";
+import { buildHomeViewModel, type HomeViewModel } from "../app/homeViewModel";
 import { type StorageStatus, useTournaments } from "../app/TournamentProvider";
 import { type LeagueStorageStatus, useLeagues } from "../app/LeagueProvider";
 import { PwaInstallGuide } from "../components/PwaInstallGuide";
@@ -39,7 +39,7 @@ export function HomePage() {
           description="参加者名簿からトーナメント表を作成します。"
           status={tournamentStorageStatus}
           error={tournamentStorageError}
-          count={viewModel.tournament.total}
+          counts={viewModel.tournament}
           onCreate={() => navigate("/tournaments/new")}
           onOpenList={() => navigate("/tournaments")}
         />
@@ -48,66 +48,42 @@ export function HomePage() {
           description="グループ分け、対戦カード、リーグ表を作成します。"
           status={leagueStorageStatus}
           error={leagueStorageError}
-          count={viewModel.league.total}
+          counts={viewModel.league}
           onCreate={() => navigate("/leagues/new")}
           onOpenList={() => navigate("/leagues")}
         />
       </section>
 
-      <section className="home-summary-section" aria-labelledby="home-summary-title">
-        <div className="home-section-heading">
-          <h2 id="home-summary-title">全体サマリー</h2>
-        </div>
-        <div className="home-summary-grid">
-          <HomeSummaryGroup
-            title="トーナメント"
-            status={tournamentStorageStatus}
-            items={[
-              ["全件", viewModel.tournament.total],
-              ["編集中", viewModel.tournament.editing],
-              ["運用中", viewModel.tournament.operating],
-              ["完了", viewModel.tournament.completed],
-            ]}
-          />
-          <HomeSummaryGroup
-            title="リーグ"
-            status={leagueStorageStatus}
-            items={[
-              ["全件", viewModel.league.total],
-              ["編集中", viewModel.league.editing],
-              ["運用中", viewModel.league.operating],
-              ["完了", viewModel.league.completed],
-            ]}
-          />
-        </div>
-      </section>
-
       <section className="home-recent-section" aria-labelledby="home-recent-title" aria-busy={recentItemsLoading || undefined}>
         <div className="home-section-heading">
-          <h2 id="home-recent-title">最近更新した大会</h2>
+          <h2 id="home-recent-title">最近更新したデータ</h2>
         </div>
         {recentItemsLoading ? (
           <p className="home-status-message" role="status">保存済みデータを読み込んでいます。</p>
         ) : viewModel.recentItems.length === 0 ? (
-          <p className="home-status-message">最近更新した大会はありません。</p>
+          <p className="home-status-message">最近更新したデータはありません。</p>
         ) : (
           <ul className="home-recent-list">
             {viewModel.recentItems.map((item) => (
               <li key={`${item.kind}-${item.id}`} className="home-recent-item">
                 <div className="home-recent-copy">
-                  <span className="home-recent-type">{item.kind === "tournament" ? "トーナメント" : "リーグ"}</span>
-                  <strong title={item.title}>{item.title}</strong>
-                  <span>{item.date}</span>
-                  <span className={`status-badge ${item.status === "編集中" ? "draft" : "generated"}`}>{item.status}</span>
-                  <span className="muted-line">最終更新 {formatDateTime(item.updatedAt)}</span>
+                  <div className="home-recent-primary">
+                    <span className="home-recent-type">{item.kind === "tournament" ? "トーナメント" : "リーグ"}</span>
+                    <strong title={item.title}>{item.title}</strong>
+                  </div>
+                  <div className="home-recent-meta">
+                    <span>{item.date}</span>
+                    <span className={`status-badge ${item.status === "編集中" ? "draft" : "generated"}`}>{item.status}</span>
+                    <span className="muted-line">最終更新 {formatDateTime(item.updatedAt)}</span>
+                  </div>
                 </div>
                 <button
                   type="button"
-                  className="button secondary"
+                  className="home-recent-open"
                   aria-label={`${item.title}を開く`}
                   onClick={() => navigate(item.resumePath)}
                 >
-                  開く
+                  開く <span aria-hidden="true">→</span>
                 </button>
               </li>
             ))}
@@ -130,7 +106,7 @@ function HomeFeatureCard({
   description,
   status,
   error,
-  count,
+  counts,
   onCreate,
   onOpenList,
 }: {
@@ -138,7 +114,7 @@ function HomeFeatureCard({
   description: string;
   status: HomeStorageStatus;
   error?: string;
-  count: number;
+  counts: HomeViewModel["tournament"];
   onCreate: () => void;
   onOpenList: () => void;
 }) {
@@ -148,57 +124,44 @@ function HomeFeatureCard({
     <article className="home-feature-card" aria-busy={status === "loading" || undefined}>
       <div className="home-feature-card-heading">
         <h2>{title}</h2>
-        <StorageState status={status} count={count} />
+        <div className="home-feature-card-total">
+          <span className="home-feature-card-count">{counts.total}件</span>
+          <StorageState status={status} />
+        </div>
       </div>
       <p>{description}</p>
+      <dl className="home-status-list" aria-label={`${title}の状態別件数`}>
+        <div>
+          <dt>編集中</dt>
+          <dd>{counts.editing}</dd>
+        </div>
+        <div>
+          <dt>運用中</dt>
+          <dd>{counts.operating}</dd>
+        </div>
+        <div>
+          <dt>完了</dt>
+          <dd>{counts.completed}</dd>
+        </div>
+      </dl>
       {status === "error" ? <p className="home-card-error" role="alert">{error || "保存データを利用できません。"}</p> : null}
       <div className="button-row home-feature-actions">
         <button type="button" className="button primary" disabled={!isReady} onClick={onCreate}>
           新規作成
         </button>
-        <button type="button" className="button secondary" onClick={onOpenList}>
-          一覧を開く
+        <button type="button" className="home-list-link" onClick={onOpenList}>
+          一覧を開く <span aria-hidden="true">→</span>
         </button>
       </div>
     </article>
   );
 }
 
-function StorageState({ status, count }: { status: HomeStorageStatus; count: number }) {
+function StorageState({ status }: { status: HomeStorageStatus }) {
   if (status === "loading") return <span className="home-storage-state">読み込み中</span>;
   if (status === "error") return <span className="home-storage-state error">利用不可</span>;
-  if (status === "saving") return <span className="home-storage-state">全{count}件・保存中</span>;
-  return <span className="home-storage-state">全{count}件</span>;
-}
-
-function HomeSummaryGroup({
-  title,
-  status,
-  items,
-}: {
-  title: string;
-  status: HomeStorageStatus;
-  items: Array<[string, number]>;
-}) {
-  return (
-    <section className="home-summary-group" aria-busy={status === "loading" || undefined}>
-      <h3>{title}</h3>
-      {status === "loading" ? (
-        <p className="home-status-message" role="status">読み込み中</p>
-      ) : status === "error" ? (
-        <p className="home-status-message error" role="alert">利用できません</p>
-      ) : (
-        <dl>
-          {items.map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </section>
-  );
+  if (status === "saving") return <span className="home-storage-state">保存中</span>;
+  return null;
 }
 
 function formatDateTime(value: string): string {
