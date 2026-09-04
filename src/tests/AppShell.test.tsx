@@ -14,27 +14,39 @@ afterEach(() => {
   cleanup();
 });
 
-describe("AppShell related app link", () => {
+describe("AppShell sidebar", () => {
   it("サイドバーのトーナメントからトーナメント一覧を開く", () => {
     renderAppShell();
 
     expect(screen.getByRole("link", { name: "トーナメント" }).getAttribute("href")).toBe("/tournaments");
   });
 
-  it("displays the MatchupLab link, favicon, and description", () => {
+  it("displays the compact brand, navigation icons, and related app heading", () => {
     renderAppShell();
 
+    const header = document.querySelector(".sidebar-header");
     const link = screen.getByRole("link", { name: "MatchupLab" });
     const icon = document.querySelector(".related-app-icon");
     const externalLinkIcon = document.querySelector(".related-app-external-icon");
 
+    expect(header?.firstElementChild?.classList.contains("brand")).toBe(true);
+    expect(header?.lastElementChild?.classList.contains("sidebar-toggle")).toBe(true);
+    const brandIcon = document.querySelector<HTMLImageElement>(".sidebar-brand-icon");
+    const toggleIcon = document.querySelector(".sidebar-toggle-icon");
+
+    expect(brandIcon?.tagName).toBe("IMG");
+    expect(brandIcon?.getAttribute("src")).toBe("/draw-lab-icon.png");
+    expect(toggleIcon?.querySelector("rect")).toBeNull();
+    expect(toggleIcon?.querySelectorAll("path")).toHaveLength(2);
+    expect(document.querySelectorAll(".sidebar-nav-icon")).toHaveLength(2);
     expect(link.getAttribute("href")).toBe("https://matchup-lab.bamboosato.com/");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
     expect(link.getAttribute("title")).toBe("別タブでアプリを開きます");
     expect(icon?.getAttribute("src")).toBe("https://matchup-lab.bamboosato.com/favicon.ico");
     expect(externalLinkIcon?.getAttribute("aria-hidden")).toBe("true");
-    expect(screen.getByText("対戦表作成・参加者管理")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "関連アプリ" })).toBeTruthy();
+    expect(screen.queryByText("対戦表作成・参加者管理")).toBeNull();
   });
 
   it("リーグ一覧はリーグと表示し、リーグ表は実際の表示画面名として残す", () => {

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { buildHomeViewModel, type HomeViewModel } from "../app/homeViewModel";
 import { type StorageStatus, useTournaments } from "../app/TournamentProvider";
@@ -28,15 +28,16 @@ export function HomePage() {
 
   return (
     <div className="page-stack home-page">
-      <section className="home-heading">
-        <h1>トーナメント・リーグ表</h1>
-        <p>トーナメント表とリーグ表を、ブラウザだけで作成・管理できます。</p>
-      </section>
-
       <section className="home-feature-grid" aria-label="主要機能">
         <HomeFeatureCard
           title="トーナメント"
-          description="参加者名簿からトーナメント表を作成します。"
+          description={
+            <>
+              参加者名簿を登録してトーナメント表を作成します。
+              <br />
+              特定のリーグ表から指定順位の参加者を引継いで名簿を作成することもできます。
+            </>
+          }
           status={tournamentStorageStatus}
           error={tournamentStorageError}
           counts={viewModel.tournament}
@@ -45,7 +46,7 @@ export function HomePage() {
         />
         <HomeFeatureCard
           title="リーグ"
-          description="グループ分け、対戦カード、リーグ表を作成します。"
+          description="参加応募者の名簿を登録・選別、グループ分けをしてリーグ表を作成します。"
           status={leagueStorageStatus}
           error={leagueStorageError}
           counts={viewModel.league}
@@ -111,7 +112,7 @@ function HomeFeatureCard({
   onOpenList,
 }: {
   title: string;
-  description: string;
+  description: ReactNode;
   status: HomeStorageStatus;
   error?: string;
   counts: HomeViewModel["tournament"];
@@ -124,13 +125,17 @@ function HomeFeatureCard({
     <article className="home-feature-card" aria-busy={status === "loading" || undefined}>
       <div className="home-feature-card-heading">
         <h2>{title}</h2>
-        <div className="home-feature-card-total">
-          <span className="home-feature-card-count">{counts.total}件</span>
-          <StorageState status={status} />
-        </div>
+        <StorageState status={status} />
       </div>
       <p>{description}</p>
-      <dl className="home-status-list" aria-label={`${title}の状態別件数`}>
+      <dl className="home-status-list" aria-label={`${title}の件数サマリー`}>
+        <div className="home-status-total">
+          <dt>総件数</dt>
+          <dd className="home-feature-card-count">
+            <span className="home-feature-card-count-number">{counts.total}</span>
+            <span className="home-feature-card-count-unit">件</span>
+          </dd>
+        </div>
         <div>
           <dt>編集中</dt>
           <dd>{counts.editing}</dd>

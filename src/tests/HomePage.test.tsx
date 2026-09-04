@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 
 describe("HomePage", () => {
-  it("全体サマリーを表示せず、両カードに全件数と状態別件数を統合して表示する", () => {
+  it("ホーム画面のタイトルを表示せず、カードに指定の説明・件数を表示する", () => {
     const tournaments = [
       makeTournament({ id: "tournament-editing" }),
       makeTournament({
@@ -73,11 +73,20 @@ describe("HomePage", () => {
 
     render(<HomePage />);
 
+    expect(screen.queryByRole("heading", { name: "トーナメント・リーグ表" })).toBeNull();
+    expect(screen.queryByText("トーナメント表とリーグ表を、ブラウザだけで作成・管理できます。")).toBeNull();
     expect(screen.queryByText("全体サマリー")).toBeNull();
     const cards = screen.getAllByRole("article");
     expect(cards).toHaveLength(2);
-    expect(within(cards[0]!).getByText("3件")).toBeTruthy();
-    expect(within(cards[1]!).getByText("3件")).toBeTruthy();
+    const tournamentDescription = cards[0]!.querySelector(".home-feature-card > p");
+    expect(tournamentDescription?.textContent).toBe("参加者名簿を登録してトーナメント表を作成します。特定のリーグ表から指定順位の参加者を引継いで名簿を作成することもできます。");
+    expect(tournamentDescription?.querySelector("br")).toBeTruthy();
+    expect(within(cards[1]!).getByText("参加応募者の名簿を登録・選別、グループ分けをしてリーグ表を作成します。")).toBeTruthy();
+    expect(within(cards[1]!).getByText("参加応募者の名簿を登録・選別、グループ分けをしてリーグ表を作成します。")).toBeTruthy();
+    expect(cards[0]!.querySelector(".home-feature-card-count")?.textContent).toBe("3件");
+    expect(cards[1]!.querySelector(".home-feature-card-count")?.textContent).toBe("3件");
+    expect(cards[0]!.querySelector(".home-status-list .home-feature-card-count")).toBeTruthy();
+    expect(cards[0]!.querySelector(".home-status-list .home-status-total + div")).toBeTruthy();
     expect(getStatusValues(cards[0]!)).toEqual({ 編集中: "1", 運用中: "1", 完了: "1" });
     expect(getStatusValues(cards[1]!)).toEqual({ 編集中: "1", 運用中: "1", 完了: "1" });
   });
@@ -86,7 +95,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     const cards = screen.getAllByRole("article");
-    expect(within(cards[0]!).getByText("0件")).toBeTruthy();
+    expect(cards[0]!.querySelector(".home-feature-card-count")?.textContent).toBe("0件");
     expect(getStatusValues(cards[0]!)).toEqual({ 編集中: "0", 運用中: "0", 完了: "0" });
     expect(getStatusValues(cards[1]!)).toEqual({ 編集中: "0", 運用中: "0", 完了: "0" });
 
@@ -133,7 +142,6 @@ describe("HomePage", () => {
     const page = document.querySelector(".home-page");
     expect(page).not.toBeNull();
     expect(Array.from(page!.children, (child) => child.className || child.getAttribute("data-testid"))).toEqual([
-      "home-heading",
       "home-feature-grid",
       "home-recent-section",
       "pwa-install-guide",
@@ -146,7 +154,7 @@ function getStatusValues(card: HTMLElement): Record<string, string> {
   const statusList = card.querySelector(".home-status-list");
   if (!statusList) throw new Error("home status list not found");
   return Object.fromEntries(
-    Array.from(statusList.querySelectorAll("div"), (row) => [
+    Array.from(statusList.querySelectorAll("div:not(.home-status-total)"), (row) => [
       row.querySelector("dt")?.textContent ?? "",
       row.querySelector("dd")?.textContent ?? "",
     ]),
