@@ -146,7 +146,11 @@ export function PwaInstallGuide() {
       <section className="home-install-guide" aria-labelledby={titleId}>
         <div className="home-install-guide-copy">
           <strong id={titleId}>アプリとして使う</strong>
-          <p>ホーム画面に追加すると、すぐに開けます。</p>
+          <p>
+            ホーム画面から1タップで起動できます。
+            <br />
+            アドレスバーのないアプリ画面で使え、インターネット接続がなくても保存済みデータを利用できます。
+          </p>
         </div>
         <div className="button-row">
           {mode === "browserInstall" ? (

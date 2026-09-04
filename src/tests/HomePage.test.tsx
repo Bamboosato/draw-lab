@@ -147,6 +147,8 @@ describe("HomePage", () => {
       "pwa-install-guide",
       "home-storage-note",
     ]);
+
+    expect(screen.getByText("データはこのブラウザ内に保存され、外部へ自動送信されません。大切なデータは、端末にバックアップファイルを保存しておくと安心です。")).toBeTruthy();
   });
 });
 

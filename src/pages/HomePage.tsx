@@ -96,7 +96,9 @@ export function HomePage() {
 
       <section className="home-storage-note" aria-label="データ保存案内">
         <strong>データ保存について</strong>
-        <p>データはこのブラウザ内に保存され、外部へ自動送信されません。対応環境ではオフラインでも利用できます。</p>
+        <p>
+          データはこのブラウザ内に保存され、外部へ自動送信されません。大切なデータは、端末にバックアップファイルを保存しておくと安心です。
+        </p>
       </section>
     </div>
   );
