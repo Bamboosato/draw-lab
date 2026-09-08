@@ -380,6 +380,13 @@ a {
   gap: 16px;
 }
 
+.section-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .section-card-heading h2,
 .section-card-heading h3,
 .section-card-heading p {
@@ -474,7 +481,51 @@ a {
 }
 
 .tournament-round-selector .group-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
   padding-inline: 0;
+}
+
+.tournament-round-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.tournament-round-selector .group-tab-segment {
+  margin-top: 0;
+}
+
+.tournament-round-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.tournament-round-actions .disabled-action-tooltip {
+  display: inline-flex;
+}
+
+.tournament-match-state-message {
+  margin: 14px 0 16px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
+  .tournament-round-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tournament-round-actions {
+    justify-content: flex-end;
+  }
 }
 
 .tab-label {
@@ -950,6 +1001,15 @@ a {
   .section-card-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .tournament-round-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tournament-round-actions {
+    justify-content: flex-start;
   }
 
   .match-participant-buttons {
@@ -2442,6 +2502,12 @@ a {
 .settings-panel,
 .import-result {
   padding: 18px;
+}
+
+fieldset.settings-panel,
+fieldset.table-panel {
+  min-inline-size: 0;
+  margin: 0;
 }
 
 .file-picker-container {

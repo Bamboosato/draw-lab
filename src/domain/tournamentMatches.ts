@@ -8,6 +8,12 @@ import type {
   TournamentMatchResult,
   TournamentMatchSource,
 } from "./types";
+import {
+  createEmptySetScores,
+  inferMatchWinnerFromSetScores,
+  normalizeSetScores,
+  type MatchFormat,
+} from "./matchScoring";
 
 type SourceResolution = {
   resolved: boolean;
@@ -18,6 +24,7 @@ export function createTournamentMatches(
   slots: readonly DrawSlot[],
   drawSize: DrawSize,
   createId?: () => string,
+  matchFormat: MatchFormat = 1,
 ): TournamentMatch[] {
   const rounds = Math.log2(drawSize);
   const matches: TournamentMatch[] = [];
@@ -41,6 +48,7 @@ export function createTournamentMatches(
           ? { slotPosition: slots[(matchNo - 1) * 2 + 1]?.position ?? (matchNo - 1) * 2 + 2 }
           : { matchId: previousRound[(matchNo - 1) * 2 + 1]?.id ?? "" },
         result: "unplayed",
+        setScores: createEmptySetScores(matchFormat),
       };
       currentRound.push(match);
       matches.push(match);
@@ -102,9 +110,10 @@ export function resolveTournamentMatches(
 export function updateTournamentMatch(
   draw: GeneratedDraw,
   matchId: string,
-  patch: Pick<TournamentMatch, "result" | "note">,
+  patch: Pick<TournamentMatch, "result"> & Partial<Pick<TournamentMatch, "note" | "setScores">>,
+  matchFormat: MatchFormat = 1,
 ): GeneratedDraw {
-  const matches = draw.matches ?? createTournamentMatches(draw.slots, draw.slots.length as DrawSize);
+  const matches = draw.matches ?? createTournamentMatches(draw.slots, draw.slots.length as DrawSize, undefined, matchFormat);
   const current = matches.find((match) => match.id === matchId);
   if (!current) {
     throw new RangeError(`Tournament match not found: ${matchId}`);
@@ -120,7 +129,12 @@ export function updateTournamentMatch(
   }
 
   const nextMatches = matches.map((match) => match.id === matchId
-    ? { ...match, result: patch.result, note: patch.note?.trim() ? patch.note : undefined }
+    ? {
+        ...match,
+        result: patch.result,
+        note: patch.note?.trim() ? patch.note : undefined,
+        ...(patch.setScores ? { setScores: normalizeSetScores(patch.setScores, matchFormat) } : {}),
+      }
     : { ...match });
   const baselineById = new Map(currentResolved.map((match) => [match.id, match]));
 
@@ -134,10 +148,51 @@ export function updateTournamentMatch(
       }
       match.result = "unplayed";
       delete match.note;
+      match.setScores = createEmptySetScores(matchFormat);
     }
   }
 
   return { ...draw, matches: nextMatches };
+}
+
+export function updateTournamentMatchSetScore(
+  draw: GeneratedDraw,
+  matchId: string,
+  matchFormat: MatchFormat,
+  setIndex: number,
+  participant: "participantA" | "participantB",
+  value: number | null,
+): GeneratedDraw {
+  const matches = draw.matches ?? createTournamentMatches(draw.slots, draw.slots.length as DrawSize, undefined, matchFormat);
+  const current = matches.find((match) => match.id === matchId);
+  if (!current) {
+    throw new RangeError(`Tournament match not found: ${matchId}`);
+  }
+
+  const resolved = resolveTournamentMatches({ ...draw, matches }, []);
+  const currentResolved = resolved.find((match) => match.id === matchId);
+  if (!currentResolved || (currentResolved.state !== "ready" && currentResolved.state !== "completed")) {
+    throw new RangeError("Only a match with two confirmed participants can receive a score.");
+  }
+
+  const setScores = normalizeSetScores(current.setScores, matchFormat);
+  if (setIndex < 0 || setIndex >= setScores.length) return { ...draw, matches };
+  setScores[setIndex] = { ...setScores[setIndex], [participant]: normalizeScoreValue(value) };
+
+  const inferredResult = current.result === "unplayed"
+    ? inferMatchWinnerFromSetScores(matchFormat, setScores)
+    : undefined;
+
+  return updateTournamentMatch(
+    { ...draw, matches },
+    matchId,
+    {
+      result: inferredResult ?? current.result,
+      setScores,
+      note: current.note,
+    },
+    matchFormat,
+  );
 }
 
 function resolveSource(
@@ -164,6 +219,10 @@ function resolveSource(
 
 function isWinResult(result: TournamentMatchResult): result is Exclude<TournamentMatchResult, "unplayed"> {
   return result === "participantAWin" || result === "participantBWin";
+}
+
+function normalizeScoreValue(value: number | null): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function compareMatches(left: TournamentMatch, right: TournamentMatch): number {

@@ -1,24 +1,32 @@
+import type { MatchFormat } from "../domain/matchScoring";
 import type { ResolvedTournamentMatch, TournamentMatchResult } from "../domain/types";
 import { MatchWinnerSelector } from "./MatchWinnerSelector";
+import { SetScoreEditor } from "./SetScoreEditor";
 
 export function TournamentMatchCard({
   match,
   participantALabel,
   participantBLabel,
+  matchFormat,
+  detailInputEnabled,
   disabled = false,
   onResultChange,
+  onSetScoreChange,
   onNoteChange,
 }: {
   match: ResolvedTournamentMatch;
   participantALabel: string;
   participantBLabel: string;
+  matchFormat: MatchFormat;
+  detailInputEnabled: boolean;
   disabled?: boolean;
   onResultChange: (result: TournamentMatchResult) => void;
+  onSetScoreChange: (setIndex: number, participant: "participantA" | "participantB", value: number | null) => void;
   onNoteChange: (note: string) => void;
 }) {
-  const canEditResult = !disabled && (match.state === "ready" || match.state === "completed");
+  const canEditMatch = !disabled && (match.state === "ready" || match.state === "completed");
   const status = getMatchStatus(match.state);
-  const statusClass = match.state === "completed" ? "league-match-status-confirmed" : canEditResult ? "generated" : "draft";
+  const statusClass = match.state === "completed" ? "league-match-status-confirmed" : canEditMatch ? "generated" : "draft";
 
   return (
     <article className={`league-match-card tournament-match-card tournament-match-${match.state}`}>
@@ -31,19 +39,28 @@ export function TournamentMatchCard({
         participantALabel={participantALabel}
         participantBLabel={participantBLabel}
         result={match.result}
-        disabled={!canEditResult}
+        disabled={!canEditMatch}
         drawDisabled
         onResultChange={(result) => {
           if (result !== "draw") onResultChange(result);
         }}
       />
+      {detailInputEnabled ? (
+        <SetScoreEditor
+          setScores={match.setScores}
+          matchFormat={matchFormat}
+          displayOrder={match.matchNo}
+          readOnly={!canEditMatch}
+          onChange={onSetScoreChange}
+        />
+      ) : null}
       <label className="field">
         <span>備考</span>
         <input
           className="match-note-input"
-          placeholder="結果の詳細を記録してください（任意）"
+          placeholder="試合に関する補足を入力してください（任意）"
           value={match.note ?? ""}
-          disabled={!canEditResult}
+          disabled={!canEditMatch}
           onChange={(event) => onNoteChange(event.target.value)}
         />
       </label>
@@ -56,7 +73,7 @@ function getMatchStatus(state: ResolvedTournamentMatch["state"]): string {
     case "ready":
       return "未実施";
     case "completed":
-      return "実施済";
+      return "実施済み";
     case "byeAdvance":
       return "BYE進出";
     case "pending":

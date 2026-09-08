@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { calculateLeagueDrawSize, createLeagueToTournament, formatLeagueTournamentTitle, getLeagueRankUpperBound, resolveLeagueDrawSize } from "../app/leagueTournamentAdapter";
 import { getRankOptions, getRankRangeValidationMessage, isValidRankRange, normalizeRankRange } from "../app/leagueTournamentPlacement";
 import { getBasicInfoErrors } from "../app/tournamentFlow";
-import { applyBasicInfoPatch, applyEntrantsUpdate, DRAW_SIZES, ensureEntrantRows, hasTournamentMatchData, SEED_COUNTS } from "../app/tournamentModel";
+import { applyBasicInfoPatch, applyEntrantsUpdate, DRAW_SIZES, ensureEntrantRows, getTournamentMatchFormat, getTournamentMatchSelectionStatus, hasTournamentMatchData, SEED_COUNTS, updateTournamentMatchFormat } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
 import { useLeagues } from "../app/LeagueProvider";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
@@ -46,7 +46,7 @@ export function BasicInfoPage() {
   const rankOptions = getRankOptions(rankUpperBound);
   const endRankOptions = getRankOptions(rankUpperBound, minimumRank);
   useEffect(() => {
-    if (!tournament || !integration || integration.drawSizeMode !== undefined || !selectedLeague) return;
+    if (!tournament || getTournamentMatchSelectionStatus(tournament) === "confirmed" || !integration || integration.drawSizeMode !== undefined || !selectedLeague) return;
     if (!isValidRankRange(integration.rankRange, rankUpperBound)) return;
 
     const expectedDrawSize = resolveLeagueDrawSize(selectedLeague.groups.length, integration.rankRange);
@@ -94,6 +94,7 @@ export function BasicInfoPage() {
         : "";
   const leagueFeedbackIsError = Boolean(selectedLeague && !rankRangeValid)
     || Boolean(selectedLeague && rankRangeValid && resolvedLeagueDrawSize === undefined);
+  const structureLocked = getTournamentMatchSelectionStatus(tournament) === "confirmed";
 
   const saveBasicChange = (nextTournament: Tournament, nextIntegration?: TournamentIntegrationRecord): void => {
     if (nextIntegration) {
@@ -122,6 +123,11 @@ export function BasicInfoPage() {
         }
       : integration;
     requestBasicChange(nextTournament, nextIntegration);
+  };
+
+  const updateMatchFormat = (value: Tournament["matchFormat"]): void => {
+    if (value !== 1 && value !== 3 && value !== 5) return;
+    updateTournament(updateTournamentMatchFormat(tournament, value));
   };
 
   const selectSourceLeague = (leagueId: string): void => {
@@ -206,6 +212,8 @@ export function BasicInfoPage() {
         <p className="page-description">トーナメント表に表示する情報とドロー構成を設定します。</p>
       </section>
 
+      {structureLocked ? <section className="flow-notice" role="status">対戦カード確定後のため、種目区分、ドローサイズ、シード数、試合形式は変更できません。</section> : null}
+
       {basicErrors.length > 0 ? (
         <section className="validation-banner error">
           <strong>入力内容に不備があります。</strong>
@@ -236,6 +244,7 @@ export function BasicInfoPage() {
           {renderRequiredLabel("種目区分")}
           <select
             value={tournament.matchType}
+            disabled={structureLocked}
             onChange={(event) => update({ matchType: event.target.value as MatchType })}
           >
             <option value="singles">シングルス</option>
@@ -247,6 +256,7 @@ export function BasicInfoPage() {
           {renderRequiredLabel("ドローサイズ")}
           <select
             value={tournament.drawSize}
+            disabled={structureLocked}
             onChange={(event) => update({ drawSize: Number(event.target.value) as DrawSize })}
           >
             {DRAW_SIZES.map((size) => <option key={size} value={size}>{size}ドロー</option>)}
@@ -256,11 +266,24 @@ export function BasicInfoPage() {
           {renderRequiredLabel("シード数")}
           <select
             value={tournament.seedCount}
+            disabled={structureLocked}
             onChange={(event) => update({ seedCount: Number(event.target.value) })}
           >
             {SEED_COUNTS.filter((count) => count <= tournament.drawSize).map((count) => (
               <option key={count} value={count}>{count === 0 ? "シードなし" : `${count}シード`}</option>
             ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>試合形式</span>
+          <select
+            value={getTournamentMatchFormat(tournament)}
+            disabled={structureLocked}
+            onChange={(event) => updateMatchFormat(Number(event.target.value) as Tournament["matchFormat"])}
+          >
+            <option value={1}>1セットマッチ</option>
+            <option value={3}>3セットマッチ</option>
+            <option value={5}>5セットマッチ</option>
           </select>
         </label>
       </section>
@@ -334,7 +357,7 @@ export function BasicInfoPage() {
       <ConfirmDialog
         open={resetConfirmOpen}
         title="結果と備考をリセットします"
-        message="生成対象の基本情報を変更すると、入力済みの勝敗と備考がリセットされます。続行してもよろしいですか？"
+        message="生成対象の基本情報を変更すると、入力済みの勝敗、ゲーム数、備考がリセットされます。続行してもよろしいですか？"
         confirmLabel="リセットして続行"
         cancelLabel="キャンセル"
         onCancel={() => {

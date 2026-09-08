@@ -82,7 +82,7 @@ export function PreviewPage() {
       <ConfirmDialog
         open={reopenOpen}
         title="完了済みトーナメントの編集を再開します"
-        message="トーナメントを編集中に戻します。結果、備考、組合せは保持されます。"
+        message="トーナメントを編集中に戻します。結果、ゲーム数、備考、組合せは保持されます。"
         confirmLabel="編集を再開"
         cancelLabel="キャンセル"
         onCancel={() => setReopenOpen(false)}

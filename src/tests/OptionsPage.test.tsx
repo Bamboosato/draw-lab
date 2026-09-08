@@ -58,6 +58,18 @@ describe("OptionsPage", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(navigateMock).toHaveBeenCalledWith("/tournaments/tournament-1/edit/matches");
   });
+
+  it("対戦カード確定後はリーグと同じ通知パネルで変更不可を案内する", () => {
+    useTournamentMock.mockReturnValue({
+      ...makeTournamentWithCompletedMatch(),
+      matchSelectionStatus: "confirmed",
+    });
+
+    render(<OptionsPage />);
+
+    const notice = screen.getByText("対戦カード確定後のため、ドロー構成と配置オプションは変更できません。");
+    expect(notice.closest(".flow-notice")).toBeTruthy();
+  });
 });
 
 function makeTournamentWithCompletedMatch() {

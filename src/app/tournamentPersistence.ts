@@ -8,10 +8,12 @@ import type {
   TournamentMatch,
   TournamentMatchResult,
   TournamentMatchSource,
+  TournamentMatchFormat,
 } from "../domain/types";
 import type { TournamentIntegrationRecord, TournamentIntegrationParticipant } from "../domain/leagueTournamentTypes";
 import { normalizeDrawOutputOptions } from "../domain/outputOptions";
 import { createTournamentMatches } from "../domain/tournamentMatches";
+import { normalizeSetScores } from "../domain/matchScoring";
 import { VALID_DRAW_SIZES } from "../domain/types";
 import {
   createDefaultTournament,
@@ -365,6 +367,11 @@ function validateStoredTournamentShape(value: unknown): asserts value is Record<
     || typeof value.createdAt !== "string"
     || typeof value.updatedAt !== "string"
     || (value.status !== undefined && value.status !== "inProgress" && value.status !== "completed")
+    || (value.matchFormat !== undefined && value.matchFormat !== 1 && value.matchFormat !== 3 && value.matchFormat !== 5)
+    || (value.detailInputEnabled !== undefined && typeof value.detailInputEnabled !== "boolean")
+    || (value.matchSelectionStatus !== undefined
+      && value.matchSelectionStatus !== "pending"
+      && value.matchSelectionStatus !== "confirmed")
   ) {
     throw new ImportDataError("IMPORT_INVALID_TOURNAMENT", "バックアップ内の大会データに必要な項目が不足しています。");
   }
@@ -446,6 +453,7 @@ function validateStoredMatches(value: unknown[]): void {
       || !isTournamentMatchSource(item.sourceB)
       || !isTournamentMatchResult(item.result)
       || (item.note !== undefined && typeof item.note !== "string")
+      || (item.setScores !== undefined && !isStoredSetScores(item.setScores))
       || ids.has(item.id)) {
       throw new ImportDataError("IMPORT_INVALID_TOURNAMENT", "バックアップ内の対戦カードが不正です。");
     }
@@ -558,8 +566,10 @@ function coerceTournament(value: unknown): Tournament {
 
   const fallback = createDefaultTournament();
   const drawSize = coerceDrawSize(value.drawSize, fallback.drawSize);
+  const matchFormat = coerceMatchFormat(value.matchFormat, fallback.matchFormat ?? 1);
   const now = new Date().toISOString();
   const id = coerceString(value.id) || fallback.id;
+  const generatedDraw = coerceGeneratedDraw(value.generatedDraw, id, drawSize, matchFormat);
 
   return {
     ...fallback,
@@ -595,7 +605,12 @@ function coerceTournament(value: unknown): Tournament {
         }
       : fallback.options,
     outputOptions: normalizeDrawOutputOptions(value.outputOptions ?? fallback.outputOptions),
-    generatedDraw: coerceGeneratedDraw(value.generatedDraw, id, drawSize),
+    matchFormat,
+    detailInputEnabled: coerceBoolean(value.detailInputEnabled, fallback.detailInputEnabled ?? false),
+    matchSelectionStatus: value.matchSelectionStatus === "pending" || value.matchSelectionStatus === "confirmed"
+      ? value.matchSelectionStatus
+      : generatedDraw ? "confirmed" : "pending",
+    generatedDraw,
     createdAt: coerceString(value.createdAt) ?? now,
     updatedAt: coerceString(value.updatedAt) ?? now,
   };
@@ -684,7 +699,12 @@ function coerceEntrant(value: unknown, index: number): Entrant {
   };
 }
 
-function coerceGeneratedDraw(value: unknown, tournamentId: string, drawSize: DrawSize): GeneratedDraw | undefined {
+function coerceGeneratedDraw(
+  value: unknown,
+  tournamentId: string,
+  drawSize: DrawSize,
+  matchFormat: TournamentMatchFormat = 1,
+): GeneratedDraw | undefined {
   if (!isRecord(value) || !Array.isArray(value.slots)) {
     return undefined;
   }
@@ -696,7 +716,8 @@ function coerceGeneratedDraw(value: unknown, tournamentId: string, drawSize: Dra
   if (slots.length === 0) {
     return undefined;
   }
-  const matches = coerceTournamentMatches(value.matches) ?? createTournamentMatches(slots, drawSize);
+  const matches = coerceTournamentMatches(value.matches, matchFormat)
+    ?? createTournamentMatches(slots, drawSize, undefined, matchFormat);
   return {
     id: coerceString(value.id) ?? createId("draw"),
     tournamentId: coerceString(value.tournamentId) ?? tournamentId,
@@ -708,19 +729,19 @@ function coerceGeneratedDraw(value: unknown, tournamentId: string, drawSize: Dra
   };
 }
 
-function coerceTournamentMatches(value: unknown): TournamentMatch[] | undefined {
+function coerceTournamentMatches(value: unknown, matchFormat: TournamentMatchFormat): TournamentMatch[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
 
   const matches = value
-    .map(coerceTournamentMatch)
+    .map((match) => coerceTournamentMatch(match, matchFormat))
     .filter((match): match is TournamentMatch => match !== undefined)
     .sort((left, right) => left.round - right.round || left.matchNo - right.matchNo);
   return matches.length > 0 ? matches : undefined;
 }
 
-function coerceTournamentMatch(value: unknown): TournamentMatch | undefined {
+function coerceTournamentMatch(value: unknown, matchFormat: TournamentMatchFormat): TournamentMatch | undefined {
   if (!isRecord(value)
     || typeof value.id !== "string"
     || typeof value.round !== "number"
@@ -736,6 +757,7 @@ function coerceTournamentMatch(value: unknown): TournamentMatch | undefined {
     sourceA: value.sourceA,
     sourceB: value.sourceB,
     result: isTournamentMatchResult(value.result) ? value.result : "unplayed",
+    setScores: normalizeSetScores(value.setScores, matchFormat),
     note: typeof value.note === "string" && value.note.trim() ? value.note : undefined,
   };
 }
@@ -753,6 +775,20 @@ function isTournamentMatchSource(value: unknown): value is TournamentMatchSource
 
 function isTournamentMatchResult(value: unknown): value is TournamentMatchResult {
   return value === "unplayed" || value === "participantAWin" || value === "participantBWin";
+}
+
+function isStoredSetScores(value: unknown): boolean {
+  return Array.isArray(value) && value.every((score) => {
+    if (!isRecord(score)) return false;
+    return [score.participantA, score.participantB].every((value) => (
+      value === null
+      || (typeof value === "number" && Number.isInteger(value) && value >= 0)
+    ));
+  });
+}
+
+function coerceMatchFormat(value: unknown, fallback: TournamentMatchFormat = 1): TournamentMatchFormat {
+  return value === 3 || value === 5 ? value : fallback;
 }
 
 function coerceDrawSlot(value: unknown): DrawSlot | undefined {
