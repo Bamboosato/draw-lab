@@ -3,6 +3,7 @@ import {
   createCandidateMatches,
   DEFAULT_LEAGUE_SCORING_POLICY,
   hasLeagueResults,
+  inferMatchWinnerFromSetScores,
   isLeagueParticipantEmpty,
   validateLeague,
 } from "../domain/leagueLogic";
@@ -311,14 +312,20 @@ export function updateMatchSetScore(
   value: number | null,
 ): League {
   if (league.status === "completed" || !league.detailInputEnabled) return league;
+  let inferredResult: LeagueMatch["result"] | undefined;
   const matches = league.matches.map((match) => {
     if (match.id !== matchId) return match;
     const setScores = normalizeSetScores(match.setScores, league.matchFormat);
     if (setIndex < 0 || setIndex >= setScores.length) return match;
     setScores[setIndex] = { ...setScores[setIndex], [participant]: normalizeScoreValue(value) };
-    return { ...match, setScores };
+    const nextMatch = { ...match, setScores };
+    if (match.result === "unplayed") {
+      inferredResult = inferMatchWinnerFromSetScores(league.matchFormat, setScores);
+    }
+    return inferredResult ? { ...nextMatch, result: inferredResult } : nextMatch;
   });
-  return { ...league, matches };
+  const nextLeague = { ...league, matches };
+  return inferredResult ? updateMatch(nextLeague, matchId, { result: inferredResult }) : nextLeague;
 }
 
 export function updateManualRanks(league: League, manualRanks: ReadonlyMap<string, number | undefined>): League {

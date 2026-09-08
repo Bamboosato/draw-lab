@@ -6,6 +6,7 @@ import {
   type LeagueMatchResult,
   type LeagueParticipant,
   type LeagueScoringPolicy,
+  type LeagueSetScore,
   type LeagueStanding,
   type LeagueValidationIssue,
   type LeagueValidationResult,
@@ -17,6 +18,25 @@ export const DEFAULT_LEAGUE_SCORING_POLICY: LeagueScoringPolicy = {
   drawPoints: 1,
   lossPoints: 0,
 };
+
+export function inferMatchWinnerFromSetScores(
+  matchFormat: MatchFormat,
+  setScores: readonly LeagueSetScore[] | undefined,
+): Extract<LeagueMatchResult, "participantAWin" | "participantBWin"> | undefined {
+  const setsToWin = Math.floor(matchFormat / 2) + 1;
+  let participantAWins = 0;
+  let participantBWins = 0;
+
+  for (const score of setScores ?? []) {
+    if (score.participantA === null || score.participantB === null) continue;
+    if (score.participantA > score.participantB) participantAWins += 1;
+    if (score.participantB > score.participantA) participantBWins += 1;
+  }
+
+  if (participantAWins >= setsToWin) return "participantAWin";
+  if (participantBWins >= setsToWin) return "participantBWin";
+  return undefined;
+}
 
 export function isLeagueParticipantEmpty(participant: LeagueParticipant): boolean {
   return [
@@ -224,50 +244,294 @@ export function calculateStandings(
     applyResult(left, right, match.result, scoringPolicy);
   }
 
-  const automaticRanks = calculateAutomaticRanks(groups, standings);
+  const automaticRanks = calculateAutomaticRanks(groups, standings, matches);
   return standings.map((standing) => ({
     ...standing,
     rank: automaticRanks.get(standing.participantId),
   }));
 }
 
+type RankingScoreStats = {
+  completedMatches: number;
+  setWins: number;
+  setLosses: number;
+  gameWins: number;
+  gameLosses: number;
+  complete: boolean;
+};
+
+type CompleteLeagueSetScore = {
+  participantA: number;
+  participantB: number;
+};
+
 /**
- * 勝点降順、同点時は星取表の参加者順で、グループごとの自動順位を計算する。
- * 順位は同順位を作らず、1位からの連番とする。
+ * 勝点、直接対決、セット率、ゲーム率、グループ内の参加者順で、
+ * グループごとの自動順位を計算する。順位は同順位を作らず、1位からの連番とする。
  */
 export function calculateAutomaticRanks(
   groups: readonly LeagueGroup[],
   standings: readonly LeagueStanding[],
+  matches: readonly LeagueMatch[],
 ): Map<string, number> {
   const standingByParticipantId = new Map(standings.map((standing) => [standing.participantId, standing]));
   const automaticRanks = new Map<string, number>();
 
   for (const group of groups) {
-    const orderByParticipantId = new Map(group.participantIds.map((participantId, index) => [participantId, index]));
     const groupStandings = group.participantIds
       .map((participantId) => standingByParticipantId.get(participantId))
       .filter((standing): standing is LeagueStanding => standing?.groupId === group.id);
 
-    groupStandings
-      .sort((left, right) => right.points - left.points
-        || (orderByParticipantId.get(left.participantId) ?? Number.MAX_SAFE_INTEGER)
-        - (orderByParticipantId.get(right.participantId) ?? Number.MAX_SAFE_INTEGER))
-      .forEach((standing, index) => automaticRanks.set(standing.participantId, index + 1));
+    const pointsBuckets = partitionByNumber(
+      groupStandings.map((standing) => standing.participantId),
+      (participantId) => standingByParticipantId.get(participantId)?.points ?? 0,
+    );
+    const orderedParticipantIds = pointsBuckets.flatMap((bucket) => (
+      bucket.length === 1 ? bucket : rankTiedParticipants(bucket, matches)
+    ));
+    orderedParticipantIds.forEach((participantId, index) => automaticRanks.set(participantId, index + 1));
   }
 
   return automaticRanks;
+}
+
+function rankTiedParticipants(
+  participantIds: readonly string[],
+  matches: readonly LeagueMatch[],
+): string[] {
+  if (participantIds.length < 2) return [...participantIds];
+
+  const directWins = calculateHeadToHeadWins(participantIds, matches);
+  const directBuckets = partitionByNumber(participantIds, (participantId) => directWins.get(participantId) ?? 0);
+  if (directBuckets.length > 1) {
+    return directBuckets.flatMap((bucket) => rankByScoreCriteria(bucket, matches));
+  }
+
+  return rankByScoreCriteria(participantIds, matches);
+}
+
+function rankByScoreCriteria(
+  participantIds: readonly string[],
+  matches: readonly LeagueMatch[],
+): string[] {
+  if (participantIds.length < 2) return [...participantIds];
+
+  const scoreStats = calculateRankingScoreStats(participantIds, matches);
+  const setRateBuckets = partitionByRatio(
+    participantIds,
+    scoreStats,
+    (stats) => stats.setWins,
+    (stats) => stats.setWins + stats.setLosses,
+  );
+  if (setRateBuckets) {
+    return setRateBuckets.flatMap((bucket) => rankByGameRateOrGroupOrder(bucket, scoreStats));
+  }
+
+  return rankByGameRateOrGroupOrder(participantIds, scoreStats);
+}
+
+function rankByGameRateOrGroupOrder(
+  participantIds: readonly string[],
+  scoreStats: ReadonlyMap<string, RankingScoreStats>,
+): string[] {
+  if (participantIds.length < 2) return [...participantIds];
+
+  const gameRateBuckets = partitionByRatio(
+    participantIds,
+    scoreStats,
+    (stats) => stats.gameWins,
+    (stats) => stats.gameWins + stats.gameLosses,
+  );
+  return gameRateBuckets?.flat() ?? [...participantIds];
+}
+
+function calculateHeadToHeadWins(
+  participantIds: readonly string[],
+  matches: readonly LeagueMatch[],
+): Map<string, number> {
+  const participantSet = new Set(participantIds);
+  const wins = new Map(participantIds.map((participantId) => [participantId, 0]));
+
+  for (const match of matches) {
+    if (!match.isValid || match.result === "unplayed") continue;
+    if (!participantSet.has(match.participantAId) || !participantSet.has(match.participantBId)) continue;
+    if (match.result === "participantAWin") {
+      wins.set(match.participantAId, (wins.get(match.participantAId) ?? 0) + 1);
+    } else if (match.result === "participantBWin") {
+      wins.set(match.participantBId, (wins.get(match.participantBId) ?? 0) + 1);
+    }
+  }
+
+  return wins;
+}
+
+function calculateRankingScoreStats(
+  participantIds: readonly string[],
+  matches: readonly LeagueMatch[],
+): Map<string, RankingScoreStats> {
+  const stats = new Map(participantIds.map((participantId) => [participantId, {
+    completedMatches: 0,
+    setWins: 0,
+    setLosses: 0,
+    gameWins: 0,
+    gameLosses: 0,
+    complete: true,
+  }]));
+
+  for (const match of matches) {
+    if (!match.isValid || match.result === "unplayed") continue;
+    const left = stats.get(match.participantAId);
+    const right = stats.get(match.participantBId);
+    if (!left && !right) continue;
+
+    if (left) left.completedMatches += 1;
+    if (right) right.completedMatches += 1;
+    const setScores = getRankableSetScores(match);
+    if (!setScores) {
+      if (left) left.complete = false;
+      if (right) right.complete = false;
+      continue;
+    }
+
+    for (const score of setScores) {
+      if (left) {
+        left.gameWins += score.participantA;
+        left.gameLosses += score.participantB;
+        if (score.participantA > score.participantB) {
+          left.setWins += 1;
+        } else if (score.participantB > score.participantA) {
+          left.setLosses += 1;
+        }
+      }
+      if (right) {
+        right.gameWins += score.participantB;
+        right.gameLosses += score.participantA;
+        if (score.participantB > score.participantA) {
+          right.setWins += 1;
+        } else if (score.participantA > score.participantB) {
+          right.setLosses += 1;
+        }
+      }
+    }
+  }
+
+  return stats;
+}
+
+function getRankableSetScores(match: LeagueMatch): readonly CompleteLeagueSetScore[] | undefined {
+  const setScores = match.setScores;
+  if (!setScores || setScores.length === 0) return undefined;
+
+  const setsToWin = Math.floor(setScores.length / 2) + 1;
+  let participantAWins = 0;
+  let participantBWins = 0;
+  let winnerDetermined = false;
+  const completedScores: CompleteLeagueSetScore[] = [];
+
+  for (const score of setScores) {
+    if (!isCompleteScore(score)) {
+      if (winnerDetermined) break;
+      return undefined;
+    }
+    if (winnerDetermined) continue;
+
+    completedScores.push(score);
+    if (score.participantA > score.participantB) participantAWins += 1;
+    if (score.participantB > score.participantA) participantBWins += 1;
+    winnerDetermined = participantAWins >= setsToWin || participantBWins >= setsToWin;
+  }
+
+  if (match.result === "participantAWin") {
+    return participantAWins >= setsToWin && participantBWins < setsToWin ? completedScores : undefined;
+  }
+  if (match.result === "participantBWin") {
+    return participantBWins >= setsToWin && participantAWins < setsToWin ? completedScores : undefined;
+  }
+  if (match.result === "draw" && completedScores.length === setScores.length && !winnerDetermined) {
+    return completedScores;
+  }
+  return undefined;
+}
+
+function isCompleteScore(score: LeagueSetScore): score is CompleteLeagueSetScore {
+  if (score.participantA === null || score.participantB === null) return false;
+  return Number.isInteger(score.participantA)
+    && score.participantA >= 0
+    && Number.isInteger(score.participantB)
+    && score.participantB >= 0;
+}
+
+function partitionByNumber(
+  participantIds: readonly string[],
+  getValue: (participantId: string) => number,
+): string[][] {
+  const buckets = new Map<number, string[]>();
+  for (const participantId of participantIds) {
+    const value = getValue(participantId);
+    const bucket = buckets.get(value) ?? [];
+    bucket.push(participantId);
+    buckets.set(value, bucket);
+  }
+  return [...buckets.entries()]
+    .sort(([left], [right]) => right - left)
+    .map(([, bucket]) => bucket);
+}
+
+function partitionByRatio(
+  participantIds: readonly string[],
+  scoreStats: ReadonlyMap<string, RankingScoreStats>,
+  getNumerator: (stats: RankingScoreStats) => number,
+  getDenominator: (stats: RankingScoreStats) => number,
+): string[][] | undefined {
+  const firstStats = scoreStats.get(participantIds[0]!);
+  if (!firstStats || !firstStats.complete || firstStats.completedMatches === 0) return undefined;
+  const completedMatchCount = firstStats.completedMatches;
+
+  for (const participantId of participantIds) {
+    const stats = scoreStats.get(participantId);
+    if (!stats || !stats.complete || stats.completedMatches !== completedMatchCount || getDenominator(stats) === 0) {
+      return undefined;
+    }
+  }
+
+  const order = new Map(participantIds.map((participantId, index) => [participantId, index]));
+  const sorted = [...participantIds].sort((leftId, rightId) => {
+    const left = scoreStats.get(leftId)!;
+    const right = scoreStats.get(rightId)!;
+    const comparison = getNumerator(right) * getDenominator(left)
+      - getNumerator(left) * getDenominator(right);
+    return comparison || order.get(leftId)! - order.get(rightId)!;
+  });
+  const buckets: string[][] = [];
+  for (const participantId of sorted) {
+    const previous = buckets.at(-1)?.[0];
+    if (previous === undefined) {
+      buckets.push([participantId]);
+      continue;
+    }
+    const currentStats = scoreStats.get(participantId)!;
+    const previousStats = scoreStats.get(previous)!;
+    const comparison = getNumerator(currentStats) * getDenominator(previousStats)
+      - getNumerator(previousStats) * getDenominator(currentStats);
+    if (comparison === 0) {
+      buckets.at(-1)!.push(participantId);
+    } else {
+      buckets.push([participantId]);
+    }
+  }
+  return buckets;
 }
 
 export function getEffectiveLeagueRank(
   standing: LeagueStanding,
   automaticRanks: ReadonlyMap<string, number>,
 ): number | undefined {
-  return standing.manualRank ?? standing.rank ?? automaticRanks.get(standing.participantId);
+  return standing.manualRank ?? automaticRanks.get(standing.participantId) ?? standing.rank;
 }
 
 export function validateManualRanks(league: League): LeagueValidationResult {
   const errors: LeagueValidationIssue[] = [];
-  const automaticRanks = calculateAutomaticRanks(league.groups, league.standings);
+  const automaticRanks = calculateAutomaticRanks(league.groups, league.standings, league.matches);
 
   for (const group of league.groups) {
     const groupStandings = league.standings.filter((standing) => standing.groupId === group.id);

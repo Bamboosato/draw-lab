@@ -71,6 +71,7 @@ describe("LeagueDashboardPage", () => {
     const resultsPanel = document.querySelector(".league-results-stack") as HTMLElement;
     expect(screen.getByRole("tab", { name: "対戦結果" }).getAttribute("aria-selected")).toBe("true");
     expect(Array.from(resultsPanel.querySelectorAll("h2"), (heading) => heading.textContent)).toEqual(["星取表", "順位表"]);
+    expect(screen.getByText("順位は勝点、直接対決、セット率、ゲーム率、グループ内の参加者順で自動計算します。")).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "詳細表示" }).closest("label")?.getAttribute("title")).toBe("ゲーム数を表示します。対戦カードの詳細入力ON時のみ利用できます。");
     expect(resultsPanel.querySelector(".league-matrix thead .league-participant-column")).toBeTruthy();
     expect(resultsPanel.querySelector(".league-matrix tbody .league-participant-column")).toBeTruthy();
@@ -120,6 +121,21 @@ describe("LeagueDashboardPage", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "第1試合 1セット A側ゲーム数" }), { target: { value: "6" } });
     expect(saveLeagueMock).toHaveBeenCalledWith(expect.objectContaining({
       matches: [expect.objectContaining({ setScores: expect.arrayContaining([expect.objectContaining({ participantA: 6 })]) })],
+    }));
+  });
+
+  it("詳細入力で両者のスコアがそろうと、未実施カードの勝者を自動選択する", () => {
+    const base = makeLeague();
+    useLeagueMock.mockReturnValue({
+      ...base,
+      detailInputEnabled: true,
+      matches: [{ ...base.matches[0]!, setScores: [{ participantA: 6, participantB: null }] }],
+    });
+    render(<LeagueDashboardPage />);
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "第1試合 1セット B側ゲーム数" }), { target: { value: "1" } });
+    expect(saveLeagueMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      matches: [expect.objectContaining({ result: "participantAWin" })],
     }));
   });
 

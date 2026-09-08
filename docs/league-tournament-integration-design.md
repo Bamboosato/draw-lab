@@ -487,11 +487,11 @@ type LeaguePlacementLookup = Map<string, {
 }>;
 ```
 
-順位は、訂正順位があれば `LeagueStanding.manualRank`、なければ勝点と星取表の並び順から計算した `LeagueStanding.rank` を使用する。訂正順位は自動順位とは別に保持し、入力済みの場合は確定順位として扱う。
+順位は、訂正順位があれば `LeagueStanding.manualRank`、なければ勝点、直接対決、セット率、ゲーム率、グループ内の参加者順から計算した `LeagueStanding.rank` を使用する。訂正順位は自動順位とは別に保持し、入力済みの場合は確定順位として扱う。
 
 - `manualRank` がある場合は訂正順位として優先して引き継ぐ。
 - `manualRank` がない場合は自動計算した `rank` を引き継ぐ。
-- 旧JSONなどで `rank` が未保持の場合は、グループの参加者順と現在の勝点から自動順位を再計算する。
+- 旧JSONなどで `rank` が未保持の場合は、現在の対戦結果・スコアとグループ内の参加者順から自動順位を再計算する。
 - `rankOrigin` はリーグからコピーした値を `league` とする。
 - 名簿入力画面で編集した値は `tournament-manual` とする。
 
