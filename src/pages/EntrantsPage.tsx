@@ -6,6 +6,7 @@ import {
   createEmptyEntrant,
   getEntrantStats,
   hasTournamentMatchData,
+  getTournamentMatchSelectionStatus,
   getVisibleEntrantRowCount,
   mergeEntrantsIntoEmptyRows,
   parseEntrantsFromText,
@@ -59,6 +60,7 @@ export function EntrantsPage() {
   const isDoubles = tournament.matchType === "doubles";
   const isTeam = tournament.matchType === "team";
   const isLeagueLinked = Boolean(integration);
+  const structureLocked = getTournamentMatchSelectionStatus(tournament) === "confirmed";
   const pastePlaceholder = isLeagueLinked
     ? isTeam
       ? "No, シード, リーググループ, リーグ順位, チーム名, メンバー（/区切り）, 所属チーム, 地区, ランキング"
@@ -156,11 +158,13 @@ export function EntrantsPage() {
       <section className="page-heading">
         <p className="page-description">ExcelまたはスプレッドシートからのTSV/CSV貼り付けにも対応します。</p>
         <div className="button-row no-print">
-          <button type="button" className="button secondary" title="名簿の入力行を追加" onClick={addVisibleRow}>行追加</button>
-          <button type="button" className="button secondary" title="空の名簿行を削除" onClick={() => updateEntrants(compactTournament(tournament).entrants)}>空行削除</button>
+          <button type="button" className="button secondary" title="名簿の入力行を追加" disabled={structureLocked} onClick={addVisibleRow}>行追加</button>
+          <button type="button" className="button secondary" title="空の名簿行を削除" disabled={structureLocked} onClick={() => updateEntrants(compactTournament(tournament).entrants)}>空行削除</button>
           <button type="button" className="button secondary" title="名簿の入力内容をチェック" onClick={() => setChecked(true)}>入力チェック</button>
         </div>
       </section>
+
+      {structureLocked ? <section className="flow-notice" role="status">対戦カード確定後のため、名簿は変更できません。</section> : null}
 
       {stats ? (
         <CompactSummary
@@ -200,7 +204,7 @@ export function EntrantsPage() {
         <ValidationBanner errors={validation.errors} warnings={validation.warnings} entrants={rows} />
       ) : null}
 
-      <section className={`table-panel roster-panel${showRosterDetails ? " roster-details-open" : " roster-details-collapsed"}`}>
+      <fieldset disabled={structureLocked} className={`table-panel roster-panel${showRosterDetails ? " roster-details-open" : " roster-details-collapsed"}`}>
         <table id="roster-details-columns" className="data-table roster-table">
           <thead>
             <tr>
@@ -331,13 +335,14 @@ export function EntrantsPage() {
             ))}
           </tbody>
         </table>
-      </section>
+      </fieldset>
 
       <section className="paste-panel no-print">
         <label className="field">
           <span>TSV/CSV貼り付け</span>
           <textarea
             value={pasteText}
+            disabled={structureLocked}
             onChange={(event) => setPasteText(event.target.value)}
             placeholder={pastePlaceholder}
           />
@@ -347,6 +352,7 @@ export function EntrantsPage() {
             type="button"
             className="button secondary"
             title="貼り付けたTSV/CSVを名簿に取り込む"
+            disabled={structureLocked}
             onClick={() => {
               const parsed = parseEntrantsFromText(pasteText, tournament.matchType);
               updateEntrants(mergeEntrantsIntoEmptyRows(rows, parsed));

@@ -68,6 +68,7 @@ export function generateDraw(input: GenerateDrawInput): GenerateDrawResult {
     randomSeed,
     slots,
     drawSize: normalizedTournament.drawSize,
+    matchFormat: normalizedTournament.matchFormat,
     now,
   });
 
@@ -115,7 +116,7 @@ export function createGeneratedDraw(params: CreateGeneratedDrawParams): Generate
     tournamentId: params.tournamentId,
     randomSeed: params.randomSeed,
     slots: sortedSlots,
-    matches: createTournamentMatches(sortedSlots, params.drawSize),
+    matches: createTournamentMatches(sortedSlots, params.drawSize, undefined, params.matchFormat),
     generatedAt: params.now,
   };
 }

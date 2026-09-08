@@ -63,7 +63,7 @@ describe("PreviewPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "編集を再開" }));
     expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByText("トーナメントを編集中に戻します。結果、備考、組合せは保持されます。")).toBeTruthy();
+    expect(screen.getByText("トーナメントを編集中に戻します。結果、ゲーム数、備考、組合せは保持されます。")).toBeTruthy();
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "編集を再開" }));
 
     expect(updateTournamentMock).toHaveBeenCalledWith(expect.objectContaining({ status: "inProgress" }));

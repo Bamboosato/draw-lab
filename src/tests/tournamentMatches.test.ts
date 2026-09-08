@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createTournamentMatches, resolveTournamentMatches, updateTournamentMatch } from "../domain/tournamentMatches";
+import { createTournamentMatches, resolveTournamentMatches, updateTournamentMatch, updateTournamentMatchSetScore } from "../domain/tournamentMatches";
+import type { MatchFormat } from "../domain/matchScoring";
 import type { DrawSlot, Entrant, GeneratedDraw } from "../domain/types";
 
 describe("tournament match resolution", () => {
@@ -55,15 +56,56 @@ describe("tournament match resolution", () => {
     expect(() => updateTournamentMatch(draw, "match-3", { result: "participantAWin" })).toThrow();
     expect(() => updateTournamentMatch(draw, "match-3", { result: "unplayed", note: "未確定メモ" })).toThrow();
   });
+
+  it.each([
+    [1, 1],
+    [3, 2],
+    [5, 3],
+  ] as const)("auto-selects a winner only after both scores are entered for a %s-set match", (matchFormat, setsToWin) => {
+    let draw = makeDraw(4, createSlots(4), matchFormat);
+
+    draw = updateTournamentMatchSetScore(draw, "match-1", matchFormat, 0, "participantA", 6);
+    expect(draw.matches.find((match) => match.id === "match-1")?.result).toBe("unplayed");
+
+    for (let setIndex = 0; setIndex < setsToWin; setIndex += 1) {
+      if (setIndex > 0) {
+        draw = updateTournamentMatchSetScore(draw, "match-1", matchFormat, setIndex, "participantA", 6);
+      }
+      draw = updateTournamentMatchSetScore(draw, "match-1", matchFormat, setIndex, "participantB", 1);
+    }
+
+    expect(draw.matches.find((match) => match.id === "match-1")).toMatchObject({ result: "participantAWin" });
+  });
+
+  it("does not overwrite a manually selected winner or change it after later score edits", () => {
+    let draw = makeDraw(4, createSlots(4), 3);
+    draw = updateTournamentMatch(draw, "match-1", { result: "participantBWin" }, 3);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 0, "participantA", 6);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 0, "participantB", 1);
+
+    expect(draw.matches.find((match) => match.id === "match-1")?.result).toBe("participantBWin");
+  });
+
+  it("accepts a later-set score without deleting or locking later rows", () => {
+    let draw = makeDraw(4, createSlots(4), 3);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 2, "participantA", 0);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 2, "participantB", 0);
+
+    expect(draw.matches.find((match) => match.id === "match-1")?.setScores).toEqual([
+      { participantA: null, participantB: null },
+      { participantA: null, participantB: null },
+      { participantA: 0, participantB: 0 },
+    ]);
+  });
 });
 
-function makeDraw(drawSize: 4 | 8, slots = createSlots(drawSize)): GeneratedDraw {
+function makeDraw(drawSize: 4 | 8, slots = createSlots(drawSize), matchFormat: MatchFormat = 1): GeneratedDraw {
   return {
     id: "draw-1",
     tournamentId: "tournament-1",
     randomSeed: "seed-1",
     slots,
-    matches: createTournamentMatches(slots, drawSize),
+    matches: createTournamentMatches(slots, drawSize, undefined, matchFormat),
     generatedAt: "2026-09-03T00:00:00.000Z",
   };
 }

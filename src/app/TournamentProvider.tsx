@@ -209,7 +209,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
     const currentTournament = tournaments.find((item) => item.id === integration.tournamentId);
     const nextTournament = currentTournament?.generatedDraw
-      ? touchTournament({ ...currentTournament, generatedDraw: undefined })
+      ? touchTournament({
+          ...currentTournament,
+          generatedDraw: undefined,
+          matchSelectionStatus: "pending",
+          detailInputEnabled: false,
+        })
       : currentTournament;
     if (nextTournament && nextTournament !== currentTournament) {
       setTournaments((current) => current.map((item) => item.id === nextTournament.id ? nextTournament : item));

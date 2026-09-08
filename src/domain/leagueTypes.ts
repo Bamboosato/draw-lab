@@ -1,4 +1,6 @@
 export type LeagueParticipantType = "individual" | "doubles" | "team";
+import type { MatchFormat } from "./matchScoring";
+
 export type LeagueStatus = "draft" | "scheduled" | "inProgress" | "completed";
 export type MatchSelectionStatus = "pending" | "confirmed";
 export type LeagueSelectionMode = "all" | "random" | "manual";
@@ -8,33 +10,15 @@ export type LeagueMatchResult =
   | "draw"
   | "participantBWin";
 
-export type MatchFormat = 1 | 3 | 5;
+export {
+  createEmptySetScores,
+  getSetCount,
+  normalizeSetScores,
+  type MatchFormat,
+  type SetScore,
+} from "./matchScoring";
 
-export type LeagueSetScore = {
-  participantA: number | null;
-  participantB: number | null;
-};
-
-export function getSetCount(matchFormat: MatchFormat | undefined): number {
-  return matchFormat === 3 || matchFormat === 5 ? matchFormat : 1;
-}
-
-export function createEmptySetScores(matchFormat: MatchFormat | undefined): LeagueSetScore[] {
-  return Array.from({ length: getSetCount(matchFormat) }, () => ({ participantA: null, participantB: null }));
-}
-
-export function normalizeSetScores(value: unknown, matchFormat: MatchFormat | undefined): LeagueSetScore[] {
-  const source = Array.isArray(value) ? value : [];
-  return Array.from({ length: getSetCount(matchFormat) }, (_, index) => {
-    const item = source[index];
-    if (!item || typeof item !== "object") return { participantA: null, participantB: null };
-    const score = item as Partial<LeagueSetScore>;
-    return {
-      participantA: normalizeScore(score.participantA),
-      participantB: normalizeScore(score.participantB),
-    };
-  });
-}
+export type LeagueSetScore = import("./matchScoring").SetScore;
 
 export type LeagueParticipant = {
   id: string;
@@ -129,8 +113,3 @@ export type LeagueValidationResult = {
   errors: LeagueValidationIssue[];
   warnings: LeagueValidationIssue[];
 };
-
-function normalizeScore(value: unknown): number | null {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
-}
-

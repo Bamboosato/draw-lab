@@ -7,6 +7,7 @@ import {
   generateTournamentDraw,
   hasTournamentMatchData,
   isTournamentDrawCurrent,
+  getTournamentMatchSelectionStatus,
   validateTournamentForUi,
 } from "../app/tournamentModel";
 import { useTournament, useTournaments } from "../app/TournamentProvider";
@@ -40,6 +41,7 @@ export function OptionsPage() {
   }
 
   const hasValidationErrors = validation.errors.length > 0;
+  const structureLocked = getTournamentMatchSelectionStatus(tournament) === "confirmed";
 
   const updateOptions = (patch: Partial<DrawOptions>): void => {
     const next = applyOptionsPatch(tournament, patch, integration);
@@ -99,12 +101,14 @@ export function OptionsPage() {
         <p className="page-description">シード位置、BYE位置、選手配置順序、出力形式を設定します。</p>
       </section>
 
+      {structureLocked ? <section className="flow-notice" role="status">対戦カード確定後のため、ドロー構成と配置オプションは変更できません。</section> : null}
+
       {validation.errors.length > 0 || validation.warnings.length > 0 ? (
         <ValidationBanner errors={validation.errors} warnings={validation.warnings} entrants={tournament.entrants} />
       ) : null}
 
       <section className="option-layout">
-        <div className="settings-panel">
+        <fieldset className="settings-panel" disabled={structureLocked}>
           <h3>シード・BYE位置</h3>
           <div className="field-group">
             <span>第3・第4シード位置</span>
@@ -166,9 +170,9 @@ export function OptionsPage() {
             />
             <span><strong>BYE位置を固定する</strong></span>
           </label>
-        </div>
+        </fieldset>
 
-        <div className="settings-panel">
+        <fieldset className="settings-panel" disabled={structureLocked}>
           <h3>選手配置順序</h3>
           <label className="check-field">
             <input
@@ -197,7 +201,7 @@ export function OptionsPage() {
             />
             <span><strong>名簿記載順に配置</strong></span>
           </label>
-        </div>
+        </fieldset>
 
         <aside className="settings-panel output-options-panel">
           <h3>出力形式</h3>
@@ -337,7 +341,7 @@ export function OptionsPage() {
       <ConfirmDialog
         open={resetConfirmOpen}
         title="結果と備考をリセットします"
-        message="生成対象の設定を変更すると、入力済みの勝敗と備考がリセットされます。続行してもよろしいですか？"
+        message="生成対象の設定を変更すると、入力済みの勝敗、ゲーム数、備考がリセットされます。続行してもよろしいですか？"
         confirmLabel="リセットして続行"
         cancelLabel="キャンセル"
         onCancel={() => {

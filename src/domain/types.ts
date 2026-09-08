@@ -48,6 +48,9 @@ export type SeedPositionMode = "fixed" | "jtaRulebook" | "grandSlam";
 export type ThirdFourthSeedPlacement = "tennisRule" | "standard";
 export type EntrantPlacementOrder = "largeTeamFirst" | "random" | "rosterOrder";
 export type TournamentStatus = "inProgress" | "completed";
+export type TournamentMatchSelectionStatus = "pending" | "confirmed";
+export type TournamentMatchFormat = import("./matchScoring").MatchFormat;
+export type TournamentSetScore = import("./matchScoring").SetScore;
 
 export type Tournament = {
   id: string;
@@ -62,6 +65,12 @@ export type Tournament = {
   options: DrawOptions;
   outputOptions?: DrawOutputOptions;
   generatedDraw?: GeneratedDraw;
+  /** Added after the initial tournament flow; missing legacy data is normalized from the draw state. */
+  matchFormat?: TournamentMatchFormat;
+  /** Detailed game input is available only after the draw is confirmed. */
+  detailInputEnabled?: boolean;
+  /** Missing legacy data is treated as confirmed when a generated draw exists. */
+  matchSelectionStatus?: TournamentMatchSelectionStatus;
   /** Optional for backwards compatibility with tournaments saved before completion status was added. */
   status?: TournamentStatus;
   createdAt: string;
@@ -98,6 +107,8 @@ export type TournamentMatch = {
   sourceA: TournamentMatchSource;
   sourceB: TournamentMatchSource;
   result: TournamentMatchResult;
+  /** Old JSON may omit scores; import normalization supplies empty rows. */
+  setScores?: TournamentSetScore[];
   note?: string;
 };
 
@@ -178,6 +189,7 @@ export type CreateGeneratedDrawParams = {
   randomSeed: string;
   slots: DrawSlot[];
   drawSize: DrawSize;
+  matchFormat?: TournamentMatchFormat;
   now: string;
 };
 

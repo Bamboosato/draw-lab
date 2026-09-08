@@ -19,6 +19,7 @@ import { LeagueNotFound, LeaguePageHeading, LeagueStorageMessage, ParticipantLab
 import { LeagueValidationBanner } from "../components/LeagueValidationBanner";
 import { LeagueMatrixPrintDocument } from "../components/LeagueMatrixPrintDocument";
 import { MatchWinnerSelector } from "../components/MatchWinnerSelector";
+import { SetScoreEditor } from "../components/SetScoreEditor";
 import { buildLeaguePrintFilename, printWithFilename } from "../utils/print";
 
 type DashboardTab = "matches" | "results";
@@ -238,7 +239,7 @@ function MatchesView({ league, matches, matchOrders, readOnly, onResultChange, o
                 disabled={readOnly}
                 onResultChange={(result) => onResultChange(match.id, result)}
               />
-              {league.detailInputEnabled ? <SetScoreEditor match={match} displayOrder={displayOrder} readOnly={readOnly} onChange={(setIndex, participant, value) => onSetScoreChange(match.id, setIndex, participant, value)} /> : null}
+              {league.detailInputEnabled ? <SetScoreEditor setScores={match.setScores} matchFormat={league.matchFormat} displayOrder={displayOrder} readOnly={readOnly} onChange={(setIndex, participant, value) => onSetScoreChange(match.id, setIndex, participant, value)} /> : null}
               <label className="field">
                 <span>備考</span>
                 <input className="match-note-input" placeholder="試合に関する補足を入力してください（任意）" value={match.note ?? ""} disabled={readOnly} onChange={(event) => onNoteChange(match.id, event.target.value)} />
@@ -254,25 +255,6 @@ function MatchesView({ league, matches, matchOrders, readOnly, onResultChange, o
 function MatrixView({ league, participantIds, matches, readOnly, onDetailDisplayChange }: { league: NonNullable<ReturnType<typeof useLeague>>; participantIds: string[]; matches: NonNullable<ReturnType<typeof useLeague>>["matches"]; readOnly: boolean; onDetailDisplayChange: (enabled: boolean) => void }) {
   const getParticipantLabel = (participantId: string) => { const participant = league.participants.find((item) => item.id === participantId); return participant ? ParticipantLabel(participant) : "名称未設定"; };
    return <section className="section-card"><div className="section-card-heading"><div><h2>星取表</h2><p>閲覧専用。結果の入力は対戦カードタブから行います。</p></div><label className="compact-checkbox no-print" title="ゲーム数を表示します。対戦カードの詳細入力ON時のみ利用できます。"><input type="checkbox" aria-label="詳細表示" checked={league.detailDisplayEnabled} disabled={readOnly || !league.detailInputEnabled} onChange={(event) => onDetailDisplayChange(event.target.checked)} /><span>詳細表示</span></label></div><div className="table-panel matrix-panel"><table className="data-table league-matrix"><thead><tr><th className="league-participant-column">参加者</th>{participantIds.map((id) => <th key={id}><span className="league-participant-label">{league.participants.find((participant) => participant.id === id)?.displayName || "名称未設定"}</span></th>)}</tr></thead><tbody>{participantIds.map((rowId) => <tr key={rowId}><th className="league-participant-column" scope="row"><span className="league-participant-label">{getParticipantLabel(rowId)}</span></th>{participantIds.map((columnId) => { const isDiagonal = rowId === columnId; return <td className={isDiagonal ? "league-matrix-diagonal-cell" : undefined} key={columnId}>{isDiagonal ? <LeagueMatrixDiagonalLine /> : renderMatrixCell(league, matches, rowId, columnId)}</td>; })}</tr>)}</tbody></table></div></section>;
-}
-
-function SetScoreEditor({ match, displayOrder, readOnly, onChange }: { match: LeagueMatch; displayOrder: number; readOnly: boolean; onChange: (setIndex: number, participant: "participantA" | "participantB", value: number | null) => void }) {
-  const setScores = match.setScores ?? [];
-  return <fieldset className="match-details"><legend>詳細</legend>{setScores.map((score, setIndex) => <div className="set-score-row" key={setIndex}><span className="set-score-label">{setIndex + 1}セット</span><ScoreStepper label={`第${displayOrder}試合 ${setIndex + 1}セット A側ゲーム数`} value={score.participantA} readOnly={readOnly} onChange={(value) => onChange(setIndex, "participantA", value)} /><span className="set-score-separator" aria-hidden="true">-</span><ScoreStepper label={`第${displayOrder}試合 ${setIndex + 1}セット B側ゲーム数`} value={score.participantB} readOnly={readOnly} onChange={(value) => onChange(setIndex, "participantB", value)} /></div>)}</fieldset>;
-}
-
-function ScoreStepper({ label, value, readOnly, onChange }: { label: string; value: number | null; readOnly: boolean; onChange: (value: number | null) => void }) {
-  const adjust = (delta: number) => {
-    const current = value ?? 0;
-    onChange(Math.max(0, current + delta));
-  };
-  return <div className="score-stepper"><button type="button" aria-label={`${label}を1減らす`} disabled={readOnly || value === null || value === 0} onClick={() => adjust(-1)}>-</button><input type="number" min="0" step="1" inputMode="numeric" aria-label={label} value={value ?? ""} disabled={readOnly} onChange={(event) => onChange(parseScoreInput(event.target.value))} /><button type="button" aria-label={`${label}を1増やす`} disabled={readOnly} onClick={() => adjust(1)}>+</button></div>;
-}
-
-function parseScoreInput(value: string): number | null {
-  if (!value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function renderMatrixCell(league: NonNullable<ReturnType<typeof useLeague>>, matches: readonly LeagueMatch[], rowId: string, columnId: string): ReactNode {

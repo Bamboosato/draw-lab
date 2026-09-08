@@ -67,6 +67,25 @@ describe("BasicInfoPage", () => {
     expect(Array.from(container.querySelectorAll("select option"), (option) => option.textContent)).toContain("チーム");
   });
 
+  it("対戦カード確定後はリーグと同じ通知パネルで変更不可を案内する", () => {
+    useTournamentMock.mockReturnValue(makeTournament({
+      matchSelectionStatus: "confirmed",
+      generatedDraw: {
+        id: "draw-1",
+        tournamentId: "tournament-1",
+        randomSeed: "seed-1",
+        slots: [],
+        matches: [],
+        generatedAt: "2026-09-08T00:00:00.000Z",
+      },
+    }));
+
+    const { container } = render(<BasicInfoPage />);
+    const notice = container.querySelector(".flow-notice");
+
+    expect(notice?.textContent).toBe("対戦カード確定後のため、種目区分、ドローサイズ、シード数、試合形式は変更できません。");
+  });
+
   it("意図: リーグから作成の入力順と4項目サマリーをダイアログと同じ構成で表示する", () => {
     const sourceLeague = makeLeagueWithGroups("league-source", "元リーグ", 4);
     const linked = createLeagueToTournament(makeTournament(), sourceLeague, { min: 1, max: 2 });

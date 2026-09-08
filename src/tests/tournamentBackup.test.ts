@@ -204,6 +204,56 @@ describe("tournament JSON backup", () => {
     expect(importedSecondRound?.sourceA).toEqual({ matchId: importedMatches[0]?.id });
   });
 
+  it("round-trips tournament format, confirmation, and set scores", () => {
+    const base = createTournament("score-source");
+    const entrants = [1, 2, 3, 4].map((number) => ({
+      id: `score-source-entrant-${number}`,
+      player1Name: `選手${number}`,
+    }));
+    const slots = entrants.map((entrant, index) => ({
+      position: index + 1,
+      entrantId: entrant.id,
+      isBye: false,
+    }));
+    const matches = createTournamentMatches(slots, 4, undefined, 3).map((match, index) => index === 0
+      ? {
+        ...match,
+        setScores: [
+          { participantA: 6, participantB: 1 },
+          { participantA: 6, participantB: 3 },
+          { participantA: null, participantB: null },
+        ],
+      }
+      : match);
+    const source: Tournament = {
+      ...base,
+      entrants,
+      matchFormat: 3,
+      detailInputEnabled: true,
+      matchSelectionStatus: "confirmed",
+      generatedDraw: {
+        ...base.generatedDraw!,
+        slots,
+        matches,
+      },
+    };
+
+    const result = parseJsonImport(serializeTournament(source));
+
+    expect(result.state).toBe("success");
+    if (result.state !== "success" || result.kind !== "tournament") return;
+    expect(result.tournament).toMatchObject({
+      matchFormat: 3,
+      detailInputEnabled: true,
+      matchSelectionStatus: "confirmed",
+    });
+    expect(result.tournament.generatedDraw?.matches[0]?.setScores).toEqual([
+      { participantA: 6, participantB: 1 },
+      { participantA: 6, participantB: 3 },
+      { participantA: null, participantB: null },
+    ]);
+  });
+
   it("round-trips league source, rank range, and manual placement metadata with remapped IDs", () => {
     const league = {
       ...createDefaultLeague(),

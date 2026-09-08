@@ -8,17 +8,21 @@ import type {
   GeneratedDraw,
   MatchType,
   Tournament,
+  TournamentMatchFormat,
+  TournamentMatchSelectionStatus,
   ValidationIssue,
   ValidationResult,
 } from "../domain/types";
 import type { TournamentIntegrationRecord } from "../domain/leagueTournamentTypes";
 import { VALID_DRAW_SIZES, VALID_SEED_COUNTS } from "../domain/types";
 import { DEFAULT_DRAW_OUTPUT_OPTIONS, getDrawOutputOptions } from "../domain/outputOptions";
+import { createEmptySetScores, hasEnteredSetScore, normalizeSetScores } from "../domain/matchScoring";
 import { getValidEntrants, isEntrantCompletelyEmpty, validateTournament } from "../domain/validation";
 import { getLeagueTournamentScope, validateLeagueTournament } from "./leagueTournamentPlacement";
 
 export const DRAW_SIZES: DrawSize[] = [...VALID_DRAW_SIZES];
 export const SEED_COUNTS = [...VALID_SEED_COUNTS];
+export const DEFAULT_MATCH_FORMAT: TournamentMatchFormat = 1;
 
 export type GenerateTournamentResult = {
   tournament: Tournament;
@@ -49,6 +53,9 @@ export function createDefaultTournament(): Tournament {
       entrantPlacementOrder: "largeTeamFirst",
     },
     outputOptions: { ...DEFAULT_DRAW_OUTPUT_OPTIONS },
+    matchFormat: DEFAULT_MATCH_FORMAT,
+    detailInputEnabled: false,
+    matchSelectionStatus: "pending",
     status: "inProgress",
     createdAt: now,
     updatedAt: now,
@@ -125,8 +132,26 @@ export function touchTournament(
 
 export function hasTournamentMatchData(tournament: Tournament): boolean {
   return tournament.generatedDraw?.matches?.some(
-    (match) => match.result !== "unplayed" || Boolean(match.note?.trim()),
+    (match) => match.result !== "unplayed"
+      || Boolean(match.note?.trim())
+      || hasEnteredSetScore(match.setScores),
   ) ?? false;
+}
+
+export function getTournamentMatchFormat(tournament: Tournament): TournamentMatchFormat {
+  return tournament.matchFormat === 3 || tournament.matchFormat === 5
+    ? tournament.matchFormat
+    : DEFAULT_MATCH_FORMAT;
+}
+
+export function getTournamentMatchSelectionStatus(tournament: Tournament): TournamentMatchSelectionStatus {
+  if (tournament.matchSelectionStatus === "pending") {
+    return "pending";
+  }
+
+  // A generated draw predates this field in legacy JSON. Treat it as confirmed
+  // so existing tournaments remain able to accept results after import.
+  return tournament.generatedDraw ? "confirmed" : "pending";
 }
 
 export function getTournamentCompletionErrors(tournament: Tournament): ValidationIssue[] {
@@ -134,6 +159,13 @@ export function getTournamentCompletionErrors(tournament: Tournament): Validatio
     return [{
       code: "TOURNAMENT_DRAW_REQUIRED",
       message: "トーナメント表を生成してから完了してください。",
+    }];
+  }
+
+  if (getTournamentMatchSelectionStatus(tournament) !== "confirmed") {
+    return [{
+      code: "TOURNAMENT_MATCH_SELECTION_REQUIRED",
+      message: "対戦カードを確定してからトーナメントを完了してください。",
     }];
   }
 
@@ -188,6 +220,15 @@ export function applyBasicInfoPatch(
   patch: Partial<Tournament>,
   integration?: TournamentIntegrationRecord,
 ): Tournament {
+  if (getTournamentMatchSelectionStatus(tournament) === "confirmed") {
+    return {
+      ...tournament,
+      title: patch.title ?? tournament.title,
+      date: patch.date ?? tournament.date,
+      venue: patch.venue ?? tournament.venue,
+      eventName: patch.eventName ?? tournament.eventName,
+    };
+  }
   const baseline = withGenerationInputSignature(tournament, integration);
   return refreshGeneratedDrawAfterChange(baseline, { ...baseline, ...patch }, integration);
 }
@@ -197,6 +238,9 @@ export function applyEntrantsUpdate(
   entrants: Entrant[],
   integration?: TournamentIntegrationRecord,
 ): Tournament {
+  if (getTournamentMatchSelectionStatus(tournament) === "confirmed") {
+    return tournament;
+  }
   const baseline = withGenerationInputSignature(tournament, integration);
   return refreshGeneratedDrawAfterChange(baseline, { ...baseline, entrants }, integration);
 }
@@ -206,11 +250,104 @@ export function applyOptionsPatch(
   patch: Partial<DrawOptions>,
   integration?: TournamentIntegrationRecord,
 ): Tournament {
+  if (getTournamentMatchSelectionStatus(tournament) === "confirmed") {
+    return tournament;
+  }
   const baseline = withGenerationInputSignature(tournament, integration);
   return refreshGeneratedDrawAfterChange(baseline, {
     ...baseline,
     options: { ...baseline.options, ...patch },
   }, integration);
+}
+
+export function updateTournamentMatchFormat(
+  tournament: Tournament,
+  matchFormat: TournamentMatchFormat,
+): Tournament {
+  if (
+    tournament.status === "completed"
+    || getTournamentMatchSelectionStatus(tournament) === "confirmed"
+  ) {
+    return tournament;
+  }
+
+  const normalizedFormat = matchFormat === 3 || matchFormat === 5 ? matchFormat : DEFAULT_MATCH_FORMAT;
+  return {
+    ...tournament,
+    matchFormat: normalizedFormat,
+    generatedDraw: tournament.generatedDraw ? {
+      ...tournament.generatedDraw,
+      matches: tournament.generatedDraw.matches.map((match) => ({
+        ...match,
+        setScores: normalizeSetScores(match.setScores, normalizedFormat),
+      })),
+    } : undefined,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function markTournamentMatchSelectionConfirmed(tournament: Tournament): Tournament {
+  if (!tournament.generatedDraw || tournament.status === "completed") {
+    return tournament;
+  }
+
+  return {
+    ...tournament,
+    matchSelectionStatus: "confirmed",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function unconfirmTournamentMatchSelection(tournament: Tournament): Tournament {
+  if (
+    !tournament.generatedDraw
+    || tournament.status === "completed"
+    || getTournamentMatchSelectionStatus(tournament) !== "confirmed"
+  ) {
+    return tournament;
+  }
+
+  const matchFormat = getTournamentMatchFormat(tournament);
+  return {
+    ...tournament,
+    matchSelectionStatus: "pending",
+    generatedDraw: {
+      ...tournament.generatedDraw,
+      matches: tournament.generatedDraw.matches.map((match) => ({
+        ...match,
+        result: "unplayed",
+        setScores: createEmptySetScores(matchFormat),
+        note: undefined,
+      })),
+    },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function updateTournamentDetailInputEnabled(
+  tournament: Tournament,
+  enabled: boolean,
+): Tournament {
+  if (
+    tournament.status === "completed"
+    || getTournamentMatchSelectionStatus(tournament) !== "confirmed"
+  ) {
+    return tournament;
+  }
+
+  const matchFormat = getTournamentMatchFormat(tournament);
+  return {
+    ...tournament,
+    detailInputEnabled: enabled,
+    generatedDraw: enabled || !tournament.generatedDraw ? tournament.generatedDraw : {
+      ...tournament.generatedDraw,
+      matches: tournament.generatedDraw.matches.map((match) => ({
+        ...match,
+        setScores: createEmptySetScores(matchFormat),
+      })),
+    },
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export function applyOutputOptionsPatch(
@@ -297,6 +434,8 @@ export function generateTournamentDraw(
     tournament: scope?.tournament ?? tournament,
     randomSeed,
     now,
+    // The match format affects score rows, not the draw placement itself.
+    // Keep the tournament setting on the generated match model.
     placementContext: scope?.placementContext,
   });
 
@@ -323,6 +462,8 @@ export function generateTournamentDraw(
     tournament: {
       ...generatedTournament,
       generatedDraw,
+      matchSelectionStatus: "pending",
+      detailInputEnabled: false,
       updatedAt: now,
     },
     draw: generatedDraw,

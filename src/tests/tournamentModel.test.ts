@@ -42,9 +42,13 @@ describe("tournamentModel", () => {
     expect(tournament.status).toBe("inProgress");
   });
 
-  it("生成済みドローがあれば試合結果未入力でも完了でき、再開時は試合データを保持する", () => {
+  it("対戦カード確定済みなら試合結果未入力でも完了でき、再開時は試合データを保持する", () => {
     const tournament = createCompletedTournament();
-    const incomplete = { ...tournament, generatedDraw: { ...tournament.generatedDraw!, matches: tournament.generatedDraw!.matches.map((match) => ({ ...match, result: "unplayed" as const })) } };
+    const incomplete = {
+      ...tournament,
+      matchSelectionStatus: "confirmed" as const,
+      generatedDraw: { ...tournament.generatedDraw!, matches: tournament.generatedDraw!.matches.map((match) => ({ ...match, result: "unplayed" as const })) },
+    };
 
     expect(getTournamentCompletionErrors(incomplete)).toEqual([]);
     expect(completeTournament(incomplete).status).toBe("completed");
@@ -536,5 +540,6 @@ function createCompletedTournament() {
       matches,
       generatedAt: "2026-09-03T00:00:00.000Z",
     },
+    matchSelectionStatus: "confirmed" as const,
   };
 }

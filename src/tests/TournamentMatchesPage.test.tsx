@@ -9,10 +9,7 @@ const { navigateMock, updateTournamentMock, useTournamentMock } = vi.hoisted(() 
   useTournamentMock: vi.fn(),
 }));
 
-vi.mock("react-router-dom", () => ({
-  useParams: () => ({ id: "tournament-1" }),
-}));
-
+vi.mock("react-router-dom", () => ({ useParams: () => ({ id: "tournament-1" }) }));
 vi.mock("../app/TournamentProvider", () => ({
   useTournament: useTournamentMock,
   useTournaments: () => ({
@@ -20,7 +17,6 @@ vi.mock("../app/TournamentProvider", () => ({
     getTournamentIntegration: () => undefined,
   }),
 }));
-
 vi.mock("../app/viewTransitionNavigation", () => ({
   useViewTransitionNavigate: () => navigateMock,
 }));
@@ -38,51 +34,62 @@ beforeEach(() => {
 });
 
 describe("TournamentMatchesPage", () => {
-  it("初期表示は1回戦の全カードで、引き分けボタンを無効表示する", () => {
+  it("未確定中は結果・備考・ゲーム数を入力できず、再生成はできる", () => {
     render(<TournamentMatchesPage />);
 
     expect(screen.getByText("ラウンドごとの対戦カードに対戦結果を入力します。結果は次のラウンドに自動で反映されます。")).toBeTruthy();
-    expect(screen.getByText("各試合の勝者を選択してください。ゲームカウント等の詳細は備考に入力します。")).toBeTruthy();
-    expect(screen.getByText("ラウンド")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "対戦カード" })).toBeTruthy();
-    const regenerateButton = screen.getByRole("button", { name: "1回戦の組合せを再生成" });
-    expect((regenerateButton as HTMLButtonElement).disabled).toBe(false);
-    expect(regenerateButton.getAttribute("title")).toBe("1回戦の組合せを再生成");
-    expect(screen.getAllByText("第1試合").every((label) => label.className.includes("match-order-label"))).toBe(true);
-    expect(screen.getByRole("tab", { name: "決勝" })).toBeTruthy();
-    expect(document.querySelectorAll(".tournament-match-card")).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "引き分け" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "引き分け" }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
-    expect(screen.getAllByRole("button", { name: /の勝ち$/ })).toHaveLength(4);
-    expect(screen.getAllByRole("textbox", { name: "備考" }).every((input) => input.getAttribute("placeholder") === "結果の詳細を記録してください（任意）")).toBe(true);
-  });
-
-  it("2回戦は未確定の枠を表示し、結果入力を無効にする", () => {
-    render(<TournamentMatchesPage />);
-
-    fireEvent.click(screen.getByRole("tab", { name: "決勝" }));
-
-    expect(screen.getByRole("heading", { name: "対戦カード" })).toBeTruthy();
-    expect(screen.getAllByText("未確定").length).toBeGreaterThan(0);
+    const notice = screen.getByText("対戦カードの内容を確認し、「対戦カードを確定」を押してください。確定後に、勝敗・ゲーム数・備考を入力できます。");
+    expect(notice.className).toContain("field-hint tournament-match-state-message");
+    expect(notice.closest(".flow-notice")).toBeNull();
+    expect(screen.getByText("未確定").className).toContain("status-badge league-match-status-pending");
+    expect((screen.getByRole("checkbox", { name: "詳細入力" }) as HTMLInputElement).disabled).toBe(true);
     expect(screen.getAllByRole("button", { name: /の勝ち$/ }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
     expect(screen.getAllByRole("textbox", { name: "備考" }).every((input) => (input as HTMLInputElement).disabled)).toBe(true);
+    const regenerate = screen.getByRole("button", { name: "1回戦の組合せを再生成" });
+    expect((regenerate as HTMLButtonElement).disabled).toBe(false);
+    expect(regenerate.closest(".tournament-round-actions")).toBeTruthy();
+    const confirmButton = screen.getByRole("button", { name: "対戦カードを確定" });
+    expect(confirmButton.className).toContain("button primary");
+    expect(confirmButton.closest(".tournament-round-actions")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "詳細入力" }).closest(".section-card-heading")).toBeTruthy();
   });
 
-  it("結果入力済みカードは実施済の青色バッジを表示する", () => {
+  it("確定すると対戦結果を入力できる", () => {
     const tournament = makeTournamentWithDraw();
-    tournament.generatedDraw.matches = tournament.generatedDraw.matches.map((match) => match.id === "match-1" ? { ...match, result: "participantAWin" as const } : match);
+    useTournamentMock.mockReturnValue(tournament);
+    render(<TournamentMatchesPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "対戦カードを確定" }));
+
+    expect(updateTournamentMock).toHaveBeenCalledWith(expect.objectContaining({
+      matchSelectionStatus: "confirmed",
+    }));
+  });
+
+  it("結果入力済みカードは実施済みバッジを表示し、再生成を無効にする", () => {
+    const tournament = makeTournamentWithDraw({ matchSelectionStatus: "confirmed" });
+    tournament.generatedDraw!.matches = tournament.generatedDraw!.matches.map((match) => match.id === "match-1"
+      ? { ...match, result: "participantAWin" as const }
+      : match);
     useTournamentMock.mockReturnValue(tournament);
 
     render(<TournamentMatchesPage />);
 
-    const status = screen.getByText("実施済");
+    const notice = screen.getByText("各試合の勝敗・ゲーム数・備考を入力できます。ドロー構成や試合形式を変更する場合は、「確定解除」を押してください。");
+    expect(notice.className).toContain("field-hint tournament-match-state-message");
+    expect(notice.closest(".flow-notice")).toBeNull();
+    expect(screen.getByText("確定").className).toContain("status-badge league-match-status-confirmed");
+    const status = screen.getByText("実施済み");
     expect(status.className).toContain("status-badge league-match-status-confirmed");
-    expect(screen.queryByText("結果入力済み")).toBeNull();
+    expect(screen.getByRole("button", { name: "確定解除" }).className).toContain("button primary");
+    const regenerate = screen.getByRole("button", { name: "1回戦の組合せを再生成" });
+    expect((regenerate as HTMLButtonElement).disabled).toBe(true);
+    expect(regenerate.getAttribute("title")).toContain("確定後");
   });
 
-  it("結果または備考が入力済みの場合は1回戦の組合せ再生成を無効にする", () => {
-    const tournament = makeTournamentWithDraw();
-    tournament.generatedDraw.matches = tournament.generatedDraw.matches.map((match) => match.id === "match-1"
+  it("確定済みで結果・備考が入力済みの場合は再生成を無効にする", () => {
+    const tournament = makeTournamentWithDraw({ matchSelectionStatus: "confirmed" });
+    tournament.generatedDraw!.matches = tournament.generatedDraw!.matches.map((match) => match.id === "match-1"
       ? { ...match, result: "participantAWin" as const }
       : match.id === "match-2"
         ? { ...match, note: "試合メモ" }
@@ -91,10 +98,7 @@ describe("TournamentMatchesPage", () => {
 
     render(<TournamentMatchesPage />);
 
-    const button = screen.getByRole("button", { name: "1回戦の組合せを再生成" });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
-    expect(button.getAttribute("title")).toBe("結果または備考入力済みのため、1回戦の組合せを再生成できません。");
-    expect(button.parentElement?.getAttribute("title")).toBe("結果または備考入力済みのため、1回戦の組合せを再生成できません。");
+    expect((screen.getByRole("button", { name: "1回戦の組合せを再生成" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("結果・備考が未入力なら再生成して対戦カード画面に留まる", () => {
@@ -114,8 +118,8 @@ describe("TournamentMatchesPage", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it("1回戦の勝敗を保存し、カード更新後のドローだけを更新する", () => {
-    const tournament = makeTournamentWithDraw();
+  it("確定済みの1回戦の勝敗を保存し、カード更新後のドローだけを更新する", () => {
+    const tournament = makeTournamentWithDraw({ matchSelectionStatus: "confirmed" });
     useTournamentMock.mockReturnValue(tournament);
     render(<TournamentMatchesPage />);
 
@@ -128,10 +132,40 @@ describe("TournamentMatchesPage", () => {
       }),
     }));
   });
+
+  it("詳細入力をONにすると、セットスコアを入力できる", () => {
+    const tournament = makeTournamentWithDraw({ matchSelectionStatus: "confirmed" });
+    useTournamentMock.mockReturnValue(tournament);
+    render(<TournamentMatchesPage />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "詳細入力" }));
+    expect(updateTournamentMock).toHaveBeenCalledWith(expect.objectContaining({ detailInputEnabled: true }));
+  });
+
+  it("1セットの両方のゲーム数が入力されると、未実施の勝者を自動選択する", () => {
+    const tournament = makeTournamentWithDraw({ matchSelectionStatus: "confirmed", detailInputEnabled: true });
+    useTournamentMock.mockReturnValue(tournament);
+    render(<TournamentMatchesPage />);
+
+    const scoreInputs = screen.getAllByRole("spinbutton");
+    fireEvent.change(scoreInputs[0]!, { target: { value: "6" } });
+
+    expect(updateTournamentMock).toHaveBeenCalledWith(expect.objectContaining({
+      generatedDraw: expect.objectContaining({
+        matches: expect.arrayContaining([expect.objectContaining({
+          id: "match-1",
+          result: "unplayed",
+          setScores: expect.arrayContaining([expect.objectContaining({ participantA: 6 })]),
+        })]),
+      }),
+    }));
+
+    expect(updateTournamentMock).toHaveBeenCalledTimes(1);
+  });
 });
 
-function makeTournamentWithDraw() {
-  const tournament = makeTournament({ drawSize: 4, entrants: makeEntrants(4) });
+function makeTournamentWithDraw(overrides: Parameters<typeof makeTournament>[0] = {}) {
+  const tournament = makeTournament({ drawSize: 4, entrants: makeEntrants(4), ...overrides });
   const slots = tournament.entrants.map((entrant, index) => ({
     position: index + 1,
     entrantId: entrant.id,
@@ -144,7 +178,7 @@ function makeTournamentWithDraw() {
       tournamentId: tournament.id,
       randomSeed: "seed-1",
       slots,
-      matches: createTournamentMatches(slots, 4),
+      matches: createTournamentMatches(slots, 4, undefined, tournament.matchFormat),
       generatedAt: "2026-09-03T00:00:00.000Z",
     },
   };
