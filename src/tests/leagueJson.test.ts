@@ -45,6 +45,36 @@ describe("leagueJson", () => {
     expect(result.backup.leagues[0]?.updatedAt).toBe(source.updatedAt);
   });
 
+  it("スキーマ1を1セット・詳細OFFとして読み込み、セットスコアを補完する", () => {
+    const source = createDefaultLeague();
+    const legacy = JSON.parse(JSON.stringify({
+      ...source,
+      participants: [
+        { id: "p1", displayName: "A", participantType: "individual", memberNames: ["A"], selectionStatus: "selected" },
+        { id: "p2", displayName: "B", participantType: "individual", memberNames: ["B"], selectionStatus: "selected" },
+      ],
+      groups: [{ id: "g1", name: "A", participantIds: ["p1", "p2"] }],
+      matches: [{ id: "m1", groupId: "g1", order: 1, participantAId: "p1", participantBId: "p2", isValid: true, result: "unplayed" }],
+    })) as Record<string, unknown>;
+    delete legacy.matchFormat;
+    delete legacy.detailInputEnabled;
+    delete legacy.detailDisplayEnabled;
+
+    const result = parseLeagueJson(JSON.stringify({
+      kind: "draw-lab-league",
+      schemaVersion: 1,
+      exportedAt: "2026-08-28T00:00:00.000Z",
+      league: legacy,
+    }));
+
+    expect(result.state).toBe("success");
+    if (result.state !== "success" || result.kind !== "league") return;
+    expect(result.league.matchFormat).toBe(1);
+    expect(result.league.detailInputEnabled).toBe(false);
+    expect(result.league.detailDisplayEnabled).toBe(false);
+    expect(result.league.matches[0]?.setScores).toEqual([{ participantA: null, participantB: null }]);
+  });
+
   it.each([
     ["", "empty"],
     ["{", "error"],

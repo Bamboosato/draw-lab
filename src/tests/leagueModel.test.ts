@@ -8,8 +8,12 @@ import {
   reopenLeague,
   selectParticipantIds,
   updateGroups,
+  updateDetailDisplayEnabled,
+  updateDetailInputEnabled,
+  updateMatchFormat,
   updateManualRanks,
   updateMatch,
+  updateMatchSetScore,
   updateMatchValidity,
   updateParticipants,
   updateScoringPolicy,
@@ -50,6 +54,36 @@ describe("league model state transitions", () => {
       const changed = updateMatch(corrected, "m1", { result: "unplayed" });
       expect(changed.standings.find((standing) => standing.participantId === "p1")).toMatchObject({ rank: 1, manualRank: 2 });
       expect(reopenLeague(completeLeague(league)).status).toBe("inProgress");
+    });
+  });
+
+  describe("機能観点: 試合形式とセット詳細", () => {
+    it("試合形式に応じたセット数を生成し、スコアは勝敗記号へ影響させない", () => {
+      const league = makeLeague({ status: "draft", matchSelectionStatus: "pending" });
+      const formatted = updateMatchFormat(league, 3);
+      const detailed = updateDetailInputEnabled(formatted, true);
+      const scored = updateMatchSetScore(detailed, "m1", 0, "participantA", 6);
+      const displayed = updateDetailDisplayEnabled(scored, true);
+
+      expect(formatted.matchFormat).toBe(3);
+      expect(displayed.matches[0]?.setScores).toHaveLength(3);
+      expect(displayed.matches[0]?.setScores?.[0]).toEqual({ participantA: 6, participantB: null });
+      expect(displayed.matches[0]?.result).toBe("unplayed");
+      expect(displayed.detailDisplayEnabled).toBe(true);
+    });
+
+    it("詳細入力をOFFにすると確認後の状態として全スコアと詳細表示をクリアする", () => {
+      const league = updateDetailDisplayEnabled(
+        updateDetailInputEnabled(updateMatchFormat(makeLeague({ status: "draft", matchSelectionStatus: "pending" }), 5), true),
+        true,
+      );
+      const scored = updateMatchSetScore(league, "m1", 4, "participantB", 3);
+      const disabled = updateDetailInputEnabled(scored, false);
+
+      expect(disabled.detailInputEnabled).toBe(false);
+      expect(disabled.detailDisplayEnabled).toBe(false);
+      expect(disabled.matches[0]?.setScores).toHaveLength(5);
+      expect(disabled.matches[0]?.setScores?.every((score) => score.participantA === null && score.participantB === null)).toBe(true);
     });
   });
 
@@ -188,6 +222,9 @@ function makeLeague(overrides: Partial<League> = {}): League {
     selection: { mode: "all", selectedParticipantIds: ["p1", "p2"], reserveParticipantIds: [] },
     groups: [group],
     scoringPolicy: { winPoints: 3, drawPoints: 1, lossPoints: 0 },
+    matchFormat: 1,
+    detailInputEnabled: false,
+    detailDisplayEnabled: false,
     matches: [match],
     standings: [
       { groupId: "g1", participantId: "p1", played: 0, wins: 0, draws: 0, losses: 0, points: 0, rankStatus: "unconfirmed" },

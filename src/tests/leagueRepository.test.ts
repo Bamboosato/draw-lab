@@ -107,7 +107,13 @@ describe("LeagueRepository", () => {
       && standing.points === 0
       && standing.manualRank === undefined
       && standing.rankStatus === "unconfirmed")).toBe(true);
-    expect(await repository.get(source.id)).toEqual(source);
+    expect(await repository.get(source.id)).toEqual(expect.objectContaining({
+      ...source,
+      matchFormat: 1,
+      detailInputEnabled: false,
+      detailDisplayEnabled: false,
+      matches: [expect.objectContaining({ setScores: [{ participantA: null, participantB: null }] })],
+    }));
   });
 
   it("全リーグをトランザクションで置換し、空配列にも対応する", async () => {

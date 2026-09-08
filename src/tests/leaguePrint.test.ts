@@ -46,6 +46,98 @@ describe("buildLeagueMatrixPrintPages", () => {
     expect(result.pages[1].rows[8].cells[0].isDiagonal).toBe(true);
   });
 
+  it("完了後は勝敗記号を表示し、詳細表示ONならセット詳細を行単位で返す", () => {
+    const league = makeLeague(2);
+    league.status = "completed";
+    league.detailInputEnabled = true;
+    league.detailDisplayEnabled = true;
+    league.matches = [{
+      id: "m1",
+      groupId: "g1",
+      order: 1,
+      participantAId: "p1",
+      participantBId: "p2",
+      isValid: true,
+      result: "participantAWin",
+      setScores: [
+        { participantA: 6, participantB: 1 },
+        { participantA: null, participantB: null },
+        { participantA: 6, participantB: 3 },
+      ],
+    }];
+    league.matchFormat = 3;
+
+    const result = buildLeagueMatrixPrintPages(league, "g1");
+    const firstRow = result.pages[0]?.rows[0];
+    const cell = firstRow?.cells.find((item) => item.participantId === "p2");
+
+    expect(cell).toMatchObject({ result: "○", details: ["6-1", "-", "6-3"] });
+  });
+
+  it("未完了では勝敗記号とセット詳細を空欄にする", () => {
+    const league = makeLeague(2);
+    league.detailInputEnabled = true;
+    league.detailDisplayEnabled = true;
+    league.matches = [{
+      id: "m1",
+      groupId: "g1",
+      order: 1,
+      participantAId: "p1",
+      participantBId: "p2",
+      isValid: true,
+      result: "participantAWin",
+      setScores: [{ participantA: 6, participantB: 1 }],
+    }];
+
+    const result = buildLeagueMatrixPrintPages(league, "g1");
+    const cell = result.pages[0]?.rows[0]?.cells.find((item) => item.participantId === "p2");
+
+    expect(cell).not.toHaveProperty("result");
+    expect(cell).not.toHaveProperty("details");
+  });
+
+  it("未完了でも現在の入力内容モードなら勝敗記号とセット詳細を表示する", () => {
+    const league = makeLeague(2);
+    league.detailInputEnabled = true;
+    league.detailDisplayEnabled = true;
+    league.matches = [{
+      id: "m1",
+      groupId: "g1",
+      order: 1,
+      participantAId: "p1",
+      participantBId: "p2",
+      isValid: true,
+      result: "participantAWin",
+      setScores: [{ participantA: 6, participantB: 1 }],
+    }];
+
+    const result = buildLeagueMatrixPrintPages(league, "g1", "current");
+    const cell = result.pages[0]?.rows[0]?.cells.find((item) => item.participantId === "p2");
+
+    expect(cell).toMatchObject({ result: "○", details: ["6-1"] });
+  });
+
+  it("完了後でも結果を空欄で表示モードなら結果を含めない", () => {
+    const league = makeLeague(2);
+    league.status = "completed";
+    league.matches = [{
+      id: "m1",
+      groupId: "g1",
+      order: 1,
+      participantAId: "p1",
+      participantBId: "p2",
+      isValid: true,
+      result: "participantAWin",
+      setScores: [{ participantA: 6, participantB: 1 }],
+    }];
+
+    const result = buildLeagueMatrixPrintPages(league, "g1", "blank");
+    const cell = result.pages[0]?.rows[0]?.cells.find((item) => item.participantId === "p2");
+
+    expect(cell).not.toHaveProperty("result");
+    expect(cell).not.toHaveProperty("details");
+  });
+
   it("ダブルス・チームの左側見出しは表示名と氏名を改行して括弧なしで返す", () => {
     const league = makeLeague(1);
     league.participants[0] = {

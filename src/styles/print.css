@@ -243,6 +243,89 @@
     height: 14mm;
     padding: 0;
     background: #ffffff;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .league-matrix-print-table tbody td.has-details {
+    height: 24mm;
+  }
+
+  .league-matrix-print-cell-content {
+    display: inline-grid;
+    justify-items: center;
+    gap: 0.7mm;
+    line-height: 1.05;
+  }
+
+  .league-matrix-print-result-symbol {
+    font-size: 14pt;
+    font-weight: 700;
+  }
+
+  .league-matrix-print-set-score {
+    font-size: 11pt;
+    white-space: nowrap;
+  }
+
+  .league-matrix-print-page.set-count-1 .league-matrix-print-table tbody td.has-details {
+    height: 24mm;
+  }
+
+  .league-matrix-print-page.set-count-1 .league-matrix-print-cell-content {
+    gap: 1.2mm;
+  }
+
+  .league-matrix-print-page.set-count-1 .league-matrix-print-result-symbol {
+    font-size: 16pt;
+  }
+
+  .league-matrix-print-page.set-count-1 .league-matrix-print-set-score {
+    font-size: 13pt;
+  }
+
+  .league-matrix-print-page.set-count-3 .league-matrix-print-table tbody td.has-details {
+    height: 30mm;
+  }
+
+  .league-matrix-print-page.set-count-3 .league-matrix-print-cell-content {
+    gap: 0.7mm;
+  }
+
+  .league-matrix-print-page.set-count-3 .league-matrix-print-result-symbol {
+    font-size: 14pt;
+  }
+
+  .league-matrix-print-page.set-count-3 .league-matrix-print-set-score {
+    font-size: 11pt;
+  }
+
+  .league-matrix-print-page.set-count-5 .league-matrix-print-table tbody td.has-details {
+    height: 34mm;
+  }
+
+  .league-matrix-print-page.set-count-5 .league-matrix-print-cell-content {
+    gap: 0.5mm;
+  }
+
+  .league-matrix-print-page.set-count-5 .league-matrix-print-result-symbol {
+    font-size: 13pt;
+  }
+
+  .league-matrix-print-page.set-count-5 .league-matrix-print-set-score {
+    font-size: 9.5pt;
+  }
+
+  .league-matrix-print-page.set-count-1.reserves-detail-space .league-matrix-print-table tbody td {
+    height: 24mm;
+  }
+
+  .league-matrix-print-page.set-count-3.reserves-detail-space .league-matrix-print-table tbody td {
+    height: 30mm;
+  }
+
+  .league-matrix-print-page.set-count-5.reserves-detail-space .league-matrix-print-table tbody td {
+    height: 34mm;
   }
 
   .league-matrix-print-diagonal {

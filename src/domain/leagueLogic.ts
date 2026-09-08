@@ -1,13 +1,15 @@
-import type {
-  League,
-  LeagueGroup,
-  LeagueMatch,
-  LeagueMatchResult,
-  LeagueParticipant,
-  LeagueScoringPolicy,
-  LeagueStanding,
-  LeagueValidationIssue,
-  LeagueValidationResult,
+import {
+  createEmptySetScores,
+  type League,
+  type LeagueGroup,
+  type LeagueMatch,
+  type LeagueMatchResult,
+  type LeagueParticipant,
+  type LeagueScoringPolicy,
+  type LeagueStanding,
+  type LeagueValidationIssue,
+  type LeagueValidationResult,
+  type MatchFormat,
 } from "./leagueTypes";
 
 export const DEFAULT_LEAGUE_SCORING_POLICY: LeagueScoringPolicy = {
@@ -26,7 +28,7 @@ export function isLeagueParticipantEmpty(participant: LeagueParticipant): boolea
   ].every((value) => !value?.trim());
 }
 
-export function createCandidateMatches(groups: readonly LeagueGroup[], createId: () => string): LeagueMatch[] {
+export function createCandidateMatches(groups: readonly LeagueGroup[], createId: () => string, matchFormat: MatchFormat = 1): LeagueMatch[] {
   let order = 1;
   const matches: LeagueMatch[] = [];
 
@@ -40,6 +42,7 @@ export function createCandidateMatches(groups: readonly LeagueGroup[], createId:
         participantBId: group.participantIds[rightIndex]!,
         isValid: true,
         result: "unplayed",
+        setScores: createEmptySetScores(matchFormat),
       });
       order += 1;
     }
