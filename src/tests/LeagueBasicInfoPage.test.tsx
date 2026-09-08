@@ -54,8 +54,23 @@ describe("LeagueBasicInfoPage", () => {
     render(<LeagueBasicInfoPage />);
 
     expect(screen.getByText("種目区分")).toBeTruthy();
-    const options = Array.from(screen.getByRole("combobox").querySelectorAll("option"), (option) => option.textContent);
+    const options = Array.from(screen.getAllByRole("combobox")[0]!.querySelectorAll("option"), (option) => option.textContent);
     expect(options).toEqual(["シングル", "ダブルス", "チーム"]);
+  });
+
+  it("試合形式は1・3・5セットマッチから選択でき、初期値は1セットマッチとする", () => {
+    render(<LeagueBasicInfoPage />);
+
+    const formatSelect = screen.getAllByRole("combobox")[1]!;
+    expect((formatSelect as HTMLSelectElement).value).toBe("1");
+    expect(Array.from(formatSelect.querySelectorAll("option"), (option) => option.textContent)).toEqual([
+      "1セットマッチ",
+      "3セットマッチ",
+      "5セットマッチ",
+    ]);
+
+    fireEvent.change(formatSelect, { target: { value: "3" } });
+    expect(updateLeagueMock).toHaveBeenCalledWith(expect.objectContaining({ matchFormat: 3 }));
   });
 
   it("大会名が未入力でもフォーカス離脱だけではエラーを出さない", () => {
@@ -84,9 +99,9 @@ describe("LeagueBasicInfoPage", () => {
 
     render(<LeagueBasicInfoPage />);
 
-    expect(screen.getByRole("combobox")).toHaveProperty("disabled", true);
+    expect(screen.getAllByRole("combobox").every((select) => (select as HTMLSelectElement).disabled)).toBe(true);
     expect(screen.getByRole("spinbutton", { name: /定員/ })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("status").textContent).toBe("対戦カード確定後のため、種目区分と定員は変更できません。");
+    expect(screen.getByRole("status").textContent).toBe("対戦カード確定後のため、種目区分、定員、試合形式は変更できません。");
   });
 
   it("未確定なら結果入力済みでも種別区分と定員を変更できる", () => {
@@ -99,7 +114,7 @@ describe("LeagueBasicInfoPage", () => {
 
     render(<LeagueBasicInfoPage />);
 
-    expect(screen.getByRole("combobox")).toHaveProperty("disabled", false);
+    expect(screen.getAllByRole("combobox").every((select) => !(select as HTMLSelectElement).disabled)).toBe(true);
     expect(screen.getByRole("spinbutton", { name: /定員/ })).toHaveProperty("disabled", false);
   });
 });

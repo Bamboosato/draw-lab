@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useLeague, useLeagues } from "../app/LeagueProvider";
-import { ensureLeagueParticipantRows } from "../app/leagueModel";
+import { ensureLeagueParticipantRows, updateMatchFormat } from "../app/leagueModel";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
 import { LeagueNotFound, LeaguePageHeading, LeagueStorageMessage, participantTypeLabel } from "../components/LeaguePageParts";
 import { LeagueValidationBanner } from "../components/LeagueValidationBanner";
-import type { League, LeagueParticipantType } from "../domain/leagueTypes";
+import type { League, LeagueParticipantType, MatchFormat } from "../domain/leagueTypes";
 
 export function LeagueBasicInfoPage() {
   const { id } = useParams();
@@ -31,7 +31,7 @@ export function LeagueBasicInfoPage() {
     <div className="page-stack league-page">
       <LeaguePageHeading description="リーグ表に表示する大会情報と参加単位の種別を設定します。" />
       <LeagueStorageMessage status={storageStatus} error={storageError} showSaving={false} />
-      {locked ? <section className="flow-notice" role="status">対戦カード確定後のため、種目区分と定員は変更できません。</section> : null}
+      {locked ? <section className="flow-notice" role="status">対戦カード確定後のため、種目区分、定員、試合形式は変更できません。</section> : null}
       <LeagueValidationBanner errors={errors} />
       <section className="form-grid">
         <label className="field">
@@ -48,6 +48,13 @@ export function LeagueBasicInfoPage() {
         </label>
         <label className="field"><span className="required-header">定員<span className="required-marker" aria-label="必須">*</span></span>
           <input className="short-input" type="number" min="1" step="1" value={league.capacity} disabled={locked} onChange={(event) => updateLeague({ ...league, capacity: Number(event.target.value) })} />
+        </label>
+        <label className="field"><span>試合形式</span>
+          <select value={league.matchFormat} disabled={locked} onChange={(event) => updateLeague(updateMatchFormat(league, Number(event.target.value) as MatchFormat))}>
+            <option value={1}>1セットマッチ</option>
+            <option value={3}>3セットマッチ</option>
+            <option value={5}>5セットマッチ</option>
+          </select>
         </label>
       </section>
       <div className="bottom-actions no-print">

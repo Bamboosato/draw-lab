@@ -1,5 +1,7 @@
 import type { League } from "../domain/leagueTypes";
 import { calculateStandings } from "../domain/leagueLogic";
+import { createEmptySetScores } from "../domain/leagueTypes";
+import { normalizeLeague } from "../app/leagueModel";
 import {
   LEAGUE_STORE_NAME,
   openAppDatabase,
@@ -38,7 +40,7 @@ export function createLeagueRepository(indexedDb: IDBFactory = indexedDB): Leagu
       const completion = transactionToPromise(transaction);
       const leagues = await requestToPromise<League[]>(transaction.objectStore(LEAGUE_STORE_NAME).getAll());
       await completion;
-      return leagues.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+      return leagues.map(normalizeLeague).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     },
 
     async get(id) {
@@ -47,7 +49,7 @@ export function createLeagueRepository(indexedDb: IDBFactory = indexedDB): Leagu
       const completion = transactionToPromise(transaction);
       const league = await requestToPromise<League | undefined>(transaction.objectStore(LEAGUE_STORE_NAME).get(id));
       await completion;
-      return league;
+      return league ? normalizeLeague(league) : undefined;
     },
 
     async save(league) {
@@ -94,6 +96,7 @@ export function createLeagueRepository(indexedDb: IDBFactory = indexedDB): Leagu
         participantBId: participantIdMap.get(match.participantBId) ?? match.participantBId,
         isValid: true,
         result: "unplayed" as const,
+        setScores: createEmptySetScores(source.matchFormat),
         note: "",
       }));
       const duplicated: League = {

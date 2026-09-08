@@ -6,13 +6,37 @@ import {
   isLeagueParticipantEmpty,
   validateLeague,
 } from "../domain/leagueLogic";
-import type {
-  League,
-  LeagueMatch,
-  LeagueParticipant,
-  LeagueParticipantType,
-  LeagueSelectionMode,
+import {
+  createEmptySetScores,
+  normalizeSetScores,
+  type League,
+  type LeagueMatch,
+  type LeagueParticipant,
+  type LeagueParticipantType,
+  type MatchFormat,
+  type LeagueSelectionMode,
 } from "../domain/leagueTypes";
+
+export const DEFAULT_MATCH_FORMAT: MatchFormat = 1;
+
+export function normalizeLeague(league: League): League {
+  const matchFormat = normalizeMatchFormat((league as League & { matchFormat?: unknown }).matchFormat);
+  const detailInputEnabled = (league as League & { detailInputEnabled?: unknown }).detailInputEnabled === true;
+  const detailDisplayEnabled = detailInputEnabled
+    && (league as League & { detailDisplayEnabled?: unknown }).detailDisplayEnabled === true;
+  return {
+    ...league,
+    matchFormat,
+    detailInputEnabled,
+    detailDisplayEnabled,
+    matches: league.matches.map((match) => ({
+      ...match,
+      setScores: detailInputEnabled
+        ? normalizeSetScores((match as LeagueMatch & { setScores?: unknown }).setScores, matchFormat)
+        : createEmptySetScores(matchFormat),
+    })),
+  };
+}
 
 export function createDefaultLeague(): League {
   const now = new Date().toISOString();
@@ -23,6 +47,9 @@ export function createDefaultLeague(): League {
     venue: "",
     eventName: "",
     participantType: "individual",
+    matchFormat: DEFAULT_MATCH_FORMAT,
+    detailInputEnabled: false,
+    detailDisplayEnabled: false,
     capacity: 8,
     participants: createEmptyLeagueParticipants(8, "individual"),
     selection: {
@@ -202,9 +229,46 @@ export function updateScoringPolicy(league: League, scoringPolicy: League["scori
   };
 }
 
+export function updateMatchFormat(league: League, matchFormat: MatchFormat): League {
+  if (league.status === "completed" || league.matchSelectionStatus === "confirmed") return league;
+  return {
+    ...league,
+    matchFormat,
+    matches: league.matches.map((match) => ({
+      ...match,
+      setScores: normalizeSetScores(match.setScores, matchFormat),
+    })),
+  };
+}
+
+export function updateDetailInputEnabled(league: League, enabled: boolean): League {
+  if (league.status === "completed") return league;
+  if (enabled) {
+    return {
+      ...league,
+      detailInputEnabled: true,
+      matches: league.matches.map((match) => ({
+        ...match,
+        setScores: normalizeSetScores(match.setScores, league.matchFormat),
+      })),
+    };
+  }
+  return {
+    ...league,
+    detailInputEnabled: false,
+    detailDisplayEnabled: false,
+    matches: league.matches.map((match) => ({ ...match, setScores: createEmptySetScores(league.matchFormat) })),
+  };
+}
+
+export function updateDetailDisplayEnabled(league: League, enabled: boolean): League {
+  if (league.status === "completed" || !league.detailInputEnabled) return league;
+  return { ...league, detailDisplayEnabled: enabled };
+}
+
 export function prepareLeagueMatches(league: League): League {
   if (league.status === "completed" || league.matchSelectionStatus === "confirmed") return league;
-  const matches = createCandidateMatches(league.groups, () => createId("match"));
+  const matches = createCandidateMatches(league.groups, () => createId("match"), league.matchFormat);
   return {
     ...league,
     matches,
@@ -237,6 +301,24 @@ export function updateMatch(league: League, matchId: string, patch: Partial<Leag
     status,
     standings: calculateStandings(league.groups, matches, league.scoringPolicy, league.standings),
   };
+}
+
+export function updateMatchSetScore(
+  league: League,
+  matchId: string,
+  setIndex: number,
+  participant: "participantA" | "participantB",
+  value: number | null,
+): League {
+  if (league.status === "completed" || !league.detailInputEnabled) return league;
+  const matches = league.matches.map((match) => {
+    if (match.id !== matchId) return match;
+    const setScores = normalizeSetScores(match.setScores, league.matchFormat);
+    if (setIndex < 0 || setIndex >= setScores.length) return match;
+    setScores[setIndex] = { ...setScores[setIndex], [participant]: normalizeScoreValue(value) };
+    return { ...match, setScores };
+  });
+  return { ...league, matches };
 }
 
 export function updateManualRanks(league: League, manualRanks: ReadonlyMap<string, number | undefined>): League {
@@ -291,7 +373,7 @@ export function rebuildLeague(league: League, preserveMatches: boolean): League 
     return league;
   }
   const matches = preserveMatches && league.matches.length > 0
-    ? createCandidateMatches(league.groups, () => createId("match"))
+    ? createCandidateMatches(league.groups, () => createId("match"), league.matchFormat)
     : league.matches;
   return {
     ...league,
@@ -354,4 +436,12 @@ function createSeededRandom(seed: string): () => number {
     value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
     return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+function normalizeMatchFormat(value: unknown): MatchFormat {
+  return value === 3 || value === 5 ? value : DEFAULT_MATCH_FORMAT;
+}
+
+function normalizeScoreValue(value: number | null): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 }

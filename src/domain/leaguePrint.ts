@@ -1,4 +1,4 @@
-import type { League, LeagueParticipant } from "./leagueTypes";
+import { getSetCount, type League, type LeagueMatch, type LeagueParticipant } from "./leagueTypes";
 
 export const LEAGUE_PRINT_MAX_PARTICIPANTS = 16;
 export const LEAGUE_PRINT_COLUMNS_PER_PAGE = 8;
@@ -9,6 +9,8 @@ export type LeaguePrintBuildError =
   | "participant-not-found"
   | "too-many-participants";
 
+export type LeaguePrintResultMode = "current" | "blank";
+
 export type LeagueMatrixPrintParticipant = {
   id: string;
   displayName: string;
@@ -18,6 +20,8 @@ export type LeagueMatrixPrintParticipant = {
 export type LeagueMatrixPrintCell = {
   participantId: string;
   isDiagonal: boolean;
+  result?: string;
+  details?: string[];
 };
 
 export type LeagueMatrixPrintRow = {
@@ -42,6 +46,7 @@ export type LeagueMatrixPrintPagesResult = {
 export function buildLeagueMatrixPrintPages(
   league: League,
   groupId: string,
+  resultMode: LeaguePrintResultMode = league.status === "completed" ? "current" : "blank",
 ): LeagueMatrixPrintPagesResult {
   const group = league.groups.find((item) => item.id === groupId);
   if (!group) return { pages: [], error: "group-not-found" };
@@ -68,6 +73,8 @@ export function buildLeagueMatrixPrintPages(
 
   const printParticipants = participants.map(toPrintParticipant);
   const columnGroups = chunk(printParticipants, LEAGUE_PRINT_COLUMNS_PER_PAGE);
+  const showResults = resultMode === "current";
+  const showDetails = showResults && league.detailDisplayEnabled;
 
   return {
     pages: columnGroups.map((columns, index) => ({
@@ -78,13 +85,38 @@ export function buildLeagueMatrixPrintPages(
       columns,
       rows: printParticipants.map((participant) => ({
         participant,
-        cells: columns.map((column) => ({
-          participantId: column.id,
-          isDiagonal: participant.id === column.id,
-        })),
+        cells: columns.map((column) => createPrintCell(league, participant.id, column.id, showResults, showDetails)),
       })),
     })),
   };
+}
+
+function createPrintCell(league: League, rowId: string, columnId: string, showResults: boolean, showDetails: boolean): LeagueMatrixPrintCell {
+  const isDiagonal = rowId === columnId;
+  const cell: LeagueMatrixPrintCell = { participantId: columnId, isDiagonal };
+  if (isDiagonal || !showResults) return cell;
+
+  const match = league.matches.find((item) => (item.participantAId === rowId && item.participantBId === columnId) || (item.participantAId === columnId && item.participantBId === rowId));
+  cell.result = getMatrixResult(match, rowId);
+  if (showDetails) {
+    cell.details = Array.from({ length: getSetCount(league.matchFormat) }, (_, setIndex) => getMatrixScore(match, rowId, setIndex));
+  }
+  return cell;
+}
+
+function getMatrixResult(match: LeagueMatch | undefined, rowId: string): string {
+  if (!match || !match.isValid) return "-";
+  if (match.result === "unplayed") return "未";
+  if (match.result === "draw") return "△";
+  if (match.result === "participantAWin") return match.participantAId === rowId ? "○" : "●";
+  return match.participantAId === rowId ? "●" : "○";
+}
+
+function getMatrixScore(match: LeagueMatch | undefined, rowId: string, setIndex: number): string {
+  if (!match || !match.isValid || match.result === "unplayed") return "-";
+  const score = match.setScores?.[setIndex];
+  if (!score || score.participantA === null || score.participantB === null) return "-";
+  return match.participantAId === rowId ? `${score.participantA}-${score.participantB}` : `${score.participantB}-${score.participantA}`;
 }
 
 function toPrintParticipant(participant: LeagueParticipant): LeagueMatrixPrintParticipant {

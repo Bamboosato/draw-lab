@@ -1,18 +1,20 @@
 import type { League } from "../domain/leagueTypes";
-import { createDefaultLeague, createId } from "../app/leagueModel";
+import { createDefaultLeague, createId, normalizeLeague } from "../app/leagueModel";
+import { normalizeSetScores } from "../domain/leagueTypes";
 
-export const LEAGUE_JSON_SCHEMA_VERSION = 1;
+export const LEAGUE_JSON_SCHEMA_VERSION = 2;
+const SUPPORTED_LEAGUE_JSON_SCHEMA_VERSIONS = new Set([1, LEAGUE_JSON_SCHEMA_VERSION]);
 
 export type LeagueJsonEnvelope = {
   kind: "draw-lab-league";
-  schemaVersion: 1;
+  schemaVersion: 2;
   exportedAt: string;
   league: League;
 };
 
 export type LeagueBackupEnvelope = {
   kind: "draw-lab-league-backup";
-  schemaVersion: 1;
+  schemaVersion: 2;
   exportedAt: string;
   leagues: League[];
 };
@@ -28,7 +30,7 @@ export function serializeLeague(league: League, exportedAt = new Date().toISOStr
     kind: "draw-lab-league",
     schemaVersion: LEAGUE_JSON_SCHEMA_VERSION,
     exportedAt,
-    league,
+    league: normalizeLeague(league),
   };
   return JSON.stringify(envelope, null, 2);
 }
@@ -38,7 +40,7 @@ export function serializeAllLeagues(leagues: readonly League[], exportedAt = new
     kind: "draw-lab-league-backup",
     schemaVersion: LEAGUE_JSON_SCHEMA_VERSION,
     exportedAt,
-    leagues: [...leagues],
+    leagues: leagues.map(normalizeLeague),
   };
   return JSON.stringify(envelope, null, 2);
 }
@@ -59,7 +61,7 @@ export function parseLeagueJson(text: string, now = new Date().toISOString()): L
         message: `全リーグバックアップです。リーグ${backup.leagues.length}件を検出しました。`,
       };
     }
-    if (!isRecord(parsed) || parsed.kind !== "draw-lab-league" || parsed.schemaVersion !== LEAGUE_JSON_SCHEMA_VERSION || !isRecord(parsed.league)) {
+    if (!isRecord(parsed) || parsed.kind !== "draw-lab-league" || !SUPPORTED_LEAGUE_JSON_SCHEMA_VERSIONS.has(parsed.schemaVersion as number) || !isRecord(parsed.league)) {
       throw new Error("対応していないリーグJSONです。");
     }
     const league = cloneImportedLeague(parsed.league, now);
@@ -70,7 +72,7 @@ export function parseLeagueJson(text: string, now = new Date().toISOString()): L
 }
 
 function parseLeagueBackup(value: Record<string, unknown>, now: string): LeagueBackupEnvelope {
-  if (value.schemaVersion !== LEAGUE_JSON_SCHEMA_VERSION || typeof value.exportedAt !== "string" || !Array.isArray(value.leagues)) {
+  if (!SUPPORTED_LEAGUE_JSON_SCHEMA_VERSIONS.has(value.schemaVersion as number) || typeof value.exportedAt !== "string" || !Array.isArray(value.leagues)) {
     throw new Error("全リーグバックアップに必要な項目が不足しています。");
   }
 
@@ -129,6 +131,7 @@ export function cloneImportedLeague(
   if (groups.some((group) => group.participantIds.some((participantId) => !participantId))) {
     throw new Error("リーググループが存在しない参加単位を参照しています。");
   }
+  const matchFormat = source.matchFormat === 3 || source.matchFormat === 5 ? source.matchFormat : 1;
   const matches = source.matches.map((item) => {
     if (!isRecord(item) || typeof item.id !== "string" || typeof item.groupId !== "string" || typeof item.participantAId !== "string" || typeof item.participantBId !== "string") {
       throw new Error("リーグ対戦カードの形式が不正です。");
@@ -139,6 +142,7 @@ export function cloneImportedLeague(
       groupId: groupIdMap.get(item.groupId) ?? "",
       participantAId: participantIdMap.get(item.participantAId) ?? "",
       participantBId: participantIdMap.get(item.participantBId) ?? "",
+      setScores: normalizeSetScores(item.setScores, matchFormat),
     } as League["matches"][number];
   });
   if (matches.some((match) => !match.groupId || !match.participantAId || !match.participantBId)) {
@@ -158,10 +162,13 @@ export function cloneImportedLeague(
     ? source.selection.reserveParticipantIds.map((id) => participantIdMap.get(id) ?? "").filter(Boolean)
     : [];
 
-  return {
+  return normalizeLeague({
     ...fallback,
     ...source,
     id: leagueId,
+    matchFormat,
+    detailInputEnabled: source.detailInputEnabled === true,
+    detailDisplayEnabled: source.detailInputEnabled === true && source.detailDisplayEnabled === true,
     participants,
     selection: {
       ...fallback.selection,
@@ -174,7 +181,7 @@ export function cloneImportedLeague(
     standings,
     createdAt: options.preserveTimestamps && typeof source.createdAt === "string" ? source.createdAt : now,
     updatedAt: options.preserveTimestamps && typeof source.updatedAt === "string" ? source.updatedAt : now,
-  };
+  });
 }
 
 export function downloadLeague(league: League): void {

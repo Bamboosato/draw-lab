@@ -1,12 +1,13 @@
 import { useEffect } from "react";
-import { buildLeagueMatrixPrintPages } from "../domain/leaguePrint";
+import { buildLeagueMatrixPrintPages, type LeaguePrintResultMode } from "../domain/leaguePrint";
 import type { League } from "../domain/leagueTypes";
 
 const LEAGUE_PRINT_ROW_COLUMN_WIDTH_MM = 34;
 const LEAGUE_PRINT_RESULT_COLUMN_WIDTH_MM = 19.5;
 
-export function LeagueMatrixPrintDocument({ league, groupId }: { league: League; groupId: string }) {
-  const { pages } = buildLeagueMatrixPrintPages(league, groupId);
+export function LeagueMatrixPrintDocument({ league, groupId, resultMode }: { league: League; groupId: string; resultMode: LeaguePrintResultMode }) {
+  const { pages } = buildLeagueMatrixPrintPages(league, groupId, resultMode);
+  const setCount = getPrintSetCount(league.matchFormat);
 
   useEffect(() => {
     if (pages.length === 0) return undefined;
@@ -21,7 +22,7 @@ export function LeagueMatrixPrintDocument({ league, groupId }: { league: League;
     <div className="league-matrix-print-document" aria-hidden="true">
       {pages.map((page) => (
         <section
-          className={`league-matrix-print-page${page.pageCount > 1 ? " has-split-columns" : ""}`}
+          className={`league-matrix-print-page set-count-${setCount} result-mode-${resultMode}${page.pageCount > 1 ? " has-split-columns" : ""}${resultMode === "blank" && league.detailDisplayEnabled ? " reserves-detail-space" : ""}`}
           key={`${page.groupId}-${page.pageNumber}`}
         >
           <header className="league-matrix-print-heading">
@@ -66,8 +67,8 @@ export function LeagueMatrixPrintDocument({ league, groupId }: { league: League;
                 <tr key={row.participant.id}>
                   <th scope="row">{row.participant.fullLabel}</th>
                   {row.cells.map((cell) => (
-                    <td className={cell.isDiagonal ? "is-diagonal" : undefined} key={cell.participantId}>
-                      {cell.isDiagonal ? <DiagonalLine /> : null}
+                    <td className={cell.isDiagonal ? "is-diagonal" : cell.details ? "has-details" : undefined} key={cell.participantId}>
+                      {cell.isDiagonal ? <DiagonalLine /> : cell.result ? <span className="league-matrix-print-cell-content"><span className="league-matrix-print-result-symbol">{cell.result}</span>{cell.details?.map((detail, index) => <span className="league-matrix-print-set-score" key={index}>{detail}</span>)}</span> : null}
                     </td>
                   ))}
                 </tr>
@@ -78,6 +79,11 @@ export function LeagueMatrixPrintDocument({ league, groupId }: { league: League;
       ))}
     </div>
   );
+}
+
+function getPrintSetCount(matchFormat: League["matchFormat"]): 1 | 3 | 5 {
+  if (matchFormat === 3 || matchFormat === 5) return matchFormat;
+  return 1;
 }
 
 function getSplitPageTableWidth(columnCount: number): number {

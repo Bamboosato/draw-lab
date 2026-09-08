@@ -112,4 +112,36 @@ describe("MatchWinnerSelector", () => {
     expect(screen.getByRole("button", { name: "Bの勝ち" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "引き分け" })).toHaveProperty("disabled", true);
   });
+
+  it("編集不可でも選択済みの勝者・引き分けは選択色を維持する", () => {
+    const onResultChange = vi.fn();
+    const { rerender } = render(
+      <MatchWinnerSelector
+        ariaLabel="第1試合の結果"
+        participantALabel="A"
+        participantBLabel="B"
+        result="participantAWin"
+        disabled
+        onResultChange={onResultChange}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Aの勝ち" }).className).toContain("active");
+    expect(screen.getByRole("button", { name: "Aの勝ち" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Bの勝ち" }).className).not.toContain("active");
+
+    rerender(
+      <MatchWinnerSelector
+        ariaLabel="第1試合の結果"
+        participantALabel="A"
+        participantBLabel="B"
+        result="draw"
+        disabled
+        onResultChange={onResultChange}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "引き分け" }).className).toContain("active");
+    expect(screen.getByRole("button", { name: "引き分け" })).toHaveProperty("disabled", true);
+  });
 });

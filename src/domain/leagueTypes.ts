@@ -8,6 +8,34 @@ export type LeagueMatchResult =
   | "draw"
   | "participantBWin";
 
+export type MatchFormat = 1 | 3 | 5;
+
+export type LeagueSetScore = {
+  participantA: number | null;
+  participantB: number | null;
+};
+
+export function getSetCount(matchFormat: MatchFormat | undefined): number {
+  return matchFormat === 3 || matchFormat === 5 ? matchFormat : 1;
+}
+
+export function createEmptySetScores(matchFormat: MatchFormat | undefined): LeagueSetScore[] {
+  return Array.from({ length: getSetCount(matchFormat) }, () => ({ participantA: null, participantB: null }));
+}
+
+export function normalizeSetScores(value: unknown, matchFormat: MatchFormat | undefined): LeagueSetScore[] {
+  const source = Array.isArray(value) ? value : [];
+  return Array.from({ length: getSetCount(matchFormat) }, (_, index) => {
+    const item = source[index];
+    if (!item || typeof item !== "object") return { participantA: null, participantB: null };
+    const score = item as Partial<LeagueSetScore>;
+    return {
+      participantA: normalizeScore(score.participantA),
+      participantB: normalizeScore(score.participantB),
+    };
+  });
+}
+
 export type LeagueParticipant = {
   id: string;
   displayName: string;
@@ -46,6 +74,8 @@ export type LeagueMatch = {
   participantBId: string;
   isValid: boolean;
   result: LeagueMatchResult;
+  /** 旧保存データでは未保持の場合があるため、読込時に正規化する。 */
+  setScores?: LeagueSetScore[];
   note?: string;
 };
 
@@ -71,6 +101,9 @@ export type League = {
   venue?: string;
   eventName?: string;
   participantType: LeagueParticipantType;
+  matchFormat: MatchFormat;
+  detailInputEnabled: boolean;
+  detailDisplayEnabled: boolean;
   capacity: number;
   participants: LeagueParticipant[];
   selection: LeagueSelection;
@@ -96,4 +129,8 @@ export type LeagueValidationResult = {
   errors: LeagueValidationIssue[];
   warnings: LeagueValidationIssue[];
 };
+
+function normalizeScore(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
 
