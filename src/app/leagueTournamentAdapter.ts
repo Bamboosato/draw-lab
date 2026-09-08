@@ -80,7 +80,7 @@ export function createLeagueToTournament(
   const groupByParticipantId = getGroupByParticipantId(league.groups);
   const calculatedStandings = calculateStandings(league.groups, league.matches, league.scoringPolicy, league.standings);
   const standingByParticipantId = getStandingByParticipantId(calculatedStandings);
-  const automaticRanks = calculateAutomaticRanks(league.groups, calculatedStandings);
+  const automaticRanks = calculateAutomaticRanks(league.groups, calculatedStandings, league.matches);
   const matchType = toMatchType(league.participantType);
   const drawSize = resolveLeagueDrawSize(league.groups.length, rankRange) ?? tournament.drawSize;
   const entrants = selectedParticipants.map((participant, index) =>
@@ -137,7 +137,7 @@ export function createLeagueToTournamentSetup(
   const groupByParticipantId = getGroupByParticipantId(league.groups);
   const calculatedStandings = calculateStandings(league.groups, league.matches, league.scoringPolicy, league.standings);
   const standingByParticipantId = getStandingByParticipantId(calculatedStandings);
-  const automaticRanks = calculateAutomaticRanks(league.groups, calculatedStandings);
+  const automaticRanks = calculateAutomaticRanks(league.groups, calculatedStandings, league.matches);
   return {
     kind: "league-to-tournament",
     schemaVersion: 1,

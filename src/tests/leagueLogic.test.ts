@@ -1,7 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { calculateAutomaticRanks, calculateStandings, countValidMatchesByParticipant, createCandidateMatches, getActiveMatchOrders, validateLeague, validateManualRanks } from "../domain/leagueLogic";
+import { calculateAutomaticRanks, calculateStandings, countValidMatchesByParticipant, createCandidateMatches, getActiveMatchOrders, getEffectiveLeagueRank, inferMatchWinnerFromSetScores, validateLeague, validateManualRanks } from "../domain/leagueLogic";
 import { distributeLeagueParticipants } from "../domain/leagueGrouping";
 import type { League, LeagueGroup, LeagueMatch, LeagueParticipant } from "../domain/leagueTypes";
+
+describe("ゲーム数からの勝者推定", () => {
+  it("1セットは両者の入力がそろった場合だけ勝者を返す", () => {
+    expect(inferMatchWinnerFromSetScores(1, [{ participantA: 6, participantB: null }])).toBeUndefined();
+    expect(inferMatchWinnerFromSetScores(1, [{ participantA: 6, participantB: 0 }])).toBe("participantAWin");
+    expect(inferMatchWinnerFromSetScores(1, [{ participantA: 0, participantB: 6 }])).toBe("participantBWin");
+  });
+
+  it("3・5セットは先取数に達した場合だけ勝者を返す", () => {
+    expect(inferMatchWinnerFromSetScores(3, [
+      { participantA: 6, participantB: 1 },
+      { participantA: 6, participantB: 3 },
+    ])).toBe("participantAWin");
+    expect(inferMatchWinnerFromSetScores(5, [
+      { participantA: 6, participantB: 1 },
+      { participantA: 6, participantB: 2 },
+      { participantA: 6, participantB: 4 },
+    ])).toBe("participantAWin");
+    expect(inferMatchWinnerFromSetScores(3, [{ participantA: 6, participantB: 1 }])).toBeUndefined();
+  });
+
+  it("同点や0-0では勝者を返さない", () => {
+    expect(inferMatchWinnerFromSetScores(1, [{ participantA: 0, participantB: 0 }])).toBeUndefined();
+    expect(inferMatchWinnerFromSetScores(1, [{ participantA: 6, participantB: 6 }])).toBeUndefined();
+  });
+});
 
 describe("league domain logic", () => {
   describe("機能観点: 所属・地区を考慮したグループ振り分け", () => {
@@ -121,7 +147,7 @@ describe("league domain logic", () => {
   });
 
   describe("データ観点: 集計と順位", () => {
-    it("勝点の降順で自動順位を付け、同点時は星取表の並び順を優先する", () => {
+    it("勝点の降順で自動順位を付け、同点時は直接対決とグループ内の参加者順を使う", () => {
       const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p1", "p2", "p3"] }];
       const matches: LeagueMatch[] = [
         { id: "m1", groupId: "g1", order: 1, participantAId: "p1", participantBId: "p2", isValid: true, result: "draw" },
@@ -136,7 +162,177 @@ describe("league domain logic", () => {
         ["p2", 4, 2],
         ["p3", 0, 3],
       ]);
-      expect(calculateAutomaticRanks(groups, standings)).toEqual(new Map([["p1", 1], ["p2", 2], ["p3", 3]]));
+      expect(calculateAutomaticRanks(groups, standings, matches)).toEqual(new Map([["p1", 1], ["p2", 2], ["p3", 3]]));
+    });
+
+    it("勝点が同じ2者は直接対決の勝者を上位にする", () => {
+      const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p2", "p1", "p3"] }];
+      const matches: LeagueMatch[] = [
+        { id: "m1", groupId: "g1", order: 1, participantAId: "p1", participantBId: "p2", isValid: true, result: "participantAWin" },
+      ];
+      const standings = calculateStandings(groups, matches, { winPoints: 1, drawPoints: 0, lossPoints: 1 });
+
+      expect(standings.find((standing) => standing.participantId === "p1")?.points).toBe(1);
+      expect(standings.find((standing) => standing.participantId === "p2")?.points).toBe(1);
+      expect(calculateAutomaticRanks(groups, standings, matches)).toEqual(new Map([["p1", 1], ["p2", 2], ["p3", 3]]));
+    });
+
+    it("3者以上の同点では同点者内の直接対決勝利数を比較する", () => {
+      const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p3", "p2", "p1"] }];
+      const matches: LeagueMatch[] = [
+        { id: "m1", groupId: "g1", order: 1, participantAId: "p1", participantBId: "p2", isValid: true, result: "participantAWin" },
+        { id: "m2", groupId: "g1", order: 2, participantAId: "p1", participantBId: "p3", isValid: true, result: "participantAWin" },
+        { id: "m3", groupId: "g1", order: 3, participantAId: "p2", participantBId: "p3", isValid: true, result: "participantAWin" },
+      ];
+      const standings = calculateStandings(groups, matches, { winPoints: 1, drawPoints: 0, lossPoints: 1 });
+
+      expect(new Set(standings.map((standing) => standing.points))).toEqual(new Set([2]));
+      expect(calculateAutomaticRanks(groups, standings, matches)).toEqual(new Map([["p1", 1], ["p2", 2], ["p3", 3]]));
+    });
+
+    it("直接対決で差がつかない場合は獲得セット率を比較する", () => {
+      const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p2", "p1", "p3"] }];
+      const matches: LeagueMatch[] = [
+        {
+          id: "m1",
+          groupId: "g1",
+          order: 1,
+          participantAId: "p1",
+          participantBId: "p2",
+          isValid: true,
+          result: "draw",
+          setScores: [
+            { participantA: 6, participantB: 6 },
+            { participantA: 6, participantB: 6 },
+            { participantA: 6, participantB: 6 },
+          ],
+        },
+        {
+          id: "m2",
+          groupId: "g1",
+          order: 2,
+          participantAId: "p1",
+          participantBId: "p3",
+          isValid: true,
+          result: "participantAWin",
+          setScores: [
+            { participantA: 6, participantB: 1 },
+            { participantA: 6, participantB: 1 },
+            { participantA: null, participantB: null },
+          ],
+        },
+        {
+          id: "m3",
+          groupId: "g1",
+          order: 3,
+          participantAId: "p2",
+          participantBId: "p3",
+          isValid: true,
+          result: "participantAWin",
+          setScores: [
+            { participantA: 6, participantB: 1 },
+            { participantA: 4, participantB: 6 },
+            { participantA: 6, participantB: 4 },
+          ],
+        },
+      ];
+      const standings = calculateStandings(groups, matches, { winPoints: 3, drawPoints: 1, lossPoints: 0 });
+
+      expect(calculateAutomaticRanks(groups, standings, matches)).toEqual(new Map([["p1", 1], ["p2", 2], ["p3", 3]]));
+    });
+
+    it("セット率が同じ場合は獲得ゲーム率で順位を決める", () => {
+      const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p2", "p1", "p3"] }];
+      const matches: LeagueMatch[] = [
+        {
+          id: "m1",
+          groupId: "g1",
+          order: 1,
+          participantAId: "p1",
+          participantBId: "p2",
+          isValid: true,
+          result: "draw",
+          setScores: [
+            { participantA: 6, participantB: 6 },
+            { participantA: 6, participantB: 6 },
+            { participantA: 6, participantB: 6 },
+          ],
+        },
+        {
+          id: "m2",
+          groupId: "g1",
+          order: 2,
+          participantAId: "p1",
+          participantBId: "p3",
+          isValid: true,
+          result: "participantAWin",
+          setScores: [
+            { participantA: 6, participantB: 1 },
+            { participantA: 6, participantB: 1 },
+            { participantA: null, participantB: null },
+          ],
+        },
+        {
+          id: "m3",
+          groupId: "g1",
+          order: 3,
+          participantAId: "p2",
+          participantBId: "p3",
+          isValid: true,
+          result: "participantAWin",
+          setScores: [
+            { participantA: 6, participantB: 4 },
+            { participantA: 6, participantB: 4 },
+            { participantA: null, participantB: null },
+          ],
+        },
+      ];
+      const standings = calculateStandings(groups, matches, { winPoints: 3, drawPoints: 1, lossPoints: 0 });
+
+      expect(standings.find((standing) => standing.participantId === "p1")?.points).toBe(4);
+      expect(standings.find((standing) => standing.participantId === "p2")?.points).toBe(4);
+      expect(calculateAutomaticRanks(groups, standings, matches)).toEqual(new Map([["p1", 1], ["p2", 2], ["p3", 3]]));
+    });
+
+    it("スコアが不足している場合はセット率・ゲーム率を使わず参加者順へ戻す", () => {
+      const groups: LeagueGroup[] = [{ id: "g1", name: "A", participantIds: ["p2", "p1", "p3"] }];
+      const matches: LeagueMatch[] = [
+        {
+          id: "m1",
+          groupId: "g1",
+          order: 1,
+          participantAId: "p1",
+          participantBId: "p2",
+          isValid: true,
+          result: "draw",
+          setScores: [{ participantA: 6, participantB: 6 }],
+        },
+        {
+          id: "m2",
+          groupId: "g1",
+          order: 2,
+          participantAId: "p1",
+          participantBId: "p3",
+          isValid: true,
+          result: "participantAWin",
+          setScores: [{ participantA: null, participantB: null }],
+        },
+        {
+          id: "m3",
+          groupId: "g1",
+          order: 3,
+          participantAId: "p2",
+          participantBId: "p3",
+          isValid: true,
+          result: "participantAWin",
+          setScores: [{ participantA: 6, participantB: 1 }],
+        },
+      ];
+      const standings = calculateStandings(groups, matches, { winPoints: 3, drawPoints: 1, lossPoints: 0 });
+
+      expect(standings.find((standing) => standing.participantId === "p1")?.points).toBe(4);
+      expect(standings.find((standing) => standing.participantId === "p2")?.points).toBe(4);
+      expect(calculateAutomaticRanks(groups, standings, matches)).toEqual(new Map([["p2", 1], ["p1", 2], ["p3", 3]]));
     });
 
     it("大会名が未入力でもリーグのドメイン検証を通過する", () => {
@@ -185,6 +381,8 @@ describe("league domain logic", () => {
       expect(validateManualRanks({ ...league, standings: [{ ...league.standings[0]!, manualRank: 3, rankStatus: "confirmed" as const }, league.standings[1]!] }).errors).toEqual([
         expect.objectContaining({ code: "MANUAL_RANK_INVALID", participantId: "p1" }),
       ]);
+      expect(getEffectiveLeagueRank({ ...league.standings[0]!, rank: 2 }, new Map([["p1", 1]]))).toBe(1);
+      expect(getEffectiveLeagueRank({ ...league.standings[0]!, rank: 2, manualRank: 3 }, new Map([["p1", 1]]))).toBe(3);
     });
 
     it("ダブルスはメンバー2名、チームはメンバー1名以上を要求する", () => {

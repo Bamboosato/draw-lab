@@ -58,7 +58,7 @@ describe("league model state transitions", () => {
   });
 
   describe("機能観点: 試合形式とセット詳細", () => {
-    it("試合形式に応じたセット数を生成し、スコアは勝敗記号へ影響させない", () => {
+    it("試合形式に応じたセット数を生成し、片側だけのスコアでは勝敗を自動選択しない", () => {
       const league = makeLeague({ status: "draft", matchSelectionStatus: "pending" });
       const formatted = updateMatchFormat(league, 3);
       const detailed = updateDetailInputEnabled(formatted, true);
@@ -70,6 +70,56 @@ describe("league model state transitions", () => {
       expect(displayed.matches[0]?.setScores?.[0]).toEqual({ participantA: 6, participantB: null });
       expect(displayed.matches[0]?.result).toBe("unplayed");
       expect(displayed.detailDisplayEnabled).toBe(true);
+    });
+
+    it("1セットの両者のスコアが入力されると、未実施のカードだけ勝者を自動選択する", () => {
+      const detailed = updateDetailInputEnabled(makeLeague({ status: "scheduled" }), true);
+      const scoredA = updateMatchSetScore(detailed, "m1", 0, "participantA", 6);
+      const scored = updateMatchSetScore(scoredA, "m1", 0, "participantB", 1);
+
+      expect(scored.matches[0]?.result).toBe("participantAWin");
+      expect(scored.status).toBe("inProgress");
+      expect(scored.standings.find((standing) => standing.participantId === "p1")?.wins).toBe(1);
+    });
+
+    it("3・5セットは先取数が確定した時だけ勝者を自動選択する", () => {
+      const threeSet = updateDetailInputEnabled({ ...makeLeague({ status: "scheduled" }), matchFormat: 3 }, true);
+      const threeSetFirst = updateMatchSetScore(threeSet, "m1", 0, "participantA", 6);
+      const threeSetSecond = updateMatchSetScore(threeSetFirst, "m1", 0, "participantB", 1);
+      const threeSetThird = updateMatchSetScore(threeSetSecond, "m1", 1, "participantA", 6);
+      expect(threeSetThird.matches[0]?.result).toBe("unplayed");
+      const threeSetComplete = updateMatchSetScore(threeSetThird, "m1", 1, "participantB", 3);
+      expect(threeSetComplete.matches[0]?.result).toBe("participantAWin");
+
+      const fiveSet = updateDetailInputEnabled({ ...makeLeague({ status: "scheduled" }), matchFormat: 5 }, true);
+      let fiveSetScored = fiveSet;
+      for (const setIndex of [0, 1, 2]) {
+        fiveSetScored = updateMatchSetScore(fiveSetScored, "m1", setIndex, "participantA", 6);
+        fiveSetScored = updateMatchSetScore(fiveSetScored, "m1", setIndex, "participantB", 1);
+      }
+      expect(fiveSetScored.matches[0]?.result).toBe("participantAWin");
+    });
+
+    it("同点・入力不足では自動選択せず、選択済みの勝敗はスコア変更で上書きしない", () => {
+      const detailed = updateDetailInputEnabled(makeLeague({ status: "scheduled" }), true);
+      const partial = updateMatchSetScore(detailed, "m1", 0, "participantA", 6);
+      const tied = updateMatchSetScore(partial, "m1", 0, "participantB", 6);
+      expect(tied.matches[0]?.result).toBe("unplayed");
+
+      const manual = updateMatch(detailed, "m1", { result: "participantBWin" });
+      const changed = updateMatchSetScore(manual, "m1", 0, "participantA", 6);
+      const unchanged = updateMatchSetScore(changed, "m1", 0, "participantB", 1);
+      expect(unchanged.matches[0]?.result).toBe("participantBWin");
+
+      const autoSelected = updateMatchSetScore(
+        updateMatchSetScore(detailed, "m1", 0, "participantA", 6),
+        "m1",
+        0,
+        "participantB",
+        1,
+      );
+      const afterAutoSelectedEdit = updateMatchSetScore(autoSelected, "m1", 0, "participantB", 6);
+      expect(afterAutoSelectedEdit.matches[0]?.result).toBe("participantAWin");
     });
 
     it("詳細入力をOFFにすると確認後の状態として全スコアと詳細表示をクリアする", () => {
