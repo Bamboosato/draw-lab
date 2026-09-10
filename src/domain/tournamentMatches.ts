@@ -60,11 +60,23 @@ export function createTournamentMatches(
   return matches;
 }
 
+export function ensureTournamentMatches(
+  draw: GeneratedDraw,
+  drawSize: DrawSize = draw.slots.length as DrawSize,
+  matchFormat: MatchFormat = 1,
+): TournamentMatch[] {
+  const storedMatches = (draw as GeneratedDraw & { matches?: unknown }).matches;
+  return Array.isArray(storedMatches) && storedMatches.length > 0
+    ? storedMatches as TournamentMatch[]
+    : createTournamentMatches(draw.slots, drawSize, undefined, matchFormat);
+}
+
 export function resolveTournamentMatches(
   draw: GeneratedDraw,
   entrants: readonly Entrant[],
+  matchFormat: MatchFormat = 1,
 ): ResolvedTournamentMatch[] {
-  const matches = draw.matches ?? createTournamentMatches(draw.slots, draw.slots.length as DrawSize);
+  const matches = ensureTournamentMatches(draw, draw.slots.length as DrawSize, matchFormat);
   const slotsByPosition = new Map(draw.slots.map((slot) => [slot.position, slot]));
   const resolvedById = new Map<string, ResolvedTournamentMatch>();
 
@@ -113,7 +125,7 @@ export function updateTournamentMatch(
   patch: Pick<TournamentMatch, "result"> & Partial<Pick<TournamentMatch, "note" | "setScores">>,
   matchFormat: MatchFormat = 1,
 ): GeneratedDraw {
-  const matches = draw.matches ?? createTournamentMatches(draw.slots, draw.slots.length as DrawSize, undefined, matchFormat);
+  const matches = ensureTournamentMatches(draw, draw.slots.length as DrawSize, matchFormat);
   const current = matches.find((match) => match.id === matchId);
   if (!current) {
     throw new RangeError(`Tournament match not found: ${matchId}`);
@@ -163,7 +175,7 @@ export function updateTournamentMatchSetScore(
   participant: "participantA" | "participantB",
   value: number | null,
 ): GeneratedDraw {
-  const matches = draw.matches ?? createTournamentMatches(draw.slots, draw.slots.length as DrawSize, undefined, matchFormat);
+  const matches = ensureTournamentMatches(draw, draw.slots.length as DrawSize, matchFormat);
   const current = matches.find((match) => match.id === matchId);
   if (!current) {
     throw new RangeError(`Tournament match not found: ${matchId}`);

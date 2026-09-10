@@ -18,6 +18,7 @@ import { VALID_DRAW_SIZES, VALID_SEED_COUNTS } from "../domain/types";
 import { DEFAULT_DRAW_OUTPUT_OPTIONS, getDrawOutputOptions } from "../domain/outputOptions";
 import { createEmptySetScores, hasEnteredSetScore, normalizeSetScores } from "../domain/matchScoring";
 import { getValidEntrants, isEntrantCompletelyEmpty, validateTournament } from "../domain/validation";
+import { ensureTournamentMatches } from "../domain/tournamentMatches";
 import { getLeagueTournamentScope, validateLeagueTournament } from "./leagueTournamentPlacement";
 
 export const DRAW_SIZES: DrawSize[] = [...VALID_DRAW_SIZES];
@@ -277,7 +278,7 @@ export function updateTournamentMatchFormat(
     matchFormat: normalizedFormat,
     generatedDraw: tournament.generatedDraw ? {
       ...tournament.generatedDraw,
-      matches: tournament.generatedDraw.matches.map((match) => ({
+      matches: ensureTournamentMatches(tournament.generatedDraw, tournament.drawSize, normalizedFormat).map((match) => ({
         ...match,
         setScores: normalizeSetScores(match.setScores, normalizedFormat),
       })),
@@ -313,7 +314,7 @@ export function unconfirmTournamentMatchSelection(tournament: Tournament): Tourn
     matchSelectionStatus: "pending",
     generatedDraw: {
       ...tournament.generatedDraw,
-      matches: tournament.generatedDraw.matches.map((match) => ({
+      matches: ensureTournamentMatches(tournament.generatedDraw, tournament.drawSize, matchFormat).map((match) => ({
         ...match,
         result: "unplayed",
         setScores: createEmptySetScores(matchFormat),
@@ -341,7 +342,7 @@ export function updateTournamentDetailInputEnabled(
     detailInputEnabled: enabled,
     generatedDraw: enabled || !tournament.generatedDraw ? tournament.generatedDraw : {
       ...tournament.generatedDraw,
-      matches: tournament.generatedDraw.matches.map((match) => ({
+      matches: ensureTournamentMatches(tournament.generatedDraw, tournament.drawSize, matchFormat).map((match) => ({
         ...match,
         setScores: createEmptySetScores(matchFormat),
       })),

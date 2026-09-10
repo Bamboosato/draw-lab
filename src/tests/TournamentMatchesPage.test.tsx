@@ -54,6 +54,16 @@ describe("TournamentMatchesPage", () => {
     expect(screen.getByRole("checkbox", { name: "詳細入力" }).closest(".section-card-heading")).toBeTruthy();
   });
 
+  it("旧形式のmatchesなしドローでも対戦カード画面を表示できる", () => {
+    const tournament = makeTournamentWithDraw();
+    delete (tournament.generatedDraw as { matches?: unknown }).matches;
+    useTournamentMock.mockReturnValue(tournament);
+
+    expect(() => render(<TournamentMatchesPage />)).not.toThrow();
+    expect(screen.getByText("対戦カード")).toBeTruthy();
+    expect(screen.getAllByText(/第1試合/).length).toBeGreaterThan(0);
+  });
+
   it("確定すると対戦結果を入力できる", () => {
     const tournament = makeTournamentWithDraw();
     useTournamentMock.mockReturnValue(tournament);

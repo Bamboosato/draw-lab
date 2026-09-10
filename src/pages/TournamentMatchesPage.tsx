@@ -33,14 +33,15 @@ export function TournamentMatchesPage() {
   const [unconfirmOpen, setUnconfirmOpen] = useState(false);
   const [detailDisableOpen, setDetailDisableOpen] = useState(false);
   const integration = tournament ? getTournamentIntegration(tournament.id) : undefined;
+  const matchFormat = tournament ? getTournamentMatchFormat(tournament) : 1;
   const validation = useMemo(
     () => tournament ? validateTournamentForUi(tournament, integration) : { errors: [], warnings: [] },
     [integration, tournament],
   );
 
   const matches = useMemo(
-    () => tournament?.generatedDraw ? resolveTournamentMatches(tournament.generatedDraw, tournament.entrants) : [],
-    [tournament],
+    () => tournament?.generatedDraw ? resolveTournamentMatches(tournament.generatedDraw, tournament.entrants, matchFormat) : [],
+    [matchFormat, tournament],
   );
   const roundCount = tournament ? Math.log2(tournament.drawSize) : 0;
   const rounds = Array.from({ length: roundCount }, (_, index) => index + 1);
@@ -68,7 +69,6 @@ export function TournamentMatchesPage() {
 
   const readOnly = tournament.status === "completed";
   const selectionConfirmed = getTournamentMatchSelectionStatus(tournament) === "confirmed";
-  const matchFormat = getTournamentMatchFormat(tournament);
 
   const saveResult = (matchId: string, result: TournamentMatchResult): void => {
     try {
@@ -127,7 +127,7 @@ export function TournamentMatchesPage() {
     }
   };
 
-  const hasEnteredScores = tournament.generatedDraw.matches.some((match) =>
+  const hasEnteredScores = matches.some((match) =>
     match.setScores?.some((score) => score.participantA !== null || score.participantB !== null) ?? false,
   );
 
