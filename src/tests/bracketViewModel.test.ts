@@ -1,9 +1,95 @@
 import { describe, expect, it } from "vitest";
 import { buildBracketViewModel } from "../domain/bracketViewModel";
+import { createTournamentMatches, updateTournamentMatchSetScore } from "../domain/tournamentMatches";
 import type { GeneratedDraw } from "../domain/types";
 import { makeEntrant, makeTournament } from "./testFactory";
 
 describe("buildBracketViewModel", () => {
+  it("converts a completed one-set score to winner-loser game order", () => {
+    const tournament = makeTournament({ drawSize: 4, matchFormat: 1, entrants: [
+      makeEntrant(1), makeEntrant(2), makeEntrant(3), makeEntrant(4),
+    ] });
+    const slots = tournament.entrants.map((entrant, index) => ({
+      position: index + 1,
+      entrantId: entrant.id,
+      isBye: false,
+    }));
+    let draw: GeneratedDraw = {
+      id: "draw-1",
+      tournamentId: tournament.id,
+      randomSeed: "view-seed",
+      generatedAt: "2026-07-02T00:00:00.000Z",
+      slots,
+      matches: createTournamentMatches(slots, 4, undefined, 1),
+    };
+
+    draw = updateTournamentMatchSetScore(draw, "match-1", 1, 0, "participantA", 3);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 1, 0, "participantB", 6);
+
+    expect(buildBracketViewModel(tournament, draw).scoreDisplays).toEqual([{
+      matchId: "match-1",
+      mode: "winner-loser-games",
+      winnerValue: 6,
+      loserValue: 3,
+    }]);
+  });
+
+  it("converts three-set scores to participant-row set wins", () => {
+    const tournament = makeTournament({ drawSize: 4, matchFormat: 3, entrants: [
+      makeEntrant(1), makeEntrant(2), makeEntrant(3), makeEntrant(4),
+    ] });
+    const slots = tournament.entrants.map((entrant, index) => ({
+      position: index + 1,
+      entrantId: entrant.id,
+      isBye: false,
+    }));
+    let draw: GeneratedDraw = {
+      id: "draw-1",
+      tournamentId: tournament.id,
+      randomSeed: "view-seed",
+      generatedAt: "2026-07-02T00:00:00.000Z",
+      slots,
+      matches: createTournamentMatches(slots, 4, undefined, 3),
+    };
+
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 0, "participantA", 6);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 0, "participantB", 4);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 1, "participantA", 3);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 1, "participantB", 6);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 2, "participantA", 6);
+    draw = updateTournamentMatchSetScore(draw, "match-1", 3, 2, "participantB", 1);
+
+    expect(buildBracketViewModel(tournament, draw).scoreDisplays).toEqual([{
+      matchId: "match-1",
+      mode: "participant-set-wins",
+      participantAValue: 2,
+      participantBValue: 1,
+    }]);
+  });
+
+  it("does not display a score when a completed match has no complete set score", () => {
+    const tournament = makeTournament({ drawSize: 4, matchFormat: 3, entrants: [
+      makeEntrant(1), makeEntrant(2), makeEntrant(3), makeEntrant(4),
+    ] });
+    const slots = tournament.entrants.map((entrant, index) => ({
+      position: index + 1,
+      entrantId: entrant.id,
+      isBye: false,
+    }));
+    const draw: GeneratedDraw = {
+      id: "draw-1",
+      tournamentId: tournament.id,
+      randomSeed: "view-seed",
+      generatedAt: "2026-07-02T00:00:00.000Z",
+      slots,
+      matches: createTournamentMatches(slots, 4, undefined, 3).map((match) => (
+        match.id === "match-1" ? { ...match, result: "participantAWin" as const } : match
+      )),
+    };
+
+    expect(buildBracketViewModel(tournament, draw).scoreDisplays).toEqual([]);
+  });
+
   it("converts tournament and draw data into renderer-friendly rows", () => {
     const tournament = makeTournament({
       title: "Summer Cup",

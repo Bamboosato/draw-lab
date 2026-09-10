@@ -8,6 +8,7 @@ import {
   getDistributedTextLayout,
   getPrintPageBrackets,
   getPrintPageMatches,
+  getPrintPageScoreDisplays,
   getRoundConnectorPath,
   getSingleSideFinalConnectorPath,
   getSlotContentLayout,
@@ -182,6 +183,7 @@ describe("draw output options", () => {
       drawSize: 4,
       outputOptions: DEFAULT_DRAW_OUTPUT_OPTIONS,
       matches: [],
+      scoreDisplays: [],
       rows: [{ position: 1, label: "A", isBye: false }],
     })).toBe(210);
   });
@@ -192,6 +194,7 @@ describe("draw output options", () => {
       drawSize: 4,
       outputOptions: DEFAULT_DRAW_OUTPUT_OPTIONS,
       matches: [],
+      scoreDisplays: [],
       rows: [{
         position: 1,
         label: "チーム5-1 / チーム5-2",
@@ -211,6 +214,7 @@ describe("draw output options", () => {
       drawSize: 4,
       outputOptions: DEFAULT_DRAW_OUTPUT_OPTIONS,
       matches: [],
+      scoreDisplays: [],
       rows: [{
         position: 1,
         label: "東京都市大学附属高等学校 / 神奈川県立総合高等学校",
@@ -313,10 +317,17 @@ describe("draw output options", () => {
       state: "ready" as const,
     }));
 
-    expect(getPrintPageMatches(matches, 4, 1).map((match) => [match.id, match.round, match.matchNo])).toEqual([
+    const pageMatches = getPrintPageMatches(matches, 4, 1);
+    expect(pageMatches.map((match) => [match.id, match.round, match.matchNo])).toEqual([
       ["r1-3", 1, 1],
       ["r1-4", 1, 2],
       ["r2-2", 2, 1],
+    ]);
+    expect(getPrintPageScoreDisplays([
+      { matchId: "r1-1", mode: "winner-loser-games", winnerValue: 6, loserValue: 3 },
+      { matchId: "r1-3", mode: "winner-loser-games", winnerValue: 7, loserValue: 5 },
+    ], pageMatches)).toEqual([
+      { matchId: "r1-3", mode: "winner-loser-games", winnerValue: 7, loserValue: 5 },
     ]);
   });
 });
