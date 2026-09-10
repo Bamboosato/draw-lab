@@ -1073,6 +1073,13 @@ type InstallGuideState = {
 - `display-mode: standalone` を基本に判定し、iPhone・iPadでは `navigator.standalone` を補助的に使用する
 - standalone起動中は `hidden` とし、インストールイベントを受信していても案内を表示しない
 - 非standaloneのiPhone・iPadは `iosManual` とし、「インストール方法」から手動手順を表示する
+
+### 17.5.5 文書タイトル
+
+- トーナメントまたはリーグの編集中・表示中は、現在の大会名がある場合に文書タイトルを `DrawLab　＞大会名` とする。
+- 大会名が未入力、一覧画面、ホーム画面、復元画面など現在の大会がない画面では文書タイトルを `DrawLab` とする。
+- 大会名の前後の空白だけは除去してから表示し、空白だけの大会名は未入力として扱う。
+- standaloneのPWAでは文書タイトルがWindowsのタイトルバーに反映される。タイトルバー上の位置、文字サイズ、長いタイトルの省略方法はOSおよびブラウザに委ねる。
 - その他のブラウザで `beforeinstallprompt` を受信した場合はイベントを保持して `browserInstall` とする
 - `prompt()` は「インストール」押下を契機に1回だけ呼び、イベントを再利用しない
 - `appinstalled` の受信またはインストール成功後は `hidden` とする

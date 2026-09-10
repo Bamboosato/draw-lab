@@ -44,7 +44,7 @@ beforeEach(() => {
 });
 
 describe("LeagueDashboardPage", () => {
-  it("表示タブを対戦カードと対戦結果にまとめ、対戦結果は星取表を順位表の上に表示する", () => {
+  it("表示タブを結果入力とリーグ表・順位表にまとめ、リーグ表を順位表の上に表示する", () => {
     render(<LeagueDashboardPage />);
 
     const groupPanel = screen.getByRole("region", { name: "グループ選択" });
@@ -56,9 +56,11 @@ describe("LeagueDashboardPage", () => {
     expect(screen.getByRole("tab", { name: /^A$/ }).className).toContain("active");
 
     const viewTabs = screen.getByRole("tablist", { name: "表示" });
-    expect(Array.from(viewTabs.querySelectorAll('[role="tab"]'), (tab) => tab.textContent)).toEqual(["対戦カード", "対戦結果"]);
-    expect(screen.getByRole("tab", { name: "対戦カード" }).getAttribute("aria-selected")).toBe("true");
-    expect(screen.queryByRole("heading", { name: "星取表" })).toBeNull();
+    expect(Array.from(viewTabs.querySelectorAll('[role="tab"]'), (tab) => tab.textContent)).toEqual(["リーグ表・順位表", "結果入力"]);
+    expect(screen.getByRole("tab", { name: "結果入力" }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("tab", { name: "リーグ表・順位表" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("heading", { name: "リーグ表" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "結果入力" }));
     expect(screen.getByText("各試合の勝敗を選択してください。詳細入力を有効にすると、セットごとのゲーム数を入力できます。")).toBeTruthy();
     expect(document.querySelector(".match-winner-selector")).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "詳細入力" }).closest("label")?.getAttribute("title")).toBe("ゲーム数を入力します。ONからOFFに変えると入力済みゲーム数がリセットされます。");
@@ -66,11 +68,11 @@ describe("LeagueDashboardPage", () => {
     expect(screen.getByRole("button", { name: "引き分け" })).toHaveProperty("disabled", false);
     expect(screen.getAllByRole("textbox", { name: "備考" }).every((input) => input.getAttribute("placeholder") === "試合に関する補足を入力してください（任意）")).toBe(true);
 
-    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
 
     const resultsPanel = document.querySelector(".league-results-stack") as HTMLElement;
-    expect(screen.getByRole("tab", { name: "対戦結果" }).getAttribute("aria-selected")).toBe("true");
-    expect(Array.from(resultsPanel.querySelectorAll("h2"), (heading) => heading.textContent)).toEqual(["星取表", "順位表"]);
+    expect(screen.getByRole("tab", { name: "リーグ表・順位表" }).getAttribute("aria-selected")).toBe("true");
+    expect(Array.from(resultsPanel.querySelectorAll("h2"), (heading) => heading.textContent)).toEqual(["リーグ表", "順位表"]);
     expect(screen.getByText("順位は勝点、直接対決、セット率、ゲーム率、グループ内の参加者順で自動計算します。")).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "詳細表示" }).closest("label")?.getAttribute("title")).toBe("ゲーム数を表示します。対戦カードの詳細入力ON時のみ利用できます。");
     expect(resultsPanel.querySelector(".league-matrix thead .league-participant-column")).toBeTruthy();
@@ -78,13 +80,48 @@ describe("LeagueDashboardPage", () => {
     expect(resultsPanel.querySelector(".league-standings-table thead .league-participant-column")).toBeTruthy();
     expect(resultsPanel.querySelector(".league-standings-table tbody .league-participant-column")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("tab", { name: "対戦カード" }));
+    fireEvent.click(screen.getByRole("tab", { name: "結果入力" }));
     expect(screen.getByRole("heading", { name: "対戦カード" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "星取表" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "リーグ表" })).toBeNull();
+  });
+
+  it("リーグ表の有効セルから結果入力の該当カードへ移動する", () => {
+    const scrollIntoView = vi.fn();
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+
+    try {
+      render(<LeagueDashboardPage />);
+
+      const cells = screen.getAllByRole("button", { name: /結果入力へ移動$/ });
+      expect(cells).toHaveLength(2);
+      fireEvent.click(cells[1]!);
+
+      expect(screen.getByRole("tab", { name: "結果入力" }).getAttribute("aria-selected")).toBe("true");
+      const target = document.getElementById("league-match-m1");
+      expect(target).toBeTruthy();
+      expect(target?.className).toContain("league-match-card-target");
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "center" });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
+  it("リーグ表の対角セルと無効カードは結果入力への移動対象にしない", () => {
+    const base = makeLeague();
+    useLeagueMock.mockReturnValue({
+      ...base,
+      matches: base.matches.map((match) => ({ ...match, isValid: false })),
+    });
+
+    render(<LeagueDashboardPage />);
+
+    expect(screen.queryAllByRole("button", { name: /結果入力へ移動$/ })).toHaveLength(0);
   });
 
   it("対戦者名ボタンからリーグの勝敗を保存する", () => {
     render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "結果入力" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Aの勝ち" }));
 
@@ -97,6 +134,7 @@ describe("LeagueDashboardPage", () => {
     const base = makeLeague();
     useLeagueMock.mockReturnValue({ ...base, matchFormat: 3 });
     render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "結果入力" }));
 
     const detailInput = screen.getByRole("checkbox", { name: "詳細入力" });
     expect(detailInput).toHaveProperty("checked", false);
@@ -116,6 +154,7 @@ describe("LeagueDashboardPage", () => {
       ] }],
     });
     render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "結果入力" }));
 
     expect(screen.getAllByRole("spinbutton")).toHaveLength(6);
     fireEvent.change(screen.getByRole("spinbutton", { name: "第1試合 1セット A側ゲーム数" }), { target: { value: "6" } });
@@ -132,6 +171,7 @@ describe("LeagueDashboardPage", () => {
       matches: [{ ...base.matches[0]!, setScores: [{ participantA: 6, participantB: null }] }],
     });
     render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "結果入力" }));
 
     fireEvent.change(screen.getByRole("spinbutton", { name: "第1試合 1セット B側ゲーム数" }), { target: { value: "1" } });
     expect(saveLeagueMock).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -148,6 +188,7 @@ describe("LeagueDashboardPage", () => {
       matches: [{ ...base.matches[0]!, setScores: [{ participantA: 6, participantB: 1 }] }],
     });
     render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "結果入力" }));
 
     fireEvent.click(screen.getByRole("checkbox", { name: "詳細入力" }));
     expect(screen.getByRole("dialog")).toBeTruthy();
@@ -175,6 +216,7 @@ describe("LeagueDashboardPage", () => {
     });
 
     render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "結果入力" }));
 
     expect(document.querySelectorAll(".league-match-card")).toHaveLength(2);
     expect(Array.from(document.querySelectorAll(".league-match-card .match-card-heading strong"), (heading) => heading.textContent)).toEqual(["第1試合", "第2試合"]);
@@ -245,11 +287,11 @@ describe("LeagueDashboardPage", () => {
     expect(document.querySelector(".league-matrix-print-page")?.className).toContain("set-count-3");
   });
 
-  it("対戦結果では参加者を表示名とメンバー名の読み取り専用で表示する", () => {
+  it("リーグ表・順位表では参加者を表示名とメンバー名の読み取り専用で表示する", () => {
     useLeagueMock.mockReturnValue(makeDoublesLeague());
     render(<LeagueDashboardPage />);
 
-    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
 
     expect(screen.getAllByRole("columnheader", { name: "参加者" })).toHaveLength(2);
     expect(screen.getByRole("columnheader", { name: "ペア01" })).toBeTruthy();
@@ -263,7 +305,7 @@ describe("LeagueDashboardPage", () => {
 
   it("順位表は自動順位と訂正欄を分け、訂正ボタンで保存モードを切り替える", () => {
     render(<LeagueDashboardPage />);
-    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
 
     expect(Array.from(document.querySelectorAll(".league-standings-table thead th"), (header) => header.textContent)).toEqual([
       "参加者", "試合", "勝", "分", "負", "勝点", "順位", "訂正",
@@ -293,13 +335,13 @@ describe("LeagueDashboardPage", () => {
   it("完了済みリーグでは訂正ボタンを無効にする", () => {
     useLeagueMock.mockReturnValue({ ...makeLeague(), status: "completed" });
     render(<LeagueDashboardPage />);
-    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
 
     expect(screen.getByRole("button", { name: "訂正" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "訂正" }).getAttribute("title")).toBe("完了済みのリーグは読み取り専用のため、順位を訂正できません。");
   });
 
-  it("星取表では無効の対戦をハイフンで表示し、対角セルを斜線で表示する", () => {
+  it("リーグ表では無効の対戦をハイフンで表示し、対角セルを斜線で表示する", () => {
     const league = makeLeague();
     useLeagueMock.mockReturnValue({
       ...league,
@@ -307,7 +349,7 @@ describe("LeagueDashboardPage", () => {
     });
 
     render(<LeagueDashboardPage />);
-    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
 
     expect(screen.getAllByText("-")).toHaveLength(2);
     expect(screen.queryByText("無")).toBeNull();
@@ -319,7 +361,7 @@ describe("LeagueDashboardPage", () => {
     expect(screen.queryByText("—")).toBeNull();
   });
 
-  it("星取表では勝敗を白丸・黒丸・三角で表示する", () => {
+  it("リーグ表では勝敗を白丸・黒丸・三角で表示する", () => {
     const league = makeLeague();
     useLeagueMock.mockReturnValue({
       ...league,
@@ -327,7 +369,7 @@ describe("LeagueDashboardPage", () => {
     });
 
     render(<LeagueDashboardPage />);
-    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
 
     expect(screen.getAllByText("○")).toHaveLength(1);
     expect(screen.getAllByText("●")).toHaveLength(1);
@@ -339,12 +381,12 @@ describe("LeagueDashboardPage", () => {
     });
 
     render(<LeagueDashboardPage />);
-    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
 
     expect(screen.getAllByText("△")).toHaveLength(2);
   });
 
-  it("詳細表示ONの星取表では勝敗記号の下にセットごとの詳細を表示する", () => {
+  it("詳細表示ONのリーグ表では勝敗記号の下にセットごとの詳細を表示する", () => {
     const base = makeLeague();
     useLeagueMock.mockReturnValue({
       ...base,
@@ -363,7 +405,7 @@ describe("LeagueDashboardPage", () => {
     });
 
     render(<LeagueDashboardPage />);
-    fireEvent.click(screen.getByRole("tab", { name: "対戦結果" }));
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
 
     expect(screen.getByRole("checkbox", { name: "詳細表示" })).toHaveProperty("checked", true);
     expect(screen.getAllByText("6-1")).toHaveLength(1);
