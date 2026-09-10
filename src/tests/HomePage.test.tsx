@@ -60,6 +60,7 @@ describe("HomePage", () => {
           slots: [],
           matches: [],
         },
+        matchSelectionStatus: "confirmed" as const,
       }),
       makeTournament({ id: "tournament-completed", status: "completed" }),
     ];

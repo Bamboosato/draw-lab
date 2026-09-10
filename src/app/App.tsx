@@ -17,6 +17,7 @@ import { LeagueMatchesPage } from "../pages/LeagueMatchesPage";
 import { LeagueParticipantsPage } from "../pages/LeagueParticipantsPage";
 import { HomePage } from "../pages/HomePage";
 import {
+  getTournamentStatus,
   getTournamentStepAccess,
   getTournamentStepPath,
   type TournamentStep,
@@ -24,7 +25,7 @@ import {
 import { TournamentProvider, useTournament, useTournaments } from "./TournamentProvider";
 import { LeagueProvider, useLeague, useLeagues } from "./LeagueProvider";
 import { getDocumentTitle } from "./documentTitle";
-import { getLeagueStepAccess, getLeagueStepPath, type LeagueStep } from "./leagueFlow";
+import { getLeagueStatus, getLeagueStepAccess, getLeagueStepPath, type LeagueStep } from "./leagueFlow";
 import {
   useViewTransitionNavigate,
   ViewTransitionRedirect,
@@ -37,11 +38,17 @@ export function App() {
   const isLeagueRoute = location.pathname.startsWith("/leagues/");
   const tournament = useTournament(isTournamentRoute ? id : undefined);
   const league = useLeague(isLeagueRoute ? id : undefined);
+  const { getTournamentIntegration } = useTournaments();
   const competitionTitle = isTournamentRoute ? tournament?.title : isLeagueRoute ? league?.title : undefined;
+  const competitionStatus = isTournamentRoute && tournament
+    ? getTournamentStatus(tournament, getTournamentIntegration(tournament.id)).label
+    : isLeagueRoute && league
+      ? getLeagueStatus(league).label
+      : undefined;
 
   useEffect(() => {
-    document.title = getDocumentTitle(competitionTitle);
-  }, [competitionTitle]);
+    document.title = getDocumentTitle(competitionTitle, competitionStatus);
+  }, [competitionStatus, competitionTitle]);
 
   return (
     <AppShell>

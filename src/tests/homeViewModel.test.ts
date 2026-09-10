@@ -20,6 +20,7 @@ describe("homeViewModel", () => {
           slots: [],
           matches: [],
         },
+        matchSelectionStatus: "confirmed" as const,
       });
       const completedTournament = makeTournament({ id: "tournament-completed", status: "completed" });
       const editingLeague = { ...createDefaultLeague(), id: "league-editing" };
@@ -55,6 +56,7 @@ describe("homeViewModel", () => {
           slots: [],
           matches: [],
         },
+        matchSelectionStatus: "confirmed" as const,
       });
       const editing = makeTournament({ id: "tournament-editing" });
       const completed = makeTournament({ id: "tournament-completed", status: "completed" });
