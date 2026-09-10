@@ -1,6 +1,10 @@
 import type { Tournament } from "../domain/types";
 import type { TournamentIntegrationRecord } from "../domain/leagueTournamentTypes";
-import { isTournamentDrawCurrent, validateTournamentForUi } from "./tournamentModel";
+import {
+  getTournamentMatchSelectionStatus,
+  isTournamentDrawCurrent,
+  validateTournamentForUi,
+} from "./tournamentModel";
 
 export const TOURNAMENT_STEPS = [
   { key: "basic", label: "基本情報", path: "edit/basic" },
@@ -27,7 +31,10 @@ export function getTournamentStatus(
     return { label: "完了", className: "generated", category: "completed" };
   }
 
-  if (isTournamentDrawCurrent(tournament, integration)) {
+  if (
+    getTournamentMatchSelectionStatus(tournament) === "confirmed"
+    && isTournamentDrawCurrent(tournament, integration)
+  ) {
     return { label: "運用中", className: "generated", category: "operating" };
   }
 

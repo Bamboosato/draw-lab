@@ -1,6 +1,16 @@
 const APP_NAME = "DrawLab";
+export type DocumentTitleStatus = "編集中" | "運用中" | "完了";
 
-export function getDocumentTitle(competitionTitle?: string): string {
+export function getDocumentTitle(
+  competitionTitle?: string,
+  status?: DocumentTitleStatus,
+): string {
   const normalizedTitle = competitionTitle?.trim();
-  return normalizedTitle ? `${APP_NAME}　＞${normalizedTitle}` : APP_NAME;
+  if (!normalizedTitle) {
+    return APP_NAME;
+  }
+
+  return status
+    ? `${APP_NAME}　＞${normalizedTitle}｜${status}`
+    : `${APP_NAME}　＞${normalizedTitle}`;
 }

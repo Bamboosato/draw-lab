@@ -230,6 +230,7 @@ describe("TournamentListPage", () => {
         slots: [],
         matches: [],
       },
+      matchSelectionStatus: "confirmed" as const,
     };
     const completed = { ...createDefaultTournament(), id: "tournament-completed", title: "完了大会", status: "completed" as const };
     useTournamentsMock.mockReturnValue({

@@ -62,11 +62,37 @@ describe("tournamentFlow", () => {
         slots: [],
         matches: [],
       },
+      matchSelectionStatus: "confirmed",
     });
 
     expect(getTournamentStatus(makeTournament({ generatedDraw: undefined }))).toMatchObject({ label: "編集中", category: "editing" });
     expect(getTournamentStatus(generated)).toMatchObject({ label: "運用中", category: "operating" });
     expect(getTournamentStatus({ ...generated, status: "completed" })).toMatchObject({ label: "完了", category: "completed" });
+  });
+
+  it("生成済みドローでも対戦カード未確定なら編集中として扱う", () => {
+    const tournament = makeTournament({
+      generatedDraw: {
+        id: "draw-1",
+        tournamentId: "tournament-1",
+        randomSeed: "seed-1",
+        generatedAt: "2026-07-03T00:00:00.000Z",
+        slots: [],
+        matches: [],
+      },
+      matchSelectionStatus: "pending",
+    });
+
+    expect(getTournamentStatus(tournament)).toMatchObject({ label: "編集中", category: "editing" });
+  });
+
+  it("対戦カード確定済みでもドローがなければ編集中として扱う", () => {
+    const tournament = makeTournament({
+      generatedDraw: undefined,
+      matchSelectionStatus: "confirmed",
+    });
+
+    expect(getTournamentStatus(tournament)).toMatchObject({ label: "編集中", category: "editing" });
   });
 
   it("完了済みトーナメントでは編集画面を提供せず、トーナメント表から再開させる", () => {
