@@ -23,6 +23,7 @@ import {
 } from "./tournamentFlow";
 import { TournamentProvider, useTournament, useTournaments } from "./TournamentProvider";
 import { LeagueProvider, useLeague, useLeagues } from "./LeagueProvider";
+import { getDocumentTitle } from "./documentTitle";
 import { getLeagueStepAccess, getLeagueStepPath, type LeagueStep } from "./leagueFlow";
 import {
   useViewTransitionNavigate,
@@ -30,6 +31,18 @@ import {
 } from "./viewTransitionNavigation";
 
 export function App() {
+  const location = useLocation();
+  const { id } = useParams();
+  const isTournamentRoute = location.pathname.startsWith("/tournaments/");
+  const isLeagueRoute = location.pathname.startsWith("/leagues/");
+  const tournament = useTournament(isTournamentRoute ? id : undefined);
+  const league = useLeague(isLeagueRoute ? id : undefined);
+  const competitionTitle = isTournamentRoute ? tournament?.title : isLeagueRoute ? league?.title : undefined;
+
+  useEffect(() => {
+    document.title = getDocumentTitle(competitionTitle);
+  }, [competitionTitle]);
+
   return (
     <AppShell>
       <Outlet />

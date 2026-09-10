@@ -954,6 +954,40 @@ a {
   line-height: 1.05;
 }
 
+.league-matrix-match-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.league-matrix-match-link:hover {
+  background: #eff6ff;
+}
+
+.league-matrix-match-link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.league-match-card {
+  scroll-margin-block: 24px;
+}
+
+.league-match-card-target {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .league-matrix-result-symbol {
   font-weight: 800;
 }
