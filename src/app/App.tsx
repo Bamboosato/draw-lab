@@ -24,7 +24,7 @@ import {
 } from "./tournamentFlow";
 import { TournamentProvider, useTournament, useTournaments } from "./TournamentProvider";
 import { LeagueProvider, useLeague, useLeagues } from "./LeagueProvider";
-import { getDocumentTitle } from "./documentTitle";
+import { getDocumentTitle, type DocumentTitleCompetition } from "./documentTitle";
 import { getLeagueStatus, getLeagueStepAccess, getLeagueStepPath, type LeagueStep } from "./leagueFlow";
 import {
   useViewTransitionNavigate,
@@ -34,21 +34,28 @@ import {
 export function App() {
   const location = useLocation();
   const { id } = useParams();
-  const isTournamentRoute = location.pathname.startsWith("/tournaments/");
-  const isLeagueRoute = location.pathname.startsWith("/leagues/");
-  const tournament = useTournament(isTournamentRoute ? id : undefined);
-  const league = useLeague(isLeagueRoute ? id : undefined);
+  const isTournamentArea = location.pathname === "/tournaments" || location.pathname.startsWith("/tournaments/");
+  const isLeagueArea = location.pathname === "/leagues" || location.pathname.startsWith("/leagues/");
+  const isTournamentDetailRoute = location.pathname.startsWith("/tournaments/") && Boolean(id);
+  const isLeagueDetailRoute = location.pathname.startsWith("/leagues/") && Boolean(id);
+  const tournament = useTournament(isTournamentDetailRoute ? id : undefined);
+  const league = useLeague(isLeagueDetailRoute ? id : undefined);
   const { getTournamentIntegration } = useTournaments();
-  const competitionTitle = isTournamentRoute ? tournament?.title : isLeagueRoute ? league?.title : undefined;
-  const competitionStatus = isTournamentRoute && tournament
+  const competition: DocumentTitleCompetition | undefined = isTournamentArea
+    ? "トーナメント"
+    : isLeagueArea
+      ? "リーグ"
+      : undefined;
+  const competitionTitle = isTournamentDetailRoute ? tournament?.title : isLeagueDetailRoute ? league?.title : undefined;
+  const competitionStatus = isTournamentDetailRoute && tournament
     ? getTournamentStatus(tournament, getTournamentIntegration(tournament.id)).label
-    : isLeagueRoute && league
+    : isLeagueDetailRoute && league
       ? getLeagueStatus(league).label
       : undefined;
 
   useEffect(() => {
-    document.title = getDocumentTitle(competitionTitle, competitionStatus);
-  }, [competitionStatus, competitionTitle]);
+    document.title = getDocumentTitle(competition, competitionTitle, competitionStatus);
+  }, [competition, competitionStatus, competitionTitle]);
 
   return (
     <AppShell>
