@@ -203,7 +203,17 @@ export type BracketViewModel = {
   outputOptions: DrawOutputOptions;
   rows: BracketRow[];
   matches: ResolvedTournamentMatch[];
+  scoreDisplays: BracketScoreDisplay[];
   championDrawPosition?: number;
+};
+
+export type BracketScoreDisplay = {
+  matchId: string;
+  mode: "winner-loser-games" | "participant-set-wins";
+  winnerValue?: number;
+  loserValue?: number;
+  participantAValue?: number;
+  participantBValue?: number;
 };
 
 export type BracketRow = {

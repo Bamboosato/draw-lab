@@ -3053,6 +3053,14 @@ fieldset.table-panel {
   stroke: #c2410c;
 }
 
+.svg-score {
+  fill: #c2410c;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  pointer-events: none;
+}
+
 .svg-champion-number {
   fill: #c2410c;
   font-size: 13px;
