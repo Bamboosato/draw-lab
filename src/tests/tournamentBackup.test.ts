@@ -6,6 +6,7 @@ import { createDefaultLeague } from "../app/leagueModel";
 import { createTournamentMatches } from "../domain/tournamentMatches";
 import {
   parseJsonImport,
+  normalizeStoredTournament,
   serializeAllTournaments,
   serializeTournament,
 } from "../app/tournamentPersistence";
@@ -56,6 +57,17 @@ describe("tournament JSON backup", () => {
     if (result.state !== "success" || result.kind !== "tournament") return;
     expect(result.tournament.generatedDraw?.matches).toHaveLength(3);
     expect(result.tournament.generatedDraw?.matches.every((match) => match.result === "unplayed")).toBe(true);
+  });
+
+  it("IndexedDBから読み込んだ旧形式のmatchesなしドローを実行時に補完する", () => {
+    const source = createTournament("legacy-stored-source");
+    delete (source.generatedDraw as { matches?: unknown }).matches;
+
+    const normalized = normalizeStoredTournament(source);
+
+    expect(normalized.generatedDraw?.matches).toHaveLength(3);
+    expect(normalized.generatedDraw?.matches.every((match) => match.result === "unplayed")).toBe(true);
+    expect(normalized.title).toBe(source.title);
   });
 
   it("imports a stale individual draw as ungenerated", () => {

@@ -14,6 +14,7 @@ import { initializeAppTournamentStorage } from "../storage/localStorageMigration
 import { getTournamentRepository } from "../storage/tournamentRepository";
 import { getTournamentIntegrationRepository } from "../storage/tournamentIntegrationRepository";
 import { cloneTournamentIntegration } from "./leagueTournamentAdapter";
+import { normalizeStoredTournament } from "./tournamentPersistence";
 import {
   createDefaultTournament,
   hasTournamentContentChanged,
@@ -62,7 +63,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         if (!active) {
           return;
         }
-        setTournaments(loaded);
+        setTournaments(loaded.map(normalizeStoredTournament));
         setIntegrations(loadedIntegrations);
         setStorageStatus("ready");
         setStorageError(undefined);

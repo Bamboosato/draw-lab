@@ -26,7 +26,7 @@ export function buildBracketViewModel(tournament: Tournament, draw: GeneratedDra
       };
     });
 
-  const matches = resolveTournamentMatches(draw, normalizedTournament.entrants);
+  const matches = resolveTournamentMatches(draw, normalizedTournament.entrants, normalizedTournament.matchFormat);
   const finalMatch = matches.find((match) => match.round === Math.log2(normalizedTournament.drawSize));
   const championEntrantId = finalMatch?.winnerEntrantId;
 

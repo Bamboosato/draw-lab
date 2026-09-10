@@ -12,7 +12,7 @@ import type {
 } from "../domain/types";
 import type { TournamentIntegrationRecord, TournamentIntegrationParticipant } from "../domain/leagueTournamentTypes";
 import { normalizeDrawOutputOptions } from "../domain/outputOptions";
-import { createTournamentMatches } from "../domain/tournamentMatches";
+import { createTournamentMatches, ensureTournamentMatches } from "../domain/tournamentMatches";
 import { normalizeSetScores } from "../domain/matchScoring";
 import { VALID_DRAW_SIZES } from "../domain/types";
 import {
@@ -20,6 +20,7 @@ import {
   createGenerationInputSignature,
   createId,
   createRandomSeed,
+  getTournamentMatchFormat,
   isTournamentDrawCurrent,
   touchTournament,
 } from "./tournamentModel";
@@ -208,6 +209,23 @@ export function createSampleJson(): string {
 
 export function coerceStoredTournament(value: unknown): Tournament {
   return coerceTournament(value);
+}
+
+export function normalizeStoredTournament(tournament: Tournament): Tournament {
+  const generatedDraw = tournament.generatedDraw;
+  const storedMatches = (generatedDraw as (GeneratedDraw & { matches?: unknown }) | undefined)?.matches;
+
+  if (!generatedDraw || Array.isArray(storedMatches) && storedMatches.length > 0) {
+    return tournament;
+  }
+
+  return {
+    ...tournament,
+    generatedDraw: {
+      ...generatedDraw,
+      matches: ensureTournamentMatches(generatedDraw, tournament.drawSize, getTournamentMatchFormat(tournament)),
+    },
+  };
 }
 
 export function cloneImportedTournament(value: unknown, now = new Date().toISOString()): Tournament {
