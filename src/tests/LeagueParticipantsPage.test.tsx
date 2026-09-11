@@ -26,7 +26,7 @@ vi.mock("../app/viewTransitionNavigation", () => ({
   useViewTransitionNavigate: () => navigateMock,
 }));
 
-import { createDefaultLeague } from "../app/leagueModel";
+import { createDefaultLeague, createLeagueParticipant } from "../app/leagueModel";
 import { LeagueParticipantsPage } from "../pages/LeagueParticipantsPage";
 
 afterEach(cleanup);
@@ -62,7 +62,7 @@ describe("LeagueParticipantsPage", () => {
     expect(updateLeagueMock).not.toHaveBeenCalled();
   });
 
-  it("確認をキャンセルすると参加単位と貼り付け内容を変更前の状態に戻す", async () => {
+  it("確認をキャンセルすると参加単位を戻し、未選出参加者の貼り付けは確認しない", async () => {
     render(<LeagueParticipantsPage />);
     const input = screen.getByRole("textbox", { name: "1 選手名" }) as HTMLInputElement;
     const paste = screen.getByRole("textbox", { name: "TSV/CSV貼り付け" }) as HTMLTextAreaElement;
@@ -76,11 +76,10 @@ describe("LeagueParticipantsPage", () => {
 
     fireEvent.change(paste, { target: { value: "C\nD" } });
     fireEvent.click(screen.getByRole("button", { name: "貼り付けを取り込み" }));
-    expect(screen.getByRole("dialog")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
 
-    expect(paste.value).toBe("C\nD");
-    expect(updateLeagueMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(paste.value).toBe("");
+    expect(updateLeagueMock).toHaveBeenCalledTimes(1);
   });
 
   it("確認すると参加単位の変更と構造リセットを反映し、勝点設定を保持する", () => {
@@ -117,6 +116,41 @@ describe("LeagueParticipantsPage", () => {
 
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(updateLeagueMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("空の入力行を追加するだけではリセット確認を表示しない", () => {
+    render(<LeagueParticipantsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "名簿のその他の操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "名簿の入力行を追加" }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(updateLeagueMock).toHaveBeenCalledWith(expect.objectContaining({
+      groups: expect.any(Array),
+      matches: expect.any(Array),
+    }));
+  });
+
+  it("既存構造がある状態で新規参加者を入力しても、選出までは確認しない", () => {
+    const emptyParticipant = createLeagueParticipant(3, "individual");
+    const league = makeLeague({
+      capacity: 3,
+      participants: [...makeLeague().participants, emptyParticipant],
+      selection: { ...makeLeague().selection, selectedParticipantIds: ["p1", "p2"], reserveParticipantIds: [] },
+    });
+    useLeagueMock.mockReturnValue(league);
+    render(<LeagueParticipantsPage />);
+
+    const input = screen.getByRole("textbox", { name: "3 選手名" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "C" } });
+    fireEvent.blur(input);
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(updateLeagueMock).toHaveBeenCalledWith(expect.objectContaining({
+      groups: league.groups,
+      matches: league.matches,
+      participants: expect.arrayContaining([expect.objectContaining({ id: emptyParticipant.id, selectionStatus: "reserve" })]),
+    }));
   });
 
   it("トーナメント名簿画面に合わせた操作項目と詳細列開閉を表示する", () => {
@@ -192,6 +226,66 @@ describe("LeagueParticipantsPage", () => {
       selection: expect.objectContaining({ mode: "manual", selectedParticipantIds: ["p1", "p2"] }),
       participants: expect.arrayContaining([expect.objectContaining({ id: "p2", selectionStatus: "selected" })]),
     }));
+  });
+
+  it("選出済み行の入替から補欠をプルダウンで選択し、参加者構造を更新する", () => {
+    const league = makeLeague({
+      participants: [
+        { id: "p1", displayName: "A", participantType: "individual" as const, memberNames: ["A"], team: "Aチーム", region: "東京", note: "", selectionStatus: "selected" as const },
+        { id: "p2", displayName: "B", participantType: "individual" as const, memberNames: ["B"], team: "Bチーム", region: "大阪", note: "", selectionStatus: "selected" as const },
+        { id: "p3", displayName: "C", participantType: "individual" as const, memberNames: ["C"], team: "Cチーム", region: "千葉", note: "", selectionStatus: "reserve" as const },
+      ],
+      selection: { ...createDefaultLeague().selection, mode: "manual" as const, selectedParticipantIds: ["p1", "p2"], reserveParticipantIds: ["p3"] },
+      status: "draft" as const,
+      matchSelectionStatus: "pending" as const,
+    });
+    useLeagueMock.mockReturnValue(league);
+    render(<LeagueParticipantsPage />);
+
+    const replaceButtons = screen.getAllByRole("button", { name: "入替" }) as HTMLButtonElement[];
+    expect(replaceButtons[0]?.disabled).toBe(false);
+    expect(replaceButtons[2]?.disabled).toBe(true);
+
+    fireEvent.click(replaceButtons[0]!);
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    const reserveSelect = screen.getByRole("combobox", { name: "入れ替える補欠" }) as HTMLSelectElement;
+    expect(Array.from(reserveSelect.options).map((option) => option.textContent)).toEqual(["補欠参加者を選択してください", "C（Cチーム・千葉）"]);
+    const replaceConfirm = screen.getByRole("button", { name: "入替を実行" }) as HTMLButtonElement;
+    expect(replaceConfirm.disabled).toBe(true);
+
+    fireEvent.change(reserveSelect, { target: { value: "p3" } });
+    expect(replaceConfirm.disabled).toBe(false);
+    fireEvent.click(replaceConfirm);
+
+    const savedLeague = updateLeagueMock.mock.calls[0]?.[0];
+    expect(savedLeague.participants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "p1", selectionStatus: "reserve" }),
+      expect.objectContaining({ id: "p3", selectionStatus: "selected" }),
+    ]));
+    expect(savedLeague.groups[0].participantIds).toEqual(["p3", "p2"]);
+    expect(savedLeague.matches[0].participantAId).toBe("p3");
+    expect(savedLeague.matchSelectionStatus).toBe("pending");
+  });
+
+  it("補欠がいない場合は選出済み行の入替を開始できない", () => {
+    const league = makeLeague({
+      participants: [
+        { id: "p1", displayName: "A", participantType: "individual" as const, memberNames: ["A"], team: "", region: "", note: "", selectionStatus: "selected" as const },
+        { id: "p2", displayName: "B", participantType: "individual" as const, memberNames: ["B"], team: "", region: "", note: "", selectionStatus: "selected" as const },
+      ],
+      selection: { ...createDefaultLeague().selection, mode: "manual" as const, selectedParticipantIds: ["p1", "p2"], reserveParticipantIds: [] },
+    });
+    useLeagueMock.mockReturnValue(league);
+    render(<LeagueParticipantsPage />);
+
+    const replaceButtons = screen.getAllByRole("button", { name: "入替" }) as HTMLButtonElement[];
+    expect(replaceButtons).toHaveLength(2);
+    expect(replaceButtons.every((button) => button.disabled)).toBe(true);
+    expect(replaceButtons[0]?.title).toBe("入れ替え可能な補欠がいません");
+
+    fireEvent.click(replaceButtons[0]!);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("自動選出は現在のチェック状態をリセットして定員分を選出する", () => {
@@ -273,7 +367,7 @@ describe("LeagueParticipantsPage", () => {
 
     expect((screen.getByRole("button", { name: "自動選出" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getAllByRole("checkbox").every((input) => (input as HTMLInputElement).disabled)).toBe(true);
-    expect(screen.getByText("対戦カード確定後のため、参加者の追加・削除・種別変更はできません。")).toBeTruthy();
+    expect(screen.getByText("対戦カード確定後のため、参加者の追加・削除・種別変更・入替はできません。")).toBeTruthy();
     expect(screen.queryByText(/表示名の編集はリーグ表から行えます/)).toBeNull();
   });
 

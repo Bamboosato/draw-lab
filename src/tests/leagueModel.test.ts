@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   completeLeague,
+  replaceSelectedParticipantWithReserve,
   createDefaultLeague,
   createLeagueParticipant,
   mergeLeagueParticipantsIntoEmptyRows,
@@ -16,6 +17,7 @@ import {
   updateMatchSetScore,
   updateMatchValidity,
   updateParticipants,
+  updateSelection,
   updateScoringPolicy,
   unconfirmMatchSelection,
 } from "../app/leagueModel";
@@ -186,6 +188,37 @@ describe("league model state transitions", () => {
       expect(next.matchSelectionStatus).toBe("pending");
     });
 
+    it("空の入力行を追加してもグループとカードを保持する", () => {
+      const league = makeLeague({ status: "draft", matchSelectionStatus: "pending" });
+      const next = updateParticipants(league, [...league.participants, createLeagueParticipant(3, "individual")]);
+
+      expect(next.groups).toEqual(league.groups);
+      expect(next.matches).toEqual(league.matches);
+      expect(next.standings).toMatchObject(league.standings);
+      expect(next.participants).toHaveLength(3);
+    });
+
+    it("既存構造がある状態で新規参加者を入力しても、選出するまでは構造を保持する", () => {
+      const emptyParticipant = createLeagueParticipant(3, "individual");
+      const league = makeLeague({
+        capacity: 3,
+        participants: [...makeLeague().participants, emptyParticipant],
+        selection: { mode: "all", selectedParticipantIds: ["p1", "p2"], reserveParticipantIds: [] },
+        matchSelectionStatus: "pending",
+      });
+      const entered = updateParticipants(league, league.participants.map((participant) => participant.id === emptyParticipant.id
+        ? { ...participant, displayName: "C", memberNames: ["C"] }
+        : participant));
+
+      expect(entered.participants.find((participant) => participant.id === emptyParticipant.id)?.selectionStatus).toBe("reserve");
+      expect(entered.groups).toEqual(league.groups);
+      expect(entered.matches).toEqual(league.matches);
+
+      const selected = updateSelection(entered, "manual", ["p1", "p2", emptyParticipant.id], [], entered.selection.randomSeed);
+      expect(selected.groups).toEqual([]);
+      expect(selected.matches).toEqual([]);
+    });
+
     it("結果入力前の参加単位更新でもグループとカードをクリアする", () => {
       const league = makeLeague({ status: "draft", matchSelectionStatus: "pending" });
       const participants = league.participants.map((participant) => participant.id === "p1"
@@ -198,6 +231,52 @@ describe("league model state transitions", () => {
       expect(next.matchSelectionStatus).toBe("pending");
       expect(next.status).toBe("draft");
       expect(next.scoringPolicy).toEqual(league.scoringPolicy);
+    });
+
+    it("結果入力前の入替では同じグループ位置と未確定カードの構造を維持する", () => {
+      const league = makeLeague({
+        capacity: 2,
+        participants: [
+          { id: "p1", displayName: "A", participantType: "individual", memberNames: ["A"], selectionStatus: "selected" },
+          { id: "p2", displayName: "B", participantType: "individual", memberNames: ["B"], selectionStatus: "selected" },
+          { id: "p3", displayName: "C", participantType: "individual", memberNames: ["C"], selectionStatus: "reserve" },
+        ],
+        selection: { mode: "manual", selectedParticipantIds: ["p1", "p2"], reserveParticipantIds: ["p3"] },
+        groups: [{ id: "g1", name: "A", participantIds: ["p1", "p2"] }],
+        matches: [{ id: "m1", groupId: "g1", order: 3, participantAId: "p1", participantBId: "p2", isValid: false, result: "unplayed" }],
+        matchSelectionStatus: "pending",
+        status: "draft",
+      });
+
+      const next = replaceSelectedParticipantWithReserve(league, "p1", "p3");
+
+      expect(next.participants.find((participant) => participant.id === "p1")?.selectionStatus).toBe("reserve");
+      expect(next.participants.find((participant) => participant.id === "p3")?.selectionStatus).toBe("selected");
+      expect(next.selection).toMatchObject({ mode: "manual", selectedParticipantIds: ["p2", "p3"], reserveParticipantIds: ["p1"] });
+      expect(next.groups[0]?.participantIds).toEqual(["p3", "p2"]);
+      expect(next.matches[0]).toMatchObject({ id: "m1", order: 3, participantAId: "p3", participantBId: "p2", isValid: false, result: "unplayed" });
+      expect(next.standings.map((standing) => standing.participantId)).toEqual(["p3", "p2"]);
+      expect(next.standings.every((standing) => standing.played === 0 && standing.points === 0)).toBe(true);
+      expect(next.matchSelectionStatus).toBe("pending");
+      expect(next.status).toBe("draft");
+    });
+
+    it("確定後または結果入力後の入替は元のリーグを変更しない", () => {
+      const pending = makeLeague({
+        participants: [
+          { id: "p1", displayName: "A", participantType: "individual", memberNames: ["A"], selectionStatus: "selected" },
+          { id: "p2", displayName: "B", participantType: "individual", memberNames: ["B"], selectionStatus: "selected" },
+          { id: "p3", displayName: "C", participantType: "individual", memberNames: ["C"], selectionStatus: "reserve" },
+        ],
+        selection: { mode: "manual", selectedParticipantIds: ["p1", "p2"], reserveParticipantIds: ["p3"] },
+        matchSelectionStatus: "pending",
+        status: "draft",
+      });
+      const confirmed = { ...pending, matchSelectionStatus: "confirmed" as const, status: "scheduled" as const };
+      const withResult = { ...pending, matches: [{ ...pending.matches[0]!, result: "participantAWin" as const }], status: "inProgress" as const };
+
+      expect(replaceSelectedParticipantWithReserve(confirmed, "p1", "p3")).toBe(confirmed);
+      expect(replaceSelectedParticipantWithReserve(withResult, "p1", "p3")).toBe(withResult);
     });
   });
 

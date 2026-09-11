@@ -131,10 +131,12 @@ export function updateParticipants(league: League, participants: LeagueParticipa
       ? "excluded"
       : previous && !isLeagueParticipantEmpty(previous)
         ? previous.selectionStatus
-        : league.selection.mode === "manual" ? "excluded" : "selected";
+        : league.groups.length > 0 || league.matches.length > 0
+          ? normalized.selectionStatus === "selected" ? "selected" : "reserve"
+          : league.selection.mode === "manual" ? "excluded" : "selected";
     return { ...normalized, selectionStatus };
   });
-  const participantsChanged = JSON.stringify(league.participants) !== JSON.stringify(nextParticipants);
+  const participantsChanged = hasSelectedParticipantContentChanged(league.participants, nextParticipants);
   const next = {
     ...league,
     participants: nextParticipants,
@@ -154,7 +156,7 @@ export function updateParticipants(league: League, participants: LeagueParticipa
       status: "draft",
     };
   }
-  return rebuildLeague(next, false);
+  return next;
 }
 
 export function mergeLeagueParticipantsIntoEmptyRows(
@@ -205,6 +207,69 @@ export function updateSelection(
     };
   }
   return rebuildLeague(next, false);
+}
+
+export function canReplaceSelectedParticipantWithReserve(league: League): boolean {
+  return league.status !== "completed"
+    && league.matchSelectionStatus !== "confirmed"
+    && !hasLeagueMatchData(league);
+}
+
+export function replaceSelectedParticipantWithReserve(
+  league: League,
+  selectedParticipantId: string,
+  reserveParticipantId: string,
+): League {
+  if (!canReplaceSelectedParticipantWithReserve(league) || selectedParticipantId === reserveParticipantId) {
+    return league;
+  }
+
+  const selectedParticipant = league.participants.find((participant) => participant.id === selectedParticipantId);
+  const reserveParticipant = league.participants.find((participant) => participant.id === reserveParticipantId);
+  if (!selectedParticipant
+    || !reserveParticipant
+    || selectedParticipant.selectionStatus !== "selected"
+    || reserveParticipant.selectionStatus !== "reserve"
+    || selectedParticipant.participantType !== reserveParticipant.participantType
+    || !isCompleteParticipantForReplacement(selectedParticipant)
+    || !isCompleteParticipantForReplacement(reserveParticipant)) {
+    return league;
+  }
+
+  const participants = league.participants.map((participant) => {
+    if (participant.id === selectedParticipantId) return { ...participant, selectionStatus: "reserve" as const };
+    if (participant.id === reserveParticipantId) return { ...participant, selectionStatus: "selected" as const };
+    return { ...participant };
+  });
+  const groups = league.groups.map((group) => ({
+    ...group,
+    participantIds: group.participantIds.map((participantId) => participantId === selectedParticipantId ? reserveParticipantId : participantId),
+  }));
+  const matches = league.matches.map((match) => ({
+    ...match,
+    participantAId: match.participantAId === selectedParticipantId ? reserveParticipantId : match.participantAId,
+    participantBId: match.participantBId === selectedParticipantId ? reserveParticipantId : match.participantBId,
+  }));
+
+  return {
+    ...league,
+    participants,
+    selection: {
+      ...league.selection,
+      mode: "manual",
+      selectedParticipantIds: participants
+        .filter((participant) => participant.selectionStatus === "selected" && !isLeagueParticipantEmpty(participant))
+        .map((participant) => participant.id),
+      reserveParticipantIds: participants
+        .filter((participant) => participant.selectionStatus === "reserve" && !isLeagueParticipantEmpty(participant))
+        .map((participant) => participant.id),
+    },
+    groups,
+    matches,
+    standings: calculateStandings(groups, matches, league.scoringPolicy, []),
+    status: "draft",
+    matchSelectionStatus: "pending",
+  };
 }
 
 export function selectParticipantIds(ids: readonly string[], capacity: number, seed: string): string[] {
@@ -428,6 +493,35 @@ export function createId(prefix: string): string {
 
 function sameIds(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index]);
+}
+
+function hasSelectedParticipantContentChanged(
+  current: readonly LeagueParticipant[],
+  next: readonly LeagueParticipant[],
+): boolean {
+  const currentSelected = current.filter((participant) => (
+    participant.selectionStatus === "selected" && !isLeagueParticipantEmpty(participant)
+  ));
+  const nextSelected = next.filter((participant) => (
+    participant.selectionStatus === "selected" && !isLeagueParticipantEmpty(participant)
+  ));
+  return JSON.stringify(currentSelected) !== JSON.stringify(nextSelected);
+}
+
+function hasLeagueMatchData(league: League): boolean {
+  return league.matches.some((match) => (
+    match.result !== "unplayed"
+    || Boolean(match.note?.trim())
+    || Boolean(match.setScores?.some((score) => score.participantA !== null || score.participantB !== null))
+  ));
+}
+
+function isCompleteParticipantForReplacement(participant: LeagueParticipant): boolean {
+  if (!participant.displayName.trim()) return false;
+  const memberCount = participant.memberNames.filter((member) => member.trim()).length;
+  if (participant.participantType === "doubles") return memberCount === 2;
+  if (participant.participantType === "team") return memberCount >= 1;
+  return true;
 }
 
 function createSeededRandom(seed: string): () => number {

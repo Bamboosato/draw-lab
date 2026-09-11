@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useLeague, useLeagues } from "../app/LeagueProvider";
 import { useViewTransitionNavigate } from "../app/viewTransitionNavigation";
-import { createId, createLeagueParticipant, ensureLeagueParticipantRows, mergeLeagueParticipantsIntoEmptyRows, parseLeagueParticipantsFromText, selectParticipantIds, updateParticipants, updateSelection } from "../app/leagueModel";
+import { canReplaceSelectedParticipantWithReserve, createId, createLeagueParticipant, ensureLeagueParticipantRows, mergeLeagueParticipantsIntoEmptyRows, parseLeagueParticipantsFromText, replaceSelectedParticipantWithReserve, selectParticipantIds, updateParticipants, updateSelection } from "../app/leagueModel";
 import { validateParticipants } from "../app/leagueFlow";
 import { CompactSummary } from "../components/CompactSummary";
 import { LeagueNotFound, LeaguePageHeading, LeagueStorageMessage } from "../components/LeaguePageParts";
@@ -19,6 +19,8 @@ export function LeagueParticipantsPage() {
   const [pasteText, setPasteText] = useState("");
   const [pendingParticipants, setPendingParticipants] = useState<PendingParticipantChange>();
   const [pendingSelection, setPendingSelection] = useState<PendingSelectionChange>();
+  const [replacementTargetId, setReplacementTargetId] = useState<string>();
+  const [replacementReserveId, setReplacementReserveId] = useState("");
   const [structureResetNotice, setStructureResetNotice] = useState(false);
   const [draftResetKey, setDraftResetKey] = useState(0);
   const [checked, setChecked] = useState(false);
@@ -29,6 +31,8 @@ export function LeagueParticipantsPage() {
     setShowRosterDetails(false);
     setStructureResetNotice(false);
     setPendingSelection(undefined);
+    setReplacementTargetId(undefined);
+    setReplacementReserveId("");
     setPasteText("");
   }, [league?.id, league?.participantType]);
 
@@ -55,6 +59,15 @@ export function LeagueParticipantsPage() {
     : [];
   const hasBlockingErrors = errors.length > 0 || completeParticipantCount === 0 || selectionErrors.length > 0;
   const shouldBlockNext = checked && hasBlockingErrors;
+  const replacementTarget = league.participants.find((participant) => participant.id === replacementTargetId);
+  const replacementCandidates = league.participants.filter((participant) => (
+    participant.selectionStatus === "reserve"
+    && !isLeagueParticipantEmpty(participant)
+    && isCompleteParticipant(participant)
+  ));
+  const replacementAllowed = canReplaceSelectedParticipantWithReserve(league)
+    && !locked
+    && replacementCandidates.length > 0;
   const applyParticipantUpdate = (participants: LeagueParticipant[], clearPaste = false) => {
     const next = updateParticipants(league, participants);
     if ((league.groups.length > 0 || league.matches.length > 0)
@@ -68,7 +81,11 @@ export function LeagueParticipantsPage() {
   const requestParticipantUpdate = (participants: LeagueParticipant[], clearPaste = false) => {
     if (locked) return;
     const preview = updateParticipants(league, participants);
-    const participantsChanged = JSON.stringify(league.participants) !== JSON.stringify(preview.participants);
+    const participantsChanged = JSON.stringify(league.participants.filter((participant) => (
+      participant.selectionStatus === "selected" && !isLeagueParticipantEmpty(participant)
+    ))) !== JSON.stringify(preview.participants.filter((participant) => (
+      participant.selectionStatus === "selected" && !isLeagueParticipantEmpty(participant)
+    )));
     if (participantsChanged && (league.groups.length > 0 || league.matches.length > 0)) {
       setPendingParticipants({ participants, clearPaste });
       return;
@@ -128,6 +145,25 @@ export function LeagueParticipantsPage() {
     ));
   };
 
+  const openReplacement = (participantId: string) => {
+    if (!replacementAllowed) return;
+    setReplacementTargetId(participantId);
+    setReplacementReserveId("");
+  };
+
+  const closeReplacement = () => {
+    setReplacementTargetId(undefined);
+    setReplacementReserveId("");
+  };
+
+  const applyReplacement = () => {
+    if (!replacementTargetId || !replacementReserveId) return;
+    const next = replaceSelectedParticipantWithReserve(league, replacementTargetId, replacementReserveId);
+    if (next === league) return;
+    updateLeague(next);
+    closeReplacement();
+  };
+
   const rosterDetailsToggle = (
     <button
       type="button"
@@ -168,7 +204,7 @@ export function LeagueParticipantsPage() {
       />
       <LeagueStorageMessage status={storageStatus} error={storageError} />
       {structureResetNotice ? <section className="flow-notice" role="status">参加者を変更したため、グループと対戦カード設定をリセットしました。勝点設定は保持しています。</section> : null}
-      {locked ? <section className="flow-notice" role="status">対戦カード確定後のため、参加者の追加・削除・種別変更はできません。</section> : null}
+       {locked ? <section className="flow-notice" role="status">対戦カード確定後のため、参加者の追加・削除・種別変更・入替はできません。</section> : null}
       <CompactSummary
         ariaLabel="参加者入力概要"
         items={[
@@ -191,7 +227,7 @@ export function LeagueParticipantsPage() {
                   <th className="league-participant-team-column roster-team-boundary-column"><span className="roster-team-heading">所属{rosterDetailsToggle}</span></th>
                   <th className="roster-detail-column league-participant-region-column">地区</th>
                   <th className="roster-detail-column league-participant-note-column">備考</th>
-                  {!locked ? <th>操作</th> : null}
+                  {!locked ? <th className="league-participant-actions-column">操作</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -204,7 +240,10 @@ export function LeagueParticipantsPage() {
                     draftResetKey={draftResetKey}
                     onChange={(next) => requestParticipantUpdate(league.participants.map((item) => item.id === next.id ? next : item))}
                     onRemove={() => requestParticipantUpdate(league.participants.filter((item) => item.id !== participant.id))}
+                    onReplace={() => openReplacement(participant.id)}
                     onSelectionChange={(selected) => updateParticipantSelection(participant.id, selected)}
+                    replacementAllowed={replacementAllowed}
+                    hasReplacementCandidates={replacementCandidates.length > 0}
                     type={league.participantType}
                   />
                 ))}
@@ -226,11 +265,35 @@ export function LeagueParticipantsPage() {
       </div>
       <ConfirmDialog open={pendingParticipants !== undefined} title="参加者の変更を反映します" message="参加者を変更すると、既存のグループ分けと対戦カード設定がリセットされます。勝点設定は保持されます。変更してよろしいですか？" confirmLabel="リセットして反映" cancelLabel="キャンセル" onCancel={() => { setPendingParticipants(undefined); setDraftResetKey((current) => current + 1); }} onConfirm={() => { if (pendingParticipants) applyParticipantUpdate(pendingParticipants.participants, pendingParticipants.clearPaste); setPendingParticipants(undefined); }} />
       <ConfirmDialog open={pendingSelection !== undefined} title="選出内容を変更します" message="選出者を変更すると、既存のグループと対戦カード設定がリセットされます。変更してよろしいですか？" confirmLabel="リセットして反映" cancelLabel="キャンセル" onCancel={() => setPendingSelection(undefined)} onConfirm={() => { if (pendingSelection) updateLeague(pendingSelection.league); setPendingSelection(undefined); }} />
+      <ConfirmDialog
+        open={replacementTarget !== undefined}
+        className="replacement-dialog"
+        title="参加者を入れ替える"
+        message="入れ替える補欠を選択してください。入替後は同じグループ位置の対戦カードを更新します。"
+        confirmLabel="入替を実行"
+        cancelLabel="キャンセル"
+        confirmDisabled={!replacementReserveId}
+        onCancel={closeReplacement}
+        onConfirm={applyReplacement}
+      >
+        {replacementTarget ? (
+          <div className="replacement-dialog-fields">
+            <p><strong>入替対象：</strong>{participantOptionLabel(replacementTarget)}</p>
+            <label className="field">
+              <span>入れ替える補欠</span>
+              <select aria-label="入れ替える補欠" value={replacementReserveId} onChange={(event) => setReplacementReserveId(event.target.value)}>
+                <option value="">補欠参加者を選択してください</option>
+                {replacementCandidates.map((participant) => <option key={participant.id} value={participant.id}>{participantOptionLabel(participant)}</option>)}
+              </select>
+            </label>
+          </div>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }
 
-function ParticipantRow({ participant, index, locked, draftResetKey, onChange, onRemove, onSelectionChange, type }: { participant: LeagueParticipant; index: number; locked: boolean; draftResetKey: number; onChange: (participant: LeagueParticipant) => void; onRemove: () => void; onSelectionChange: (selected: boolean) => void; type: LeagueParticipant["participantType"] }) {
+function ParticipantRow({ participant, index, locked, draftResetKey, onChange, onRemove, onReplace, onSelectionChange, replacementAllowed, hasReplacementCandidates, type }: { participant: LeagueParticipant; index: number; locked: boolean; draftResetKey: number; onChange: (participant: LeagueParticipant) => void; onRemove: () => void; onReplace: () => void; onSelectionChange: (selected: boolean) => void; replacementAllowed: boolean; hasReplacementCandidates: boolean; type: LeagueParticipant["participantType"] }) {
   const [draft, setDraft] = useState(participant);
   useEffect(() => setDraft(participant), [participant, draftResetKey]);
   const nameLabel = participantNameLabel(type);
@@ -241,6 +304,14 @@ function ParticipantRow({ participant, index, locked, draftResetKey, onChange, o
   };
   const isEntered = !isLeagueParticipantEmpty(participant);
   const isReserve = isEntered && participant.selectionStatus !== "selected";
+  const canReplace = replacementAllowed && isEntered && participant.selectionStatus === "selected";
+  const replaceTitle = canReplace
+    ? "この参加者を補欠と入れ替える"
+    : participant.selectionStatus !== "selected"
+      ? "選出済みの参加者だけ入れ替えできます"
+      : !hasReplacementCandidates
+        ? "入れ替え可能な補欠がいません"
+      : "対戦カード未確定かつ結果入力前だけ入れ替えできます";
   return (
     <tr className={isReserve ? "league-participant-reserve-row" : undefined}>
       <td className="league-selection-column"><input type="checkbox" aria-label={`${index + 1} ${nameLabel}を選出`} checked={isEntered && participant.selectionStatus === "selected"} disabled={locked || !isEntered} onChange={(event) => onSelectionChange(event.target.checked)} /></td>
@@ -254,7 +325,7 @@ function ParticipantRow({ participant, index, locked, draftResetKey, onChange, o
       <td className="league-participant-team-column"><input aria-label={`${index + 1} 所属`} value={draft.team ?? ""} disabled={locked} onChange={(event) => set({ team: event.target.value })} onBlur={commit} /></td>
       <td className="roster-detail-column league-participant-region-column"><input aria-label={`${index + 1} 地区`} value={draft.region ?? ""} disabled={locked} onChange={(event) => set({ region: event.target.value })} onBlur={commit} /></td>
       <td className="roster-detail-column league-participant-note-column"><input aria-label={`${index + 1} 備考`} value={draft.note ?? ""} disabled={locked} onChange={(event) => set({ note: event.target.value })} onBlur={commit} /></td>
-      {!locked ? <td><button type="button" className="danger-link" title="この参加者を削除" onClick={onRemove}>削除</button></td> : null}
+       {!locked ? <td className="league-participant-actions-column"><div className="inline-actions"><button type="button" className="button secondary" title={replaceTitle} disabled={!canReplace} onClick={onReplace}>入替</button><button type="button" className="danger-link" title="この参加者を削除" onClick={onRemove}>削除</button></div></td> : null}
     </tr>
   );
 }
@@ -274,6 +345,11 @@ function isCompleteParticipant(participant: LeagueParticipant): boolean {
   if (participant.participantType === "doubles") return memberCount === 2;
   if (participant.participantType === "team") return memberCount >= 1;
   return true;
+}
+
+function participantOptionLabel(participant: LeagueParticipant): string {
+  const details = [participant.team, participant.region].filter((value) => value?.trim()).join("・");
+  return details ? `${participant.displayName}（${details}）` : participant.displayName;
 }
 
 function participantNameLabel(type: LeagueParticipant["participantType"]): string {
