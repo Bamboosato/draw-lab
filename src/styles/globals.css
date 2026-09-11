@@ -2252,6 +2252,34 @@ a {
   min-width: 240px;
 }
 
+.league-participant-table th.league-participant-actions-column,
+.league-participant-table td.league-participant-actions-column {
+  width: 140px;
+  min-width: 140px;
+  text-align: center;
+}
+
+.league-participant-table .league-participant-actions-column .inline-actions {
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.league-participant-table .league-participant-actions-column .inline-actions > button {
+  flex: 0 0 auto;
+}
+
+.league-participant-table .league-participant-actions-column .danger-link {
+  border-color: #fecdd3;
+  color: #b42336;
+}
+
+.league-participant-table .league-participant-actions-column .danger-link:hover {
+  border-color: #fda4af;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
 .league-participant-table tr.league-participant-reserve-row > td,
 .league-participant-table tr.league-participant-reserve-row input {
   background: #f1f5f9;
@@ -2432,6 +2460,38 @@ a {
 
 .confirm-dialog.danger {
   border-color: #fecdd3;
+}
+
+.confirm-dialog.replacement-dialog h2 {
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+
+.confirm-dialog.replacement-dialog > p {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.replacement-dialog-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.replacement-dialog-fields > p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.replacement-dialog-fields .field {
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.replacement-dialog-fields .field > span,
+.replacement-dialog-fields .field select {
+  font-size: 1rem;
+  line-height: 1.4;
 }
 
 .print-mode-options {

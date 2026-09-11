@@ -6,7 +6,9 @@ type ConfirmDialogProps = {
   message: string;
   confirmLabel: string;
   cancelLabel: string;
+  confirmDisabled?: boolean;
   tone?: "warning" | "danger";
+  className?: string;
   children?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
@@ -18,7 +20,9 @@ export function ConfirmDialog({
   message,
   confirmLabel,
   cancelLabel,
+  confirmDisabled = false,
   tone = "warning",
+  className,
   children,
   onConfirm,
   onCancel,
@@ -47,7 +51,7 @@ export function ConfirmDialog({
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={onCancel}>
       <section
-        className={`confirm-dialog ${tone}`}
+        className={`confirm-dialog ${tone}${className ? ` ${className}` : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -60,7 +64,7 @@ export function ConfirmDialog({
           <button type="button" className="button secondary" title={cancelLabel} onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button type="button" className={`button ${tone === "danger" ? "danger" : "primary"}`} title={confirmLabel} onClick={onConfirm}>
+          <button type="button" className={`button ${tone === "danger" ? "danger" : "primary"}`} title={confirmLabel} disabled={confirmDisabled} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>
