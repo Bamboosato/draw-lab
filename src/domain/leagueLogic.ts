@@ -386,6 +386,9 @@ function calculateRankingScoreStats(
 
     if (left) left.completedMatches += 1;
     if (right) right.completedMatches += 1;
+    // WO is a completed result, but its stored game values are record-only
+    // and must not affect set/game-rate tie breakers.
+    if (match.isWalkover) continue;
     const setScores = getRankableSetScores(match);
     if (!setScores) {
       if (left) left.complete = false;

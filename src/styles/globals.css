@@ -831,7 +831,7 @@ a {
 }
 
 .match-details {
-  width: min(50%, 420px);
+  width: min(54%, 460px);
   min-width: 300px;
   margin: 0;
   padding: 9px 10px 10px;
@@ -847,12 +847,40 @@ a {
   font-weight: 800;
 }
 
+.match-details-option-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 15px 0 0;
+}
+
+.walkover-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.walkover-control input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #2563eb;
+}
+
+.walkover-control input:disabled {
+  accent-color: #94a3b8;
+}
+
 .set-score-row {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr) 14px minmax(0, 1fr);
   align-items: center;
   gap: 5px;
   margin-top: 6px;
+  width: min(100%, 398px);
 }
 
 .set-score-label {
@@ -986,10 +1014,6 @@ a {
 .league-match-card-target {
   outline: 3px solid #2563eb;
   outline-offset: 2px;
-}
-
-.league-matrix-result-symbol {
-  font-weight: 800;
 }
 
 .league-matrix-set-score {

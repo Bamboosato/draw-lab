@@ -5,12 +5,18 @@ export function SetScoreEditor({
   matchFormat,
   displayOrder,
   readOnly,
+  walkover = false,
+  canMarkWalkover = false,
+  onWalkoverChange,
   onChange,
 }: {
   setScores?: readonly SetScore[];
   matchFormat: MatchFormat;
   displayOrder: number;
   readOnly: boolean;
+  walkover?: boolean;
+  canMarkWalkover?: boolean;
+  onWalkoverChange?: (walkover: boolean) => void;
   onChange: (setIndex: number, participant: "participantA" | "participantB", value: number | null) => void;
 }) {
   const scores = normalizeSetScores(setScores, matchFormat);
@@ -36,6 +42,20 @@ export function SetScoreEditor({
           />
         </div>
       ))}
+      {onWalkoverChange ? (
+        <div className="match-details-option-row">
+          <label className="walkover-control">
+            <input
+              type="checkbox"
+              aria-label={`第${displayOrder}試合 Walk Over`}
+              checked={walkover}
+              disabled={readOnly || !canMarkWalkover}
+              onChange={(event) => onWalkoverChange(event.target.checked)}
+            />
+            <span>Walk Over（不戦勝）</span>
+          </label>
+        </div>
+      ) : null}
     </fieldset>
   );
 }

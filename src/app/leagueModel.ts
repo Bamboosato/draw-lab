@@ -32,6 +32,9 @@ export function normalizeLeague(league: League): League {
     detailDisplayEnabled,
     matches: league.matches.map((match) => ({
       ...match,
+      isWalkover: match.result === "participantAWin" || match.result === "participantBWin"
+        ? match.isWalkover === true
+        : false,
       setScores: detailInputEnabled
         ? normalizeSetScores((match as LeagueMatch & { setScores?: unknown }).setScores, matchFormat)
         : createEmptySetScores(matchFormat),
@@ -355,7 +358,17 @@ export function updateMatchValidity(league: League, matchId: string, isValid: bo
 }
 
 export function updateMatch(league: League, matchId: string, patch: Partial<LeagueMatch>): League {
-  const matches = league.matches.map((match) => match.id === matchId ? { ...match, ...patch } : match);
+  const matches = league.matches.map((match) => {
+    if (match.id !== matchId) return match;
+    const nextResult = patch.result ?? match.result;
+    return {
+      ...match,
+      ...patch,
+      isWalkover: nextResult === "participantAWin" || nextResult === "participantBWin"
+        ? patch.isWalkover ?? match.isWalkover
+        : false,
+    };
+  });
   const status = patch.result === undefined
     ? league.status
     : matches.some((match) => match.result !== "unplayed")
@@ -384,7 +397,7 @@ export function updateMatchSetScore(
     if (setIndex < 0 || setIndex >= setScores.length) return match;
     setScores[setIndex] = { ...setScores[setIndex], [participant]: normalizeScoreValue(value) };
     const nextMatch = { ...match, setScores };
-    if (match.result === "unplayed") {
+    if (match.result === "unplayed" && !match.isWalkover) {
       inferredResult = inferMatchWinnerFromSetScores(league.matchFormat, setScores);
     }
     return inferredResult ? { ...nextMatch, result: inferredResult } : nextMatch;
@@ -415,7 +428,7 @@ export function markMatchSelectionConfirmed(league: League): League {
 
 export function unconfirmMatchSelection(league: League): League {
   if (league.status === "completed" || league.matchSelectionStatus !== "confirmed") return league;
-  const matches = league.matches.map((match) => ({ ...match, result: "unplayed" as const }));
+  const matches = league.matches.map((match) => ({ ...match, result: "unplayed" as const, isWalkover: false }));
   return {
     ...league,
     matches,

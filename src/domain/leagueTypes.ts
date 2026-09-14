@@ -60,6 +60,8 @@ export type LeagueMatch = {
   result: LeagueMatchResult;
   /** 旧保存データでは未保持の場合があるため、読込時に正規化する。 */
   setScores?: LeagueSetScore[];
+  /** 不戦勝の記録。未保持は通常試合（false）として扱う。 */
+  isWalkover?: boolean;
   note?: string;
 };
 

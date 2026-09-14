@@ -74,6 +74,56 @@ describe("buildLeagueMatrixPrintPages", () => {
     expect(cell).toMatchObject({ result: "○", details: ["6-1", "-", "6-3"] });
   });
 
+  it("現在の入力内容モードでは左側参加者に有効順位を持たせ、空欄モードでは順位を持たせない", () => {
+    const league = makeLeague(3);
+    league.status = "completed";
+    league.standings = league.participants.map((participant, index) => ({
+      groupId: "g1",
+      participantId: participant.id,
+      played: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      points: 0,
+      manualRank: index === 0 ? 2 : index === 1 ? 1 : undefined,
+      rankStatus: index < 2 ? "confirmed" : "unconfirmed",
+    }));
+
+    const current = buildLeagueMatrixPrintPages(league, "g1", "current");
+    expect(current.pages[0]?.rows.map((row) => row.participant.rank)).toEqual([2, 1, 3]);
+
+    const blank = buildLeagueMatrixPrintPages(league, "g1", "blank");
+    expect(blank.pages[0]?.rows.every((row) => row.participant.rank === undefined)).toBe(true);
+  });
+
+  it("WOの詳細表示はゲーム数の代わりにWOを返す", () => {
+    const league = makeLeague(2);
+    league.status = "completed";
+    league.detailInputEnabled = true;
+    league.detailDisplayEnabled = true;
+    league.matchFormat = 3;
+    league.matches = [{
+      id: "m1",
+      groupId: "g1",
+      order: 1,
+      participantAId: "p1",
+      participantBId: "p2",
+      isValid: true,
+      result: "participantAWin",
+      isWalkover: true,
+      setScores: [
+        { participantA: 6, participantB: 3 },
+        { participantA: null, participantB: null },
+        { participantA: null, participantB: null },
+      ],
+    }];
+
+    const result = buildLeagueMatrixPrintPages(league, "g1");
+    const cell = result.pages[0]?.rows[0]?.cells.find((item) => item.participantId === "p2");
+
+    expect(cell).toMatchObject({ result: "○", details: ["WO"] });
+  });
+
   it("未完了では勝敗記号とセット詳細を空欄にする", () => {
     const league = makeLeague(2);
     league.detailInputEnabled = true;

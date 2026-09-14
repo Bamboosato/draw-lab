@@ -179,6 +179,30 @@ describe("LeagueDashboardPage", () => {
     }));
   });
 
+  it("勝者を選択した後にWOを記録でき、ゲーム数は変更しない", () => {
+    const base = makeLeague();
+    useLeagueMock.mockReturnValue({
+      ...base,
+      detailInputEnabled: true,
+      matches: [{ ...base.matches[0]!, result: "participantAWin", setScores: [{ participantA: 6, participantB: 1 }] }],
+    });
+    render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "結果入力" }));
+
+    const walkover = screen.getByRole("checkbox", { name: "第1試合 Walk Over" });
+    expect((walkover as HTMLInputElement).disabled).toBe(false);
+    fireEvent.click(walkover);
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(saveLeagueMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      matches: [expect.objectContaining({
+        result: "participantAWin",
+        isWalkover: true,
+        setScores: [{ participantA: 6, participantB: 1 }],
+      })],
+    }));
+  });
+
   it("詳細入力をOFFにすると削除確認を表示し、確定後にスコアと詳細表示をOFFにする", () => {
     const base = makeLeague();
     useLeagueMock.mockReturnValue({
@@ -263,8 +287,12 @@ describe("LeagueDashboardPage", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "PDF/印刷内容を選択" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "現在の入力内容を表示" })).toHaveProperty("checked", true);
+    expect(document.querySelectorAll(".league-matrix-print-table tbody .league-matrix-print-rank-badge")).toHaveLength(18);
+    expect(document.querySelectorAll(".league-matrix-print-table thead .league-matrix-print-rank-badge")).toHaveLength(0);
+    expect(Array.from(document.querySelectorAll(".league-matrix-print-result-symbol")).filter((element) => element.textContent === "未")).toHaveLength(2);
     fireEvent.click(screen.getByRole("radio", { name: "結果を空欄で表示" }));
     expect(screen.getByRole("radio", { name: "結果を空欄で表示" })).toHaveProperty("checked", true);
+    expect(document.querySelectorAll(".league-matrix-print-rank-badge")).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "出力する" }));
 
     expect(printMock).toHaveBeenCalledTimes(1);
@@ -412,6 +440,44 @@ describe("LeagueDashboardPage", () => {
     expect(screen.getAllByText("-")).toHaveLength(2);
     expect(screen.getAllByText("6-3")).toHaveLength(1);
     expect(screen.getByText("1-6")).toBeTruthy();
+  });
+
+  it("詳細表示ONの未実施カードでは結果記号を通常の文字ウェイトで表示する", () => {
+    const base = makeLeague();
+    useLeagueMock.mockReturnValue({
+      ...base,
+      detailInputEnabled: true,
+      detailDisplayEnabled: true,
+      matches: [{ ...base.matches[0]!, result: "unplayed" }],
+    });
+
+    render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
+
+    const unplayedSymbols = document.querySelectorAll(".league-matrix-result-symbol");
+    expect(unplayedSymbols).toHaveLength(2);
+    expect(Array.from(unplayedSymbols, (element) => element.textContent)).toEqual(["未", "未"]);
+  });
+
+  it("詳細表示ONのWOカードではゲーム数の代わりにWOを表示する", () => {
+    const base = makeLeague();
+    useLeagueMock.mockReturnValue({
+      ...base,
+      detailInputEnabled: true,
+      detailDisplayEnabled: true,
+      matches: [{
+        ...base.matches[0]!,
+        result: "participantAWin",
+        isWalkover: true,
+        setScores: [{ participantA: 6, participantB: 3 }],
+      }],
+    });
+
+    render(<LeagueDashboardPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "リーグ表・順位表" }));
+
+    expect(screen.getAllByText("WO")).toHaveLength(2);
+    expect(screen.queryByText("6-3")).toBeNull();
   });
 
   it("フッターの戻るで対戦カード画面へ、一覧でリーグ一覧へ戻る", () => {

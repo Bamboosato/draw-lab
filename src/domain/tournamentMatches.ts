@@ -108,6 +108,7 @@ export function resolveTournamentMatches(
       const resolved: ResolvedTournamentMatch = {
         ...match,
         result,
+        isWalkover: isWinResult(result) && match.isWalkover === true,
         state,
         participantAId: participantA.entrantId,
         participantBId: participantB.entrantId,
@@ -122,7 +123,7 @@ export function resolveTournamentMatches(
 export function updateTournamentMatch(
   draw: GeneratedDraw,
   matchId: string,
-  patch: Pick<TournamentMatch, "result"> & Partial<Pick<TournamentMatch, "note" | "setScores">>,
+  patch: Pick<TournamentMatch, "result"> & Partial<Pick<TournamentMatch, "note" | "setScores" | "isWalkover">>,
   matchFormat: MatchFormat = 1,
 ): GeneratedDraw {
   const matches = ensureTournamentMatches(draw, draw.slots.length as DrawSize, matchFormat);
@@ -144,6 +145,9 @@ export function updateTournamentMatch(
     ? {
         ...match,
         result: patch.result,
+        isWalkover: patch.result === "unplayed"
+          ? false
+          : patch.isWalkover ?? match.isWalkover,
         note: patch.note?.trim() ? patch.note : undefined,
         ...(patch.setScores ? { setScores: normalizeSetScores(patch.setScores, matchFormat) } : {}),
       }
@@ -159,6 +163,7 @@ export function updateTournamentMatch(
         continue;
       }
       match.result = "unplayed";
+      match.isWalkover = false;
       delete match.note;
       match.setScores = createEmptySetScores(matchFormat);
     }
@@ -191,7 +196,7 @@ export function updateTournamentMatchSetScore(
   if (setIndex < 0 || setIndex >= setScores.length) return { ...draw, matches };
   setScores[setIndex] = { ...setScores[setIndex], [participant]: normalizeScoreValue(value) };
 
-  const inferredResult = current.result === "unplayed"
+  const inferredResult = current.result === "unplayed" && !current.isWalkover
     ? inferMatchWinnerFromSetScores(matchFormat, setScores)
     : undefined;
 

@@ -109,6 +109,8 @@ export type TournamentMatch = {
   result: TournamentMatchResult;
   /** Old JSON may omit scores; import normalization supplies empty rows. */
   setScores?: TournamentSetScore[];
+  /** Records a walkover without selecting the winner automatically. */
+  isWalkover?: boolean;
   note?: string;
 };
 
@@ -209,7 +211,7 @@ export type BracketViewModel = {
 
 export type BracketScoreDisplay = {
   matchId: string;
-  mode: "winner-loser-games" | "participant-set-wins";
+  mode: "winner-loser-games" | "participant-set-wins" | "walkover";
   winnerValue?: number;
   loserValue?: number;
   participantAValue?: number;

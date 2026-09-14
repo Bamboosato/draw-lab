@@ -1,4 +1,5 @@
 import { getSetCount, type League, type LeagueMatch, type LeagueParticipant } from "./leagueTypes";
+import { calculateAutomaticRanks, getEffectiveLeagueRank } from "./leagueLogic";
 
 export const LEAGUE_PRINT_MAX_PARTICIPANTS = 16;
 export const LEAGUE_PRINT_COLUMNS_PER_PAGE = 8;
@@ -15,6 +16,7 @@ export type LeagueMatrixPrintParticipant = {
   id: string;
   displayName: string;
   fullLabel: string;
+  rank?: number;
 };
 
 export type LeagueMatrixPrintCell = {
@@ -71,7 +73,15 @@ export function buildLeagueMatrixPrintPages(
     return { pages: [], error: "too-many-participants" };
   }
 
-  const printParticipants = participants.map(toPrintParticipant);
+  const automaticRanks = resultMode === "current"
+    ? calculateAutomaticRanks(league.groups, league.standings, league.matches)
+    : new Map<string, number>();
+  const standingsByParticipantId = new Map(league.standings.map((standing) => [standing.participantId, standing]));
+  const printParticipants = participants.map((participant) => {
+    const standing = standingsByParticipantId.get(participant.id);
+    const rank = resultMode === "current" && standing ? getEffectiveLeagueRank(standing, automaticRanks) : undefined;
+    return toPrintParticipant(participant, rank);
+  });
   const columnGroups = chunk(printParticipants, LEAGUE_PRINT_COLUMNS_PER_PAGE);
   const showResults = resultMode === "current";
   const showDetails = showResults && league.detailDisplayEnabled;
@@ -99,7 +109,9 @@ function createPrintCell(league: League, rowId: string, columnId: string, showRe
   const match = league.matches.find((item) => (item.participantAId === rowId && item.participantBId === columnId) || (item.participantAId === columnId && item.participantBId === rowId));
   cell.result = getMatrixResult(match, rowId);
   if (showDetails) {
-    cell.details = Array.from({ length: getSetCount(league.matchFormat) }, (_, setIndex) => getMatrixScore(match, rowId, setIndex));
+    cell.details = match?.isWalkover
+      ? ["WO"]
+      : Array.from({ length: getSetCount(league.matchFormat) }, (_, setIndex) => getMatrixScore(match, rowId, setIndex));
   }
   return cell;
 }
@@ -119,11 +131,12 @@ function getMatrixScore(match: LeagueMatch | undefined, rowId: string, setIndex:
   return match.participantAId === rowId ? `${score.participantA}-${score.participantB}` : `${score.participantB}-${score.participantA}`;
 }
 
-function toPrintParticipant(participant: LeagueParticipant): LeagueMatrixPrintParticipant {
+function toPrintParticipant(participant: LeagueParticipant, rank: number | undefined): LeagueMatrixPrintParticipant {
   return {
     id: participant.id,
     displayName: participant.displayName || "名称未設定",
     fullLabel: getParticipantLabel(participant),
+    ...(rank === undefined ? {} : { rank }),
   };
 }
 

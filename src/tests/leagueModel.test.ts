@@ -21,7 +21,7 @@ import {
   updateScoringPolicy,
   unconfirmMatchSelection,
 } from "../app/leagueModel";
-import { isLeagueParticipantEmpty } from "../domain/leagueLogic";
+import { calculateStandings, isLeagueParticipantEmpty } from "../domain/leagueLogic";
 import type { League, LeagueGroup, LeagueMatch } from "../domain/leagueTypes";
 
 describe("league model state transitions", () => {
@@ -82,6 +82,41 @@ describe("league model state transitions", () => {
       expect(scored.matches[0]?.result).toBe("participantAWin");
       expect(scored.status).toBe("inProgress");
       expect(scored.standings.find((standing) => standing.participantId === "p1")?.wins).toBe(1);
+    });
+
+    it("WOは手動で選択した勝者とゲーム数を保持し、結果を未実施へ戻すと解除する", () => {
+      const detailed = updateDetailInputEnabled(makeLeague({ status: "scheduled" }), true);
+      const scored = updateMatchSetScore(detailed, "m1", 0, "participantA", 6);
+      const withWinner = updateMatchSetScore(scored, "m1", 0, "participantB", 1);
+      const withWalkover = updateMatch(withWinner, "m1", { isWalkover: true });
+
+      expect(withWalkover.matches[0]).toMatchObject({
+        result: "participantAWin",
+        isWalkover: true,
+        setScores: [{ participantA: 6, participantB: 1 }],
+      });
+      expect(withWalkover.standings.find((standing) => standing.participantId === "p1")).toMatchObject({ played: 1, wins: 1, points: 3 });
+
+      const reset = updateMatch(withWalkover, "m1", { result: "unplayed" });
+      expect(reset.matches[0]).toMatchObject({ result: "unplayed", isWalkover: false });
+
+      const invalid = updateMatch(detailed, "m1", { isWalkover: true });
+      expect(invalid.matches[0]).toMatchObject({ result: "unplayed", isWalkover: false });
+    });
+
+    it("WOの保存ゲーム数をセット率・ゲーム率へ使用せず、勝点だけを集計する", () => {
+      const standings = calculateStandings(
+        [{ id: "g1", name: "A", participantIds: ["p2", "p1", "p3", "p4"] }],
+        [
+          { id: "wo", groupId: "g1", order: 1, participantAId: "p1", participantBId: "p3", isValid: true, result: "participantAWin", isWalkover: true, setScores: [{ participantA: 100, participantB: 0 }] },
+          { id: "normal", groupId: "g1", order: 2, participantAId: "p2", participantBId: "p4", isValid: true, result: "participantAWin", setScores: [{ participantA: 2, participantB: 1 }] },
+        ],
+        { winPoints: 3, drawPoints: 1, lossPoints: 0 },
+        [],
+      );
+
+      expect(standings.slice(0, 2).map((standing) => standing.participantId)).toEqual(["p2", "p1"]);
+      expect(standings.find((standing) => standing.participantId === "p1")?.points).toBe(3);
     });
 
     it("3・5セットは先取数が確定した時だけ勝者を自動選択する", () => {

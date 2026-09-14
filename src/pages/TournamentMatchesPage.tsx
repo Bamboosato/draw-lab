@@ -87,6 +87,24 @@ export function TournamentMatchesPage() {
     }
   };
 
+  const saveWalkover = (matchId: string, isWalkover: boolean): void => {
+    try {
+      const current = matches.find((match) => match.id === matchId);
+      if (!current || (current.result !== "participantAWin" && current.result !== "participantBWin")) return;
+      updateTournament({
+        ...tournament,
+        generatedDraw: updateTournamentMatch(tournament.generatedDraw!, matchId, {
+          result: current.result,
+          isWalkover,
+          note: current.note,
+          setScores: current.setScores,
+        }, matchFormat),
+      });
+    } catch {
+      // A card that became unresolved between render and input cannot accept edits.
+    }
+  };
+
   const saveSetScore = (
     matchId: string,
     setIndex: number,
@@ -235,6 +253,7 @@ export function TournamentMatchesPage() {
               disabled={!selectionConfirmed || readOnly}
               onResultChange={(result) => saveResult(match.id, result)}
               onSetScoreChange={(setIndex, participant, value) => saveSetScore(match.id, setIndex, participant, value)}
+              onWalkoverChange={(isWalkover) => saveWalkover(match.id, isWalkover)}
               onNoteChange={(note) => saveNote(match.id, note)}
             />
           ))}

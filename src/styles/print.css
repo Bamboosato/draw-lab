@@ -238,6 +238,25 @@
     vertical-align: middle;
   }
 
+  .league-matrix-print-participant {
+    display: grid;
+    justify-items: start;
+    gap: 1mm;
+  }
+
+  .league-matrix-print-rank-badge {
+    display: inline-block;
+    padding: 0.4mm 1.4mm;
+    border: 0.3mm solid #64748b;
+    border-radius: 1.2mm;
+    background: #f1f5f9;
+    color: #172033;
+    font-size: 6.5pt;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
   .league-matrix-print-table tbody td {
     position: relative;
     height: 14mm;
@@ -260,7 +279,6 @@
 
   .league-matrix-print-result-symbol {
     font-size: 14pt;
-    font-weight: 700;
   }
 
   .league-matrix-print-set-score {

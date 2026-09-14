@@ -99,6 +99,29 @@ describe("DrawPreview winner rendering", () => {
     ]);
   });
 
+  it("renders WO instead of game scores in both screen and print previews", () => {
+    const tournament = makeTournament({ drawSize: 4, matchFormat: 1, entrants: makeEntrants(4) });
+    const slots = tournament.entrants.map((entrant, index) => ({ position: index + 1, entrantId: entrant.id, isBye: false }));
+    const draw = updateTournamentMatch(
+      {
+        id: "draw-1",
+        tournamentId: tournament.id,
+        randomSeed: "view-seed",
+        generatedAt: "2026-09-03T00:00:00.000Z",
+        slots,
+        matches: createTournamentMatches(slots, 4, undefined, 1),
+      },
+      "match-1",
+      { result: "participantAWin", isWalkover: true },
+    );
+
+    const { container } = render(<DrawPreview viewModel={buildBracketViewModel(tournament, draw)} generatedAt={draw.generatedAt} />);
+
+    expect(container.querySelectorAll(".svg-score-walkover")).toHaveLength(2);
+    expect(Array.from(container.querySelectorAll(".svg-score-walkover"), (node) => node.textContent)).toEqual(["WO", "WO"]);
+    expect(container.querySelectorAll(".svg-score-winner-loser")).toHaveLength(0);
+  });
+
   it("renders three-set wins on the participant rows", () => {
     const tournament = makeTournament({ drawSize: 4, matchFormat: 3, entrants: makeEntrants(4) });
     const slots = tournament.entrants.map((entrant, index) => ({ position: index + 1, entrantId: entrant.id, isBye: false }));

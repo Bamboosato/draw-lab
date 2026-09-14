@@ -625,6 +625,11 @@ export function DrawPreview({
           {scoreDisplay.winnerValue}-{scoreDisplay.loserValue}
         </text>
       );
+      const renderWalkover = (x: number, y: number, key: string) => (
+        <text className="svg-score svg-score-walkover" key={key} x={x} y={y} textAnchor="middle">
+          WO
+        </text>
+      );
       const renderParticipantSetScores = (
         participantAX: number,
         participantBX: number,
@@ -643,14 +648,12 @@ export function DrawPreview({
       );
 
       if (bothSides && match.round === roundCount) {
-        if (scoreDisplay.mode === "winner-loser-games") {
+        if (scoreDisplay.mode === "walkover" || scoreDisplay.mode === "winner-loser-games") {
           const winnerIsA = match.winnerEntrantId === match.participantAId;
           const sourceX = winnerIsA ? leftFinalSourceX : rightFinalSourceX;
-          scoreElements.push(renderWinnerLoserScore(
-            (sourceX + centerFinalX) / 2,
-            finalCenterY - 7,
-            `score-${scoreDisplay.matchId}`,
-          ));
+          scoreElements.push(scoreDisplay.mode === "walkover"
+            ? renderWalkover((sourceX + centerFinalX) / 2, finalCenterY - 7, `score-${scoreDisplay.matchId}`)
+            : renderWinnerLoserScore((sourceX + centerFinalX) / 2, finalCenterY - 7, `score-${scoreDisplay.matchId}`));
         } else {
           scoreElements.push(renderParticipantSetScores(
             (leftFinalSourceX + centerFinalX) / 2,
@@ -676,16 +679,14 @@ export function DrawPreview({
       const sourceY = (winner: "A" | "B") => winner === "A" ? geometry.topY : geometry.bottomY;
       const scoreX = (geometry.sourceX + geometry.targetX) / 2;
 
-      if (scoreDisplay.mode === "winner-loser-games") {
+      if (scoreDisplay.mode === "walkover" || scoreDisplay.mode === "winner-loser-games") {
         const winnerSide = getWinnerSide(match);
         if (!winnerSide) {
           continue;
         }
-        scoreElements.push(renderWinnerLoserScore(
-          scoreX,
-          sourceY(winnerSide) - 7,
-          `score-${scoreDisplay.matchId}`,
-        ));
+        scoreElements.push(scoreDisplay.mode === "walkover"
+          ? renderWalkover(scoreX, sourceY(winnerSide) - 7, `score-${scoreDisplay.matchId}`)
+          : renderWinnerLoserScore(scoreX, sourceY(winnerSide) - 7, `score-${scoreDisplay.matchId}`));
       } else {
         scoreElements.push(renderParticipantSetScores(
           scoreX,
