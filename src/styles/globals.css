@@ -283,6 +283,69 @@ a {
   min-width: 0;
 }
 
+.mobile-header {
+  display: none;
+}
+
+.mobile-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobile-brand-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.mobile-brand strong {
+  font-size: 20px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.mobile-menu-toggle {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #334155;
+}
+
+.mobile-menu-toggle:hover {
+  background: #f1f5f9;
+}
+
+.mobile-menu-toggle:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.mobile-menu-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.mobile-menu-backdrop {
+  display: none;
+}
+
 .pwa-status {
   display: flex;
   align-items: center;
@@ -1088,6 +1151,46 @@ a {
 
   .set-score-row {
     grid-template-columns: 58px minmax(0, 1fr) 12px minmax(0, 1fr);
+  }
+
+  .tournament-matches-page,
+  .tournament-matches-page > .page-heading,
+  .tournament-matches-page > .section-card,
+  .tournament-matches-page .league-match-cards,
+  .tournament-matches-page .league-match-card,
+  .tournament-matches-page .match-card-heading,
+  .tournament-matches-page .match-winner-selector,
+  .tournament-matches-page .match-details,
+  .tournament-matches-page .field {
+    min-width: 0;
+  }
+
+  .tournament-matches-page .league-match-card,
+  .tournament-matches-page .match-details,
+  .tournament-matches-page .field {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 260px) {
+  .tournament-matches-page .set-score-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tournament-matches-page .set-score-separator {
+    display: none;
+  }
+
+  .tournament-matches-page .score-stepper {
+    width: 100%;
+  }
+
+  .tournament-matches-page .match-details-option-row {
+    justify-content: flex-start;
+  }
+
+  .tournament-matches-page .walkover-control {
+    white-space: normal;
   }
 }
 
@@ -2980,6 +3083,44 @@ fieldset.table-panel {
   justify-items: center;
 }
 
+.bracket-zoom-controls {
+  display: flex;
+  box-sizing: border-box;
+  width: min(100%, 900px);
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px auto 0;
+}
+
+.bracket-zoom-button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.bracket-zoom-value {
+  min-width: 44px;
+  color: #172033;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: center;
+}
+
+.bracket-zoom-reset {
+  height: 28px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
 .screen-draw-page {
   position: relative;
   width: min(100%, 900px);
@@ -3040,10 +3181,33 @@ fieldset.table-panel {
   box-sizing: border-box;
   min-height: 0;
   flex: 1 1 auto;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding-top: 16px;
+}
+
+.bracket-zoom-viewport {
+  touch-action: none;
+  cursor: grab;
+}
+
+.bracket-zoom-viewport:active {
+  cursor: grabbing;
+}
+
+.bracket-zoom-surface {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+@media (max-width: 640px) {
+  .bracket-zoom-controls {
+    justify-content: flex-start;
+  }
 }
 
 .page-svg-bracket {
@@ -3593,6 +3757,10 @@ fieldset.table-panel {
 }
 
 @media (max-width: 980px) {
+  body {
+    min-width: 0;
+  }
+
   .app-shell {
     --sidebar-width: 0px;
     --content-gutter: 28px;
@@ -3614,8 +3782,109 @@ fieldset.table-panel {
   }
 
   .sidebar {
-    position: static;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1001;
+    width: min(286px, calc(100vw - 48px));
+    height: 100dvh;
+    padding: 20px 12px;
+    overflow-y: auto;
+    border-right: 1px solid #dce2ed;
+    box-shadow: 12px 0 28px rgb(15 23 42 / 12%);
+    transform: translateX(-105%);
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 180ms ease, visibility 180ms ease;
+  }
+
+  .app-shell.mobile-menu-open .sidebar {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .app-shell.sidebar-collapsed .sidebar {
+    padding: 20px 12px;
+  }
+
+  .sidebar-header {
+    display: none;
+  }
+
+  .app-shell.sidebar-collapsed .brand {
+    display: flex;
+  }
+
+  .app-shell.sidebar-collapsed .nav-list {
+    display: grid;
+  }
+
+  .nav-list {
+    margin-top: 0;
+  }
+
+  .mobile-header {
+    position: sticky;
+    top: 0;
+    z-index: 900;
+    display: flex;
+    min-height: 64px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px var(--content-gutter);
+    border-bottom: 1px solid #dce2ed;
+    background: #ffffff;
+  }
+
+  .mobile-menu-backdrop {
+    position: fixed;
+    top: 64px;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1000;
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: rgb(15 23 42 / 32%);
+  }
+
+  .stepper {
+    width: 100%;
+    margin-inline: 0;
+    padding-inline: var(--content-gutter);
+  }
+
+  .topbar {
+    min-height: 64px;
     height: auto;
+    padding: 16px var(--content-gutter);
+  }
+
+  .bottom-actions {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 950;
+    min-width: 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .topbar .eyebrow {
+    display: none;
+  }
+
+  .topbar h1 {
+    transform: none;
+  }
+
+  body.mobile-menu-open {
+    overflow: hidden;
   }
 
   .form-grid,
@@ -3696,6 +3965,27 @@ fieldset.table-panel {
 @media (max-width: 640px) {
   .home-feature-grid {
     grid-template-columns: 1fr;
+  }
+
+  .screen-draw-page .draw-sheet-heading {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .screen-draw-page .draw-sheet-heading h2 {
+    font-size: 18px;
+  }
+
+  .screen-draw-page .draw-sheet-heading p {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .screen-draw-page .draw-meta {
+    gap: 4px;
+    min-width: 0;
+    font-size: 11px;
   }
 
   .home-feature-card {

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { getLeagueStepFromPath, LEAGUE_STEPS, type LeagueStep } from "../app/leagueFlow";
 import {
@@ -11,6 +11,8 @@ import { PwaStatus } from "./PwaStatus";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const location = useLocation();
   const screenName = getScreenName(location.pathname);
   const isHome = location.pathname === "/";
@@ -24,16 +26,63 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isTournamentArea = isTournamentPath(location.pathname);
   const isLeagueArea = isLeaguePath(location.pathname);
   const viewTransitionsEnabled = useViewTransitionsEnabled();
+  const appShellClassName = [
+    "app-shell",
+    isSidebarCollapsed ? "sidebar-collapsed" : "",
+    isMobileMenuOpen ? "mobile-menu-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const closeMenuOnDesktop = () => {
+      if (window.innerWidth > 980) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("resize", closeMenuOnDesktop);
+    return () => window.removeEventListener("resize", closeMenuOnDesktop);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) {
+      document.body.classList.remove("mobile-menu-open");
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+        mobileMenuButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.body.classList.add("mobile-menu-open");
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.classList.remove("mobile-menu-open");
+    };
+  }, [isMobileMenuOpen]);
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
-    <div className={isSidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
-      <aside className="sidebar no-print">
+    <div className={appShellClassName}>
+      <aside id="global-navigation" className="sidebar no-print">
         <div className="sidebar-header">
           <NavLink
             className="brand"
             to="/"
             aria-label="DrawLab トップへ"
             viewTransition={viewTransitionsEnabled}
+            onClick={closeMobileMenu}
           >
             <img
               className="sidebar-brand-icon"
@@ -60,6 +109,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             to="/tournaments"
             className={isTournamentArea ? "active" : undefined}
             viewTransition={viewTransitionsEnabled}
+            onClick={closeMobileMenu}
           >
             <SidebarNavIcon />
             <span>トーナメント</span>
@@ -68,6 +118,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             to="/leagues"
             className={isLeagueArea ? "active" : undefined}
             viewTransition={viewTransitionsEnabled}
+            onClick={closeMobileMenu}
           >
             <SidebarNavIcon />
             <span>リーグ</span>
@@ -81,6 +132,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             target="_blank"
             rel="noopener noreferrer"
             title="別タブでアプリを開きます"
+            onClick={closeMobileMenu}
           >
             <img
               className="related-app-icon"
@@ -106,6 +158,44 @@ export function AppShell({ children }: { children: ReactNode }) {
         </section>
       </aside>
       <div className="main-area">
+        <div className="mobile-header no-print">
+          <NavLink
+            className="mobile-brand"
+            to="/"
+            aria-label="DrawLab トップへ"
+            viewTransition={viewTransitionsEnabled}
+            onClick={closeMobileMenu}
+          >
+            <img
+              className="mobile-brand-icon"
+              src="/draw-lab-icon.png"
+              alt=""
+              width="24"
+              height="24"
+            />
+            <strong>DrawLab</strong>
+          </NavLink>
+          <button
+            ref={mobileMenuButtonRef}
+            type="button"
+            className="mobile-menu-toggle"
+            aria-label={isMobileMenuOpen ? "メニューを閉じる" : "メニューを開く"}
+            title={isMobileMenuOpen ? "メニューを閉じる" : "メニューを開く"}
+            aria-controls="global-navigation"
+            aria-expanded={isMobileMenuOpen}
+            onClick={() => setMobileMenuOpen((current) => !current)}
+          >
+            <MobileMenuIcon isOpen={isMobileMenuOpen} />
+          </button>
+        </div>
+        {isMobileMenuOpen ? (
+          <button
+            type="button"
+            className="mobile-menu-backdrop no-print"
+            aria-label="メニューを閉じる"
+            onClick={closeMobileMenu}
+          />
+        ) : null}
         {showTournamentStepper && tournamentId ? (
           <div className="stepper-band no-print">
             <TournamentStepper currentStep={currentStep} />
@@ -283,6 +373,30 @@ function SidebarToggleIcon({ isCollapsed }: { isCollapsed: boolean }) {
     >
       <path d={isCollapsed ? "M8 5L13 10L8 15" : "M12 5L7 10L12 15"} />
       <path d={isCollapsed ? "M4 5L9 10L4 15" : "M16 5L11 10L16 15"} />
+    </svg>
+  );
+}
+
+function MobileMenuIcon({ isOpen }: { isOpen: boolean }) {
+  return (
+    <svg
+      className="mobile-menu-icon"
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {isOpen ? (
+        <>
+          <path d="M4 4L16 16" />
+          <path d="M16 4L4 16" />
+        </>
+      ) : (
+        <>
+          <path d="M3 5H17" />
+          <path d="M3 10H17" />
+          <path d="M3 15H17" />
+        </>
+      )}
     </svg>
   );
 }

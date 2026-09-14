@@ -79,6 +79,70 @@ describe("AppShell sidebar", () => {
     expect(relatedApps?.hasAttribute("hidden")).toBe(false);
     expect(screen.getByRole("link", { name: "MatchupLab" })).toBeTruthy();
   });
+
+  it("renders the common mobile header with the app brand and menu button", () => {
+    renderAppShell();
+
+    const mobileHeader = document.querySelector(".mobile-header");
+    const mobileBrand = document.querySelector<HTMLAnchorElement>(".mobile-brand");
+    const mobileBrandIcon = document.querySelector<HTMLImageElement>(".mobile-brand-icon");
+    const menuButton = screen.getByRole("button", { name: "メニューを開く" });
+
+    expect(mobileHeader).toBeTruthy();
+    expect(mobileBrand?.getAttribute("aria-label")).toBe("DrawLab トップへ");
+    expect(mobileBrandIcon?.getAttribute("src")).toBe("/draw-lab-icon.png");
+    expect(mobileBrand?.textContent).toContain("DrawLab");
+    expect(menuButton.getAttribute("aria-controls")).toBe("global-navigation");
+    expect(menuButton.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("opens the mobile drawer and closes it with the backdrop or Escape", () => {
+    renderAppShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "メニューを開く" }));
+
+    const menuButton = document.querySelector<HTMLButtonElement>(".mobile-menu-toggle")!;
+    expect(menuButton.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector(".mobile-menu-backdrop")).toBeTruthy();
+    expect(document.body.classList.contains("mobile-menu-open")).toBe(true);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.getByRole("button", { name: "メニューを開く" })).toBeTruthy();
+    expect(document.querySelector(".mobile-menu-backdrop")).toBeNull();
+    expect(document.body.classList.contains("mobile-menu-open")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "メニューを開く" }));
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".mobile-menu-backdrop")!);
+
+    expect(screen.getByRole("button", { name: "メニューを開く" })).toBeTruthy();
+  });
+
+  it("closes the mobile drawer after selecting a navigation item", () => {
+    renderAppShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "メニューを開く" }));
+    fireEvent.click(screen.getByRole("link", { name: "リーグ" }));
+
+    expect(screen.getByRole("heading", { name: "リーグ" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "メニューを開く" })).toBeTruthy();
+    expect(document.querySelector(".mobile-menu-backdrop")).toBeNull();
+  });
+
+  it("closes the mobile drawer when the viewport returns to desktop width", () => {
+    renderAppShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "メニューを開く" }));
+
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1200 });
+    fireEvent(window, new Event("resize"));
+
+    expect(screen.getByRole("button", { name: "メニューを開く" })).toBeTruthy();
+    expect(document.body.classList.contains("mobile-menu-open")).toBe(false);
+
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
+  });
 });
 
 describe("AppShell league stepper", () => {

@@ -6,7 +6,13 @@ import type {
   DrawSize,
   ResolvedTournamentMatch,
 } from "../domain/types";
+import { useState } from "react";
 import type { ReactNode } from "react";
+import {
+  BracketZoomControls,
+  BracketZoomViewport,
+  DEFAULT_BRACKET_ZOOM,
+} from "./BracketZoom";
 import { getEffectiveOutputPageCount } from "../domain/outputOptions";
 
 const singleSlotHeight = 44;
@@ -335,6 +341,7 @@ export function DrawPreview({
   renderMode?: "full" | "canvas";
   pageNumber?: number;
 }) {
+  const [zoom, setZoom] = useState<number>(DEFAULT_BRACKET_ZOOM);
   const roundCount = Math.log2(viewModel.drawSize);
   const bothSides = viewModel.outputOptions.bracketLayout === "bothSides";
   const doubles = viewModel.matchType === "doubles";
@@ -898,23 +905,25 @@ export function DrawPreview({
     >
       <div className="draw-page-content">
         {renderHeading()}
-        <div className="page-bracket-viewport">
-          {(() => {
-            const pageMatches = getPrintPageMatches(viewModel.matches, pageBracket.drawSize, index);
-            return <DrawPreview
-              viewModel={{
-                ...viewModel,
-                drawSize: pageBracket.drawSize,
-                rows: pageBracket.rows,
-                matches: pageMatches,
-                scoreDisplays: getPrintPageScoreDisplays(viewModel.scoreDisplays, pageMatches),
-              }}
-              generatedAt={generatedAt}
-              renderMode="canvas"
-              pageNumber={index + 1}
-            />;
-          })()}
-        </div>
+        {(() => {
+          const pageMatches = getPrintPageMatches(viewModel.matches, pageBracket.drawSize, index);
+          const bracket = <DrawPreview
+            viewModel={{
+              ...viewModel,
+              drawSize: pageBracket.drawSize,
+              rows: pageBracket.rows,
+              matches: pageMatches,
+              scoreDisplays: getPrintPageScoreDisplays(viewModel.scoreDisplays, pageMatches),
+            }}
+            generatedAt={generatedAt}
+            renderMode="canvas"
+            pageNumber={index + 1}
+          />;
+
+          return output === "screen"
+            ? <BracketZoomViewport zoom={zoom} onZoomChange={setZoom}>{bracket}</BracketZoomViewport>
+            : <div className="page-bracket-viewport">{bracket}</div>;
+        })()}
         <footer className="draw-page-footer" aria-label={`${index + 1} / ${pageCount}ページ`}>
           {index + 1} / {pageCount}ページ
         </footer>
@@ -924,6 +933,7 @@ export function DrawPreview({
 
   return (
     <>
+      <BracketZoomControls zoom={zoom} onZoomChange={setZoom} />
       <div className="draw-page-preview-list">
         {pageBrackets.map((pageBracket, index) => renderPage(pageBracket, index, "screen"))}
       </div>
