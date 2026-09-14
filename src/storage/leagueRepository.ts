@@ -97,6 +97,7 @@ export function createLeagueRepository(indexedDb: IDBFactory = indexedDB): Leagu
         isValid: true,
         result: "unplayed" as const,
         setScores: createEmptySetScores(source.matchFormat),
+        isWalkover: false,
         note: "",
       }));
       const duplicated: League = {

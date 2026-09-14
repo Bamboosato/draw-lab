@@ -65,7 +65,12 @@ export function LeagueMatrixPrintDocument({ league, groupId, resultMode }: { lea
             <tbody>
               {page.rows.map((row) => (
                 <tr key={row.participant.id}>
-                  <th scope="row">{row.participant.fullLabel}</th>
+                  <th scope="row">
+                    <span className="league-matrix-print-participant">
+                      {row.participant.rank === undefined ? null : <span className="league-matrix-print-rank-badge">{row.participant.rank}位</span>}
+                      <span>{row.participant.fullLabel}</span>
+                    </span>
+                  </th>
                   {row.cells.map((cell) => (
                     <td className={cell.isDiagonal ? "is-diagonal" : cell.details ? "has-details" : undefined} key={cell.participantId}>
                       {cell.isDiagonal ? <DiagonalLine /> : cell.result ? <span className="league-matrix-print-cell-content"><span className="league-matrix-print-result-symbol">{cell.result}</span>{cell.details?.map((detail, index) => <span className="league-matrix-print-set-score" key={index}>{detail}</span>)}</span> : null}

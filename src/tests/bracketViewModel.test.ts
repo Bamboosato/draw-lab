@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildBracketViewModel } from "../domain/bracketViewModel";
-import { createTournamentMatches, updateTournamentMatchSetScore } from "../domain/tournamentMatches";
+import { createTournamentMatches, updateTournamentMatch, updateTournamentMatchSetScore } from "../domain/tournamentMatches";
 import type { GeneratedDraw } from "../domain/types";
 import { makeEntrant, makeTournament } from "./testFactory";
 
@@ -88,6 +88,32 @@ describe("buildBracketViewModel", () => {
     };
 
     expect(buildBracketViewModel(tournament, draw).scoreDisplays).toEqual([]);
+  });
+
+  it("uses a walkover display instead of score values when a match is marked WO", () => {
+    const tournament = makeTournament({ drawSize: 4, matchFormat: 1, entrants: [
+      makeEntrant(1), makeEntrant(2), makeEntrant(3), makeEntrant(4),
+    ] });
+    const slots = tournament.entrants.map((entrant, index) => ({
+      position: index + 1,
+      entrantId: entrant.id,
+      isBye: false,
+    }));
+    let draw: GeneratedDraw = {
+      id: "draw-1",
+      tournamentId: tournament.id,
+      randomSeed: "view-seed",
+      generatedAt: "2026-07-02T00:00:00.000Z",
+      slots,
+      matches: createTournamentMatches(slots, 4, undefined, 1),
+    };
+
+    draw = updateTournamentMatch(draw, "match-1", { result: "participantAWin", isWalkover: true });
+
+    expect(buildBracketViewModel(tournament, draw).scoreDisplays).toEqual([{
+      matchId: "match-1",
+      mode: "walkover",
+    }]);
   });
 
   it("converts tournament and draw data into renderer-friendly rows", () => {

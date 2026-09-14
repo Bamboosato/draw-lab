@@ -23,6 +23,30 @@ describe("leagueJson", () => {
     expect(result.league.createdAt).toBe("2026-08-28T00:00:00.000Z");
   });
 
+  it("WOと記録用ゲーム数をJSONへ往復する", () => {
+    const source = {
+      ...createDefaultLeague(),
+      id: "league-1",
+      title: "リーグA",
+      detailInputEnabled: true,
+      participants: [
+        { id: "p1", displayName: "A", participantType: "individual" as const, memberNames: ["A"], selectionStatus: "selected" as const },
+        { id: "p2", displayName: "B", participantType: "individual" as const, memberNames: ["B"], selectionStatus: "selected" as const },
+      ],
+      groups: [{ id: "g1", name: "A", participantIds: ["p1", "p2"] }],
+      matches: [{ id: "m1", groupId: "g1", order: 1, participantAId: "p1", participantBId: "p2", isValid: true, result: "participantAWin" as const, isWalkover: true, setScores: [{ participantA: 6, participantB: 0 }] }],
+    };
+
+    const result = parseLeagueJson(serializeLeague(source));
+
+    expect(result.state).toBe("success");
+    if (result.state !== "success" || result.kind !== "league") return;
+    expect(result.league.matches[0]).toMatchObject({
+      isWalkover: true,
+      setScores: [{ participantA: 6, participantB: 0 }],
+    });
+  });
+
   it("全リーグバックアップを認識し、置換復元用のIDと日時を保持する", () => {
     const source = {
       ...createDefaultLeague(),

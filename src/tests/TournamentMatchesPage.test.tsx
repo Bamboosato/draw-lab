@@ -172,6 +172,30 @@ describe("TournamentMatchesPage", () => {
 
     expect(updateTournamentMock).toHaveBeenCalledTimes(1);
   });
+
+  it("勝者を選択した後にWOを記録でき、ゲーム数は変更しない", () => {
+    const tournament = makeTournamentWithDraw({ matchSelectionStatus: "confirmed", detailInputEnabled: true });
+    tournament.generatedDraw!.matches = tournament.generatedDraw!.matches.map((match) => match.id === "match-1"
+      ? { ...match, result: "participantAWin" as const, setScores: [{ participantA: 6, participantB: 1 }] }
+      : match);
+    useTournamentMock.mockReturnValue(tournament);
+    render(<TournamentMatchesPage />);
+
+    const walkover = screen.getByRole("checkbox", { name: "第1試合 Walk Over" });
+    expect((walkover as HTMLInputElement).disabled).toBe(false);
+    fireEvent.click(walkover);
+
+    expect(updateTournamentMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      generatedDraw: expect.objectContaining({
+        matches: expect.arrayContaining([expect.objectContaining({
+          id: "match-1",
+          result: "participantAWin",
+          isWalkover: true,
+          setScores: [{ participantA: 6, participantB: 1 }],
+        })]),
+      }),
+    }));
+  });
 });
 
 function makeTournamentWithDraw(overrides: Parameters<typeof makeTournament>[0] = {}) {

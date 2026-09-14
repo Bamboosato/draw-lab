@@ -12,6 +12,7 @@ export function TournamentMatchCard({
   disabled = false,
   onResultChange,
   onSetScoreChange,
+  onWalkoverChange,
   onNoteChange,
 }: {
   match: ResolvedTournamentMatch;
@@ -22,6 +23,7 @@ export function TournamentMatchCard({
   disabled?: boolean;
   onResultChange: (result: TournamentMatchResult) => void;
   onSetScoreChange: (setIndex: number, participant: "participantA" | "participantB", value: number | null) => void;
+  onWalkoverChange: (walkover: boolean) => void;
   onNoteChange: (note: string) => void;
 }) {
   const canEditMatch = !disabled && (match.state === "ready" || match.state === "completed");
@@ -51,6 +53,9 @@ export function TournamentMatchCard({
           matchFormat={matchFormat}
           displayOrder={match.matchNo}
           readOnly={!canEditMatch}
+          walkover={Boolean(match.isWalkover)}
+          canMarkWalkover={match.result === "participantAWin" || match.result === "participantBWin"}
+          onWalkoverChange={onWalkoverChange}
           onChange={onSetScoreChange}
         />
       ) : null}

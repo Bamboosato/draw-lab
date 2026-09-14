@@ -68,6 +68,10 @@ export function buildBracketScoreDisplays(
       return [] as BracketScoreDisplay[];
     }
 
+    if (match.isWalkover) {
+      return [{ matchId: match.id, mode: "walkover" } satisfies BracketScoreDisplay];
+    }
+
     const setScores = normalizeSetScores(match.setScores, format);
     if (format === 1) {
       const score = setScores[0];

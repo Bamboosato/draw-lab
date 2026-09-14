@@ -86,6 +86,25 @@ describe("tournament match resolution", () => {
     expect(draw.matches.find((match) => match.id === "match-1")?.result).toBe("participantBWin");
   });
 
+  it("records WO independently from the manually selected winner and stored game scores", () => {
+    let draw = makeDraw(4);
+    draw = updateTournamentMatch(draw, "match-1", {
+      result: "participantAWin",
+      isWalkover: true,
+      setScores: [{ participantA: 6, participantB: 1 }],
+    });
+
+    expect(resolveTournamentMatches(draw, entrants(4)).find((match) => match.id === "match-1")).toMatchObject({
+      result: "participantAWin",
+      isWalkover: true,
+      winnerEntrantId: "entrant-1",
+      setScores: [{ participantA: 6, participantB: 1 }],
+    });
+
+    draw = updateTournamentMatch(draw, "match-1", { result: "unplayed" });
+    expect(draw.matches.find((match) => match.id === "match-1")?.isWalkover).toBe(false);
+  });
+
   it("accepts a later-set score without deleting or locking later rows", () => {
     let draw = makeDraw(4, createSlots(4), 3);
     draw = updateTournamentMatchSetScore(draw, "match-1", 3, 2, "participantA", 0);

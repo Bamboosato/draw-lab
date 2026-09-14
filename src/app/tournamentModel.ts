@@ -317,6 +317,7 @@ export function unconfirmTournamentMatchSelection(tournament: Tournament): Tourn
       matches: ensureTournamentMatches(tournament.generatedDraw, tournament.drawSize, matchFormat).map((match) => ({
         ...match,
         result: "unplayed",
+        isWalkover: false,
         setScores: createEmptySetScores(matchFormat),
         note: undefined,
       })),

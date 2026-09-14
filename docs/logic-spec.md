@@ -1,7 +1,7 @@
 # 処理ロジック仕様書
 
 作成日: 2026-07-02  
-更新日: 2026-09-03
+更新日: 2026-09-14
 対象: draw-lab WEB版トーナメント表作成アプリ PoC（正式リリース版 1.0.0）
 参照: `docs/requirements.md`, `docs/screen-spec.md`
 
@@ -188,6 +188,7 @@ type TournamentMatch = {
   sourceB: TournamentMatchSource;
   result: TournamentMatchResult;
   setScores?: Array<{ participantA: number | null; participantB: number | null }>;
+  isWalkover?: boolean;
   note?: string;
 };
 
@@ -732,7 +733,7 @@ function resolveTournamentMatches(
 function updateTournamentMatch(
   draw: GeneratedDraw,
   matchId: string,
-  patch: Pick<TournamentMatch, "result"> & Partial<Pick<TournamentMatch, "setScores" | "note">>,
+  patch: Pick<TournamentMatch, "result"> & Partial<Pick<TournamentMatch, "setScores" | "note" | "isWalkover">>,
   matchFormat: 1 | 3 | 5,
 ): GeneratedDraw;
 
@@ -752,6 +753,8 @@ function updateTournamentMatchSetScore(
 
 - 対戦者が2名とも確定した実試合は、結果入力可能な`ready`状態とする
 - `result`が`participantAWin`または`participantBWin`の場合、その参加者を勝者として次回戦へ渡す
+- `isWalkover`は不戦勝の記録であり、勝者を自動選択する入力ではない。勝者は`result`で手動選択する
+- WOを設定しても`setScores`は編集・保存可能で、既存値を削除しない。`result`を`unplayed`へ戻す場合はWOを解除する
 - 1名とBYEの組み合わせは自動勝ち上がりとし、結果入力を要求しない
 - 前回戦の結果が未入力、または対戦者が未確定の場合は、対戦カードの枠だけを表示する`pending`状態とする
 - 引き分けは結果値として保存しない。ただしUIではリーグと同じ見た目の無効ボタンを表示する
@@ -1145,7 +1148,7 @@ type BracketScoreDisplay = {
 
 `matches`の解決結果をもとに、レンダラーは勝者が通過した区間だけへ勝者用の濃いオレンジ色（`#c2410c`）と少し太い線を適用する。勝者線は参加者側の横線、回戦の縦線、次回戦側の横線を一続きの経路として強調する。既存のU字型接続線を一つのパスとして全体着色せず、参加者側、接続部、次回戦側の区間を対戦カードに対応付ける。`championDrawPosition`がある場合だけ、決勝の優勝線の上へ同じ色のNo.を表示する。
 
-`scoreDisplays`は入力済みのセットゲーム数から派生させ、`matchId`で`matches`の試合に対応付ける。1セットマッチは`mode = "winner-loser-games"`とし、選択された勝者のゲーム数を`winnerValue`、敗者のゲーム数を`loserValue`へ設定する。レンダラーは勝者線の上に`winnerValue-loserValue`の順で1つの文字列を表示する。3セットマッチ・5セットマッチは`mode = "participant-set-wins"`とし、各セットのゲーム数を比較して取得セット数を`participantAValue`・`participantBValue`へ設定する。レンダラーは勝敗で値を入れ替えず、A側・B側の対戦者行に対応する位置へ表示する。未実施、BYE、スコア未入力、またはセット数を算出できない試合は`scoreDisplays`へ含めない。手動で選択された勝敗とスコアが一致しない場合も、表示用の値や勝敗を自動修正しない。
+`scoreDisplays`は入力済みのセットゲーム数から派生させ、`matchId`で`matches`の試合に対応付ける。WOが記録された完了試合は`mode = "walkover"`としてゲーム数に依存せず表示対象に含める。レンダラーは勝者線の上に`WO`を1つ表示する。通常の1セットマッチは`mode = "winner-loser-games"`とし、選択された勝者のゲーム数を`winnerValue`、敗者のゲーム数を`loserValue`へ設定する。レンダラーは勝者線の上に`winnerValue-loserValue`の順で1つの文字列を表示する。3セットマッチ・5セットマッチは`mode = "participant-set-wins"`とし、各セットのゲーム数を比較して取得セット数を`participantAValue`・`participantBValue`へ設定する。レンダラーは勝敗で値を入れ替えず、A側・B側の対戦者行に対応する位置へ表示する。未実施、BYE、スコア未入力、またはセット数を算出できない通常試合は`scoreDisplays`へ含めない。手動で選択された勝敗とスコアが一致しない場合も、表示用の値や勝敗を自動修正しない。
 
 対戦結果、備考、途中回戦の対戦カードそのものは、スコア表示用の派生値を除いてViewModelの表示対象に含めない。
 
