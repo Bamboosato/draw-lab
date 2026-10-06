@@ -1,7 +1,7 @@
 # 実装状況と文書の対応
 
 確認日: 2026-10-06  
-確認元: GitHub `main`と一致する`a1ecba6afc9c68b9444072fcf15acd7bc41fc508`のコード・既存テスト
+アプリ機能の確認元: GitHub `main`と一致する`a1ecba6afc9c68b9444072fcf15acd7bc41fc508`のコード・既存テスト。依存性CIの追加と依存更新は[監査の検証記録](dependency-security.md)を参照。
 
 本書は、1.0.0リリース後の追加機能を含む現在の実装を整理する。要件を変更する文書ではなく、要件・設計から実装を確認するための案内とする。アプリと各設計文書の版番号は別に管理する。
 
@@ -26,6 +26,7 @@
 | IndexedDB、旧localStorage移行、連携情報の一括保存 | `src/storage/appDatabase.ts`、`tournamentRepository.ts`、`leagueRepository.ts`、`tournamentIntegrationRepository.ts`、`localStorageMigration.ts` | [保存要件](requirements.md)、[ロジック仕様](logic-spec.md)、[連携設計](league-tournament-integration-design.md) |
 | 個別JSON、種別ごとの全件バックアップ・復元 | `src/app/tournamentPersistence.ts`、`src/storage/leagueJson.ts`、`src/pages/JsonImportPage.tsx`、`LeagueJsonImportPage.tsx` | [JSON要件](requirements.md)、[リーグ設計](league-design.md)、[連携設計](league-tournament-integration-design.md) |
 | PWA、オフライン起動、更新・インストール案内 | `vite.config.ts`、`pwa/`、`src/components/PwaStatus.tsx`、`PwaInstallGuide.tsx` | [共通要件](requirements.md)、[画面仕様](screen-spec.md) |
+| CIの依存性監査、開発依存の期限付き例外、監査JSON保存 | `.github/workflows/ci.yml`、`scripts/security-audit.mjs`、`scripts/security-audit-policy.mjs`、`./security-audit-exception.json` | [依存性セキュリティ監査](dependency-security.md) |
 
 初期の推奨案にある`src/renderers/`は現在使用していない。生成と描画の責務を分離し、描画用ViewModelは`src/domain/bracketViewModel.ts`、SVG描画は`src/components/DrawPreview.tsx`に置く。リーグ設計の`leagueValidation`、`leagueSelection`、`leagueSchedule`などの責務は、主に`src/domain/leagueLogic.ts`と`src/app/leagueModel.ts`へ分割されている。
 
@@ -68,11 +69,11 @@ WOは通常のBYE枠とは別の試合記録である。チェックだけでは
 | 境界値 | 4 / 128ドロー、出力ページ数、100 / 300%倍率、順位区分の範囲を区別すること |
 | 状態遷移 | 未生成→生成、未確定→確定、運用→完了→編集再開、全置換の確認・キャンセルを区別すること |
 
-今回は文書のみを変更し、生成・結果・状態遷移、保存・JSON、リーグ順位・連携、出力設定、メニュー・倍率操作を裏付ける既存テストに範囲を絞った。
+以下は依存性CI導入前の文書照合時の検証記録。文書のみを変更し、生成・結果・状態遷移、保存・JSON、リーグ順位・連携、出力設定、メニュー・倍率操作を裏付ける既存テストに範囲を絞った。
 
 - Vitest: 関連17ファイル・230件成功。対象は`drawGenerator`、`validation`、`tournamentModel`、`tournamentMatches`、`tournamentBackup`、`tournamentIntegrationRepository`、`leagueLogic`、`leagueModel`、`leagueJson`、`leagueRepository`、`leagueTournamentAdapter`、`leagueTournamentPlacement`、`outputOptions`、`BracketZoom`、`AppShell`、`leaguePrint`、`print`の既存テスト。
 - `npm run typecheck`成功。
 - Markdown内の相対リンク57件、対応表の実装参照55件について参照先の存在を確認。文書のモデル項目・省略可能性をTypeScript定義と比較。
 - `git diff --check`成功。
 
-文書変更であるため、実ブラウザE2E・クロスブラウザ・全E2Eは未実施。画面表示・実際のPDFレイアウト・PWA挙動を今回再検証したとは扱わない。
+この文書照合時は実ブラウザE2E・クロスブラウザ・全E2Eを未実施とした。その後の依存更新では単体テスト全件と画面遷移の実ブラウザ確認を実施し、[監査の検証記録](dependency-security.md)へ記載する。PDFレイアウト・PWAの更新／オフライン挙動は再検証していない。

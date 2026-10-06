@@ -76,6 +76,8 @@ npm run dev
 検証コマンド:
 
 ```bash
+npm run test:security
+npm run audit:security
 npm test
 npm run typecheck
 npm run build
@@ -83,11 +85,18 @@ npm run build
 
 React / TypeScript / Vite / React Router / Vitestを使用します。生成・集計処理はReactから独立した`src/domain/`、画面は`src/pages/`と`src/components/`、保存は`src/storage/`、状態管理とJSON変換の一部は`src/app/`に分離しています。既存VBAコードやExcel固有の実装は移植しません。
 
+## CIと依存性の監査
+
+GitHub ActionsはPull Requestと`main`へのpushで、Node.js 24と`npm ci`を使って検証します。監査ルールのテスト、本番依存の`npm audit --omit=dev --json`、開発依存を含む`npm audit --include=dev --json`、型チェック、単体テスト、本番ビルドを順に実行します。
+
+重大度を問わず、未承認の脆弱性や監査の通信・解析失敗があればCIは失敗します。現在の一時例外は0件です。例外を認める場合も、開発依存だけを対象に、アドバイザリ・バージョン・依存パス・有効期限を限定し、本番依存とCriticalは除外できません。監査JSONは成功・失敗にかかわらず`dependency-audit` artifactへ保存します。詳細は[依存性セキュリティ監査](docs/dependency-security.md)を参照してください。
+
 ## 開発用ドキュメント
 
 | ドキュメント | 内容 |
 |---|---|
 | [実装状況](docs/implementation-status.md) | 現在の機能・実装箇所・文書の対応、未対応範囲 |
+| [依存性セキュリティ監査](docs/dependency-security.md) | CIの監査基準、一時例外、レポート、検証範囲 |
 | [要件定義書](docs/requirements.md) | トーナメントと共通機能の要件の正 |
 | [処理ロジック仕様書](docs/logic-spec.md) | 生成、結果、保存・復元、テスト観点 |
 | [画面別仕様書](docs/screen-spec.md) | 画面・操作・ルーティング・状態遷移 |
