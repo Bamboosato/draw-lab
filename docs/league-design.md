@@ -4,12 +4,14 @@
 - **文書種別:** リーグ用新規設計書
 - **バージョン:** 0.8.0（Walk Over記録を追加）
 - **作成日:** 2026-08-28
-- **更新日:** 2026-09-14
+- **更新日:** 2026-10-06
 - **要件正:** `docs/league-requirements.md`
 - **UI参考:** `docs/screen-spec.md`
 - **既存実装参考:** `src/components/AppShell.tsx`、`src/app/tournamentFlow.ts`、`src/components/ConfirmDialog.tsx`、`src/components/ValidationBanner.tsx`
 
 本書は、リーグ要件を実装可能な構造へ分解する。既存トーナメントのドメインモデルは再利用せず、共通UI・保存基盤・画面遷移の考え方のみを再利用する。
+
+リーグ機能は実装済みである。以下の責務分解には設計上の名前を含むため、現在の実装ファイルとの対応は[実装状況](implementation-status.md)を参照する。
 
 ---
 
@@ -256,7 +258,7 @@ type LeagueMatch = {
   participantBId: string;
   isValid: boolean;
   result: "unplayed" | "participantAWin" | "draw" | "participantBWin";
-  setScores: SetScore[];
+  setScores?: SetScore[];
   isWalkover?: boolean;
   note?: string;
 };
@@ -677,9 +679,9 @@ type ChangeImpact = {
 ### 7.1 IndexedDB
 
 - 既存の`draw-lab`データベースを使用する。
-- DBバージョンを上げ、新しい`leagues` object storeを追加する。
+- 現在のDBバージョンは3。`tournaments`、`leagues`、`metadata`、`tournamentIntegrations`の4つのobject storeを持つ。定義は`src/storage/appDatabase.ts`を参照する。
 - `tournaments` object storeは変更せず、既存データをそのまま読み書きできるようにする。
-- `LeagueRepository`は`list`、`get`、`put`、`delete`を提供する。
+- `LeagueRepository`は`list`、`get`、`save`、`delete`、`duplicate`、`replaceAll`を提供する。
 - 保存状態は`loading`、`ready`、`saving`、`error`を既存Providerと同じ考え方で扱う。
 - 保存失敗時は画面の入力状態を維持し、再試行できるようにする。
 
@@ -699,24 +701,27 @@ type ChangeImpact = {
 ```ts
 type LeagueJsonEnvelope = {
   kind: "draw-lab-league";
-  schemaVersion: number;
+  schemaVersion: 2;
+  exportedAt: string;
   league: League;
 };
 
 type LeagueBackupJsonEnvelope = {
   kind: "draw-lab-league-backup";
-  schemaVersion: number;
+  schemaVersion: 2;
   exportedAt: string;
   leagues: League[];
 };
 ```
 
 - JSON変換は`leagueJson.ts`へ分離する。
+- 現在の出力形式は`schemaVersion: 2`とし、入力では旧バージョン1も受け入れて正規化する。
 - 個別出力は`draw-lab-league`、全件出力は`draw-lab-league-backup`として識別する。
 - 全件出力ファイル名は`drawlab_league_backup_日時.json`とする。
 - エクスポートは候補カード、`isValid`、確定状態、結果、`isWalkover`、セットスコア、備考、試合形式、詳細入力・詳細表示、手動順位を含む。旧JSONで`isWalkover`がない場合はfalse相当として扱う。
 - 個別インポート時はリーグID、参加単位ID、グループID、対戦カードIDを再採番する。
 - 全件復元時はバックアップ内のIDを保持し、既存リーグを全置換する。
+- 全リーグバックアップはリーグ本体だけを含み、トーナメントとその連携情報を含めない。全件復元でもトーナメント・連携情報は置換しない。アプリ全体の移行には全大会バックアップも別途必要とする。
 - 再採番後もすべての参照を整合させる。
 - 不正なJSONを保存処理へ渡さない。
 

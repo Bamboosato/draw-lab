@@ -1,9 +1,11 @@
 # 処理ロジック仕様書
 
 作成日: 2026-07-02  
-更新日: 2026-09-14
-対象: draw-lab WEB版トーナメント表作成アプリ PoC（正式リリース版 1.0.0）
+更新日: 2026-10-06
+対象: draw-labのトーナメントと共通処理（1.0.0リリース後の追加実装を含む）
 参照: `docs/requirements.md`, `docs/screen-spec.md`
+
+各機能の現在の実装ファイルは[実装状況](implementation-status.md)を参照する。本書の「推奨関数」は責務の仕様を表し、実装の関数名・ファイル分割は同一覧とソースを参照する。
 
 ---
 
@@ -90,13 +92,14 @@ type Tournament = {
   venue?: string;
   eventName?: string;
   matchType: "singles" | "doubles" | "team";
-  matchFormat: 1 | 3 | 5;
-  detailInputEnabled: boolean;
-  matchSelectionStatus: "pending" | "confirmed";
+  matchFormat?: 1 | 3 | 5;
+  detailInputEnabled?: boolean;
+  matchSelectionStatus?: "pending" | "confirmed";
   drawSize: DrawSize;
   seedCount: number;
   entrants: Entrant[];
   options: DrawOptions;
+  outputOptions?: DrawOutputOptions;
   generatedDraw?: GeneratedDraw;
   status?: "inProgress" | "completed";
   createdAt: string;
@@ -115,7 +118,7 @@ type DrawSize = 4 | 8 | 16 | 32 | 64 | 128;
 ```ts
 type Entrant = {
   id: string;
-  seedNo?: number;
+  seedNo?: number | string;
   player1Name: string;
   player2Name?: string;
   teamName?: string;
@@ -125,6 +128,7 @@ type Entrant = {
   sameTeam?: boolean;
   sameTeamGroup?: string;
   region?: string;
+  ranking?: number | string;
 };
 ```
 
@@ -233,7 +237,9 @@ function generateDraw(input: GenerateDrawInput): GenerateDrawResult;
 ```ts
 type GenerateDrawInput = {
   tournament: Tournament;
-  now?: string;
+  randomSeed?: string;
+  now: string;
+  placementContext?: TournamentPlacementContext;
 };
 
 type GenerateDrawResult = {
@@ -573,9 +579,11 @@ function placeUnseededEntrants(params: PlaceUnseededEntrantsParams): DrawSlot[];
 type PlaceUnseededEntrantsParams = {
   slots: DrawSlot[];
   entrants: Entrant[];
+  entrantsById?: Map<string, Entrant>;
   drawSize: DrawSize;
   options: DrawOptions;
   random: () => number;
+  placementContext?: TournamentPlacementContext;
 };
 ```
 
@@ -636,6 +644,7 @@ type PlacementPenaltyParams = {
   entrantsById: Map<string, Entrant>;
   drawSize: DrawSize;
   options: DrawOptions;
+  placementContext?: TournamentPlacementContext;
 };
 ```
 
@@ -701,7 +710,8 @@ type CreateGeneratedDrawParams = {
   tournamentId: string;
   randomSeed: string;
   slots: DrawSlot[];
-  matches: TournamentMatch[];
+  drawSize: DrawSize;
+  matchFormat?: 1 | 3 | 5;
   now: string;
 };
 ```
@@ -818,6 +828,8 @@ function exportAllTournamentsToJson(tournaments: readonly Tournament[], exported
 
 時刻を引数で受け取り、同じ入力から同じJSONを生成できる純粋関数に寄せる。
 
+実装は`src/app/tournamentPersistence.ts`の`serializeTournament`、`serializeAllTournaments`に対応する。省略可能な連携情報を受け取り、含まれる場合はJSONへ保存する。
+
 ## 15.2 個別大会JSON
 
 個別大会JSONは、選択した1大会の共有、複製、不具合調査に使用する。
@@ -827,18 +839,20 @@ type TournamentExport = {
   schemaVersion: 1;
   exportedAt: string;
   tournament: Tournament;
+  integration?: TournamentIntegrationRecord;
 };
 ```
 
 ## 15.3 全大会バックアップJSON
 
-全大会バックアップJSONは、IndexedDBに保存されている全大会のバックアップと、別PC・別ブラウザへの移行に使用する。
+全大会バックアップJSONは、全トーナメントとその連携情報のバックアップと、別PC・別ブラウザへの移行に使用する。リーグ本体は含めず、`src/storage/leagueJson.ts`の全リーグバックアップを別途使用する。
 
 ```ts
 type TournamentBackup = {
   schemaVersion: 1;
   exportedAt: string;
   tournaments: Tournament[];
+  integrations?: TournamentIntegrationRecord[];
 };
 ```
 
@@ -943,6 +957,8 @@ interface TournamentRepository {
   delete(id: string): Promise<void>;
   duplicate(id: string): Promise<Tournament>;
   replaceAll(tournaments: readonly Tournament[]): Promise<void>;
+  getMetadata<T>(key: string): Promise<T | undefined>;
+  setMetadata(key: string, value: unknown): Promise<void>;
 }
 ```
 
@@ -954,19 +970,23 @@ UIとReact Providerは永続化に `TournamentRepository` を使用し、Indexed
 
 ```ts
 const DATABASE_NAME = "draw-lab";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 3;
 const TOURNAMENT_STORE = "tournaments";
+const LEAGUE_STORE = "leagues";
 const METADATA_STORE = "metadata";
+const TOURNAMENT_INTEGRATION_STORE = "tournamentIntegrations";
 ```
 
 | object store | key | 用途 |
 |---|---|---|
 | `tournaments` | `Tournament.id` | 大会単位の保存、取得、更新、削除 |
+| `leagues` | `League.id` | リーグ単位の保存、取得、更新、削除 |
 | `metadata` | 文字列キー | schemaVersion、localStorage移行完了状態 |
+| `tournamentIntegrations` | `TournamentIntegrationRecord.tournamentId` | 引継ぎ元リーグ・順位区分・参加者スナップショット |
 
 `tournaments` には `updatedAt` のインデックスを用意し、一覧は更新日時の降順で取得する。1大会の更新で全大会を再書き込みしない。
 
-`replaceAll` は `tournaments` storeを対象とする1つのreadwriteトランザクション内で、既存全件の削除、バックアップ全件の保存、件数とID集合の再読込確認を行う。書き込み失敗または確認不一致の場合はtransactionをabortし、completeイベント後にのみ処理成功とする。
+`TournamentRepository.replaceAll` は `tournaments` storeを対象とする1つのreadwriteトランザクション内で、既存全件の削除、バックアップ全件の保存、件数とID集合の再読込確認を行う。画面からの全大会復元では、`TournamentIntegrationRepository.replaceAllWithTournaments`で`tournaments`と`tournamentIntegrations`を同一トランザクションで置換する。連携情報がないバックアップでは連携storeを空にする。書き込み失敗または確認不一致の場合はtransactionをabortし、completeイベント後にのみ処理成功とする。いずれも`leagues` storeは置換しない。
 
 ## 17.3 localStorageからの移行
 
@@ -1128,15 +1148,18 @@ type BracketViewModel = {
 type BracketRow = {
   position: number;
   label: string;
+  player1Label?: string;
+  player2Label?: string;
   seedNo?: number;
   teamLabel?: string;
-  region?: string;
+  team1Label?: string;
+  team2Label?: string;
   isBye: boolean;
 };
 
 type BracketScoreDisplay = {
   matchId: string;
-  mode: "winner-loser-games" | "participant-set-wins";
+  mode: "winner-loser-games" | "participant-set-wins" | "walkover";
   winnerValue?: number;
   loserValue?: number;
   participantAValue?: number;

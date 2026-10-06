@@ -1,9 +1,11 @@
 # draw-lab 要件定義書
 
 作成日: 2026-07-02  
-更新日: 2026-09-14
-対象: WEB版トーナメント表作成アプリ PoC（正式リリース版 1.0.0）
+更新日: 2026-10-06
+対象: WEB版トーナメント表作成アプリと共通機能（1.0.0リリース後の追加実装を含む）
 リポジトリ: `Bamboosato/draw-lab`
+
+現在の機能と実装箇所は[実装状況](implementation-status.md)を参照する。リーグ機能は[リーグ要件](league-requirements.md)、リーグからトーナメントへの連携は[連携要件](league-tournament-integration-requirements.md)を要件の正とする。
 
 ---
 
@@ -133,14 +135,13 @@ PoCで対象とする機能は以下。
 
 最初のPoCでは以下を対象外とする。
 
-なお、リーグ戦機能は本書とは別の`docs/league-requirements.md`で定義する。本節の対象外範囲は、トーナメントPoCにおける対象外を示す。
+リーグ戦とリーグからトーナメントへの連携は実装済みであり、別の要件定義書で扱う。本節はアプリ全体で現在未対応の範囲を示す。
 
 - ユーザー登録・ログイン
 - クラウド保存
 - 共有URL発行
 - 共同編集
 - 高度な競技ルールに基づくスコア妥当性検証
-- リーグ戦
 - コンソレーション
 - 3位決定戦
 - 複数種目の一括管理
@@ -482,12 +483,12 @@ PoCでは、クラウド保存の代替としてJSONエクスポート / イン�
 - 不具合調査時にデータを共有できる
 - 将来的なクラウド保存設計に流用できる
 
-JSONは、以下の2種類を扱う。
+トーナメントのJSONは、以下の2種類を扱う。「全大会」は全トーナメントを指し、リーグ本体は含めない。リーグは個別リーグJSONと全リーグバックアップで別途入出力する。トーナメントの全置換復元ではリーグを変更せず、リーグの全置換復元ではトーナメントを変更しない。
 
 | 種類 | 用途 | 対象 |
 |---|---|---|
-| 個別大会JSON | 1大会の共有、複製、不具合調査 | 選択した1大会 |
-| 全大会バックアップJSON | PC移行、ブラウザ移行、一括バックアップ | IndexedDBに保存されている全大会 |
+| 個別大会JSON | 1大会の共有、複製、不具合調査 | 選択した1トーナメントと、その連携情報 |
+| 全大会バックアップJSON | PC移行、ブラウザ移行、一括バックアップ | 全トーナメントと、その連携情報 |
 
 個別大会JSONのインポートは、既存データを保持したまま新しい大会として追加する。大会IDを再採番する場合は、生成済みドローなどが保持する関連IDも整合するよう更新する。
 
@@ -498,6 +499,7 @@ type TournamentBackup = {
   schemaVersion: 1;
   exportedAt: string;
   tournaments: Tournament[];
+  integrations?: TournamentIntegrationRecord[];
 };
 ```
 
@@ -509,6 +511,7 @@ type TournamentBackup = {
 - 出力形式オプション
 - 生成済みドロー
 - 回戦ごとの対戦カード、勝敗、セットゲーム数、備考
+- Walk Over記録と、リーグから作成した場合の連携情報
 - 生成時入力署名
 - 乱数シード
 - 作成日時・更新日時
@@ -516,7 +519,7 @@ type TournamentBackup = {
 
 個別大会インポートでは、対戦カードが保持する生成済みドローIDおよび前回戦カードへの参照も新しいIDへ対応付ける。旧形式JSONに対戦カードがない場合は、配置枠から未実施状態の対戦カードを補完する。
 
-全大会バックアップJSONの復元は、現在のIndexedDBに保存されている全大会をバックアップ内容で置き換える「全置換」を基本とする。初期PoCでは、既存大会を残したままバックアップを統合するマージ復元は必須としない。
+全大会バックアップJSONの復元は、トーナメントとその連携情報をバックアップ内容で置き換える「全置換」を基本とする。連携情報を持たない旧バックアップも受け入れ、その場合は連携情報を空にする。リーグ本体は置き換えない。既存大会を残したままバックアップを統合するマージ復元は必須としない。
 
 一般ユーザー向けの復元画面名は「大会情報の復元」とする。復元はDrawLabから出力したファイルの選択に限定し、JSONテキストの直接入力機能は提供しない。ファイル内のJSON本文は画面に表示せず、読込後はデータ種別、対象件数、大会名など、復元判断に必要な要約だけを表示する。ファイルはクリック、タップ、ドラッグ＆ドロップで選択でき、選択直後に既存の検証・解析処理を自動開始する。処理中は二重実行を防止し、ファイル名と読み込み中・処理中・完了・エラーの状態を表示する。処理完了後は別のファイルおよび同一ファイルを再選択できるものとする。サンプルデータはJSON本文を表示せず、ファイル選択より控えめな補助操作から内部読込し、自動的に同じ解析処理を開始する。
 
@@ -761,7 +764,9 @@ PoCでのオプションは以下。
 
 ---
 
-## 9. データモデル案
+## 9. データモデル
+
+保存・入力の互換性を含む型は`src/domain/types.ts`を参照する。旧データで省略可能な設定は読み込み時に正規化する。連携情報は`Tournament`へ直接追加せず、`TournamentIntegrationRecord`として別storeへ保存する。
 
 ## 9.1 Tournament
 
@@ -779,6 +784,9 @@ type Tournament = {
   options: DrawOptions;
   outputOptions?: DrawOutputOptions;
   generatedDraw?: GeneratedDraw;
+  matchFormat?: 1 | 3 | 5;
+  detailInputEnabled?: boolean;
+  matchSelectionStatus?: "pending" | "confirmed";
   status?: "inProgress" | "completed";
   createdAt: string;
   updatedAt: string;
@@ -790,7 +798,7 @@ type Tournament = {
 ```ts
 type Entrant = {
   id: string;
-  seedNo?: number;
+  seedNo?: number | string;
   player1Name: string;
   player2Name?: string;
   teamName?: string;
@@ -800,6 +808,7 @@ type Entrant = {
   sameTeam?: boolean;
   sameTeamGroup?: string;
   region?: string;
+  ranking?: number | string;
 };
 ```
 
@@ -823,6 +832,7 @@ type DrawOptions = {
 ```ts
 type DrawOutputOptions = {
   bracketLayout: "singleSide" | "bothSides";
+  outputPageCount: 1 | 2 | 4 | 8 | 16 | 32;
   rightSideDrawNumberPosition: "left" | "right";
   seedNumberPosition: "outer" | "inner";
   lineWeight: "thin" | "normal" | "bold" | "extraBold";
@@ -836,6 +846,7 @@ type DrawOutputOptions = {
 ```ts
 const DEFAULT_DRAW_OUTPUT_OPTIONS: DrawOutputOptions = {
   bracketLayout: "singleSide",
+  outputPageCount: 1,
   rightSideDrawNumberPosition: "right",
   seedNumberPosition: "outer",
   lineWeight: "normal",
@@ -888,6 +899,7 @@ type TournamentMatch = {
   sourceA: TournamentMatchSource;
   sourceB: TournamentMatchSource;
   result: TournamentMatchResult;
+  setScores?: Array<{ participantA: number | null; participantB: number | null }>;
   isWalkover?: boolean;
   note?: string;
 };
@@ -989,7 +1001,7 @@ PoCではクラウド保存を行わないため、参加者データは基本�
 - 閲覧専用共有URL
 - 公開用スナップショット
 - PDF生成品質の向上
-- 選手入替
+- トーナメントの対戦カード確定後の選手入替
 - 空ドロー作成
 - Excel / CSVファイル読み込み
 
@@ -997,8 +1009,8 @@ PoCではクラウド保存を行わないため、参加者データは基本�
 
 - ユーザー認証
 - 編集権限管理
-- 複数大会管理
-- スマートフォン閲覧最適化
+- 複数種目をまとめる親大会管理
+- スマートフォンでの大規模名簿編集の最適化
 - 大会ページ公開機能
 
 ---
@@ -1013,7 +1025,7 @@ PoC完了の判定条件は以下。
 - シード番号を指定できる
 - BYEが自動補完される
 - チーム・地区の偏りを考慮して配置される
-- 16、32、64ドローが生成できる
+- 4、8、16、32、64、128ドローが生成できる
 - 回戦ごとの対戦カードをタブで表示し、1回戦の全カードを初期表示できる
 - 2回戦以降は未確定カードを枠だけで表示し、前回戦の勝者確定後に対戦者を反映できる
 - 試合形式を1セット、3セット、5セットから選択でき、対戦カードの詳細入力欄が選択したセット数に連動する
