@@ -4,11 +4,14 @@
 - **文書種別:** 連携機能 設計書
 - **バージョン:** 0.1.0
 - **作成日:** 2026-09-01
+- **更新日:** 2026-10-06
 - **要件正:** `docs/league-tournament-integration-requirements.md`
 - **関連要件:** `docs/requirements.md`、`docs/league-requirements.md`
 - **関連設計:** `docs/league-design.md`、`docs/logic-spec.md`、`docs/screen-spec.md`
 
 本書は、リーグから順位区分別のトーナメントを作成する機能を、既存のリーグ機能とトーナメント機能の責務を分離したまま実装するための設計を定める。
+
+スナップショット連携は実装済みであり、現在の実装ファイルは[実装状況](implementation-status.md)を参照する。第15章は連携全体ではなく、現在未対応の拡張範囲を示す。
 
 ---
 
